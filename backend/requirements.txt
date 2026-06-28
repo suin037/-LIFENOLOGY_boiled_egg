@@ -1,0 +1,13 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pydantic>=2.6
+pydantic-settings>=2.2
+python-dotenv>=1.0
+pandas>=2.2
+numpy>=1.26
+scikit-learn>=1.4
+econml>=0.15
+lifelines>=0.28
+pyreadstat>=1.2
+anthropic>=0.40
+joblib>=1.3

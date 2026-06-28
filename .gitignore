@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+
+# Data (대용량 원본 / 산출물)
+data/raw/*.SAV
+data/raw/*.sav
+data/processed/*.csv
+data/goms_clean.csv
+
+# Model artifacts
+backend/models/artifacts/*.pkl
+
+# Node / frontend
+node_modules/
+frontend/dist/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
