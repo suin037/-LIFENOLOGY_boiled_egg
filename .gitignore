@@ -22,3 +22,25 @@ frontend/dist/
 .DS_Store
 .vscode/
 .idea/
+
+# ── 원자료(raw) 미포함 정책 (README 6절) ──
+# 사회통합실태조사 원자료 (개인 단위 데이터 — 재배포 금지)
+*사회통합실태조사_데이터*.xlsx
+*사회통합실태조사*.SAV
+*.sav
+
+# 보고서 PDF 원문 (재배포 이슈)
+*.pdf
+
+# 설문지·개요서 원본
+*.hwp
+*.hwpx
+
+# KOSIS/KEDI 원본 다운로드 파일 (팀 판단으로 포함 시 이 두 줄 삭제)
+*_2026*.csv
+*_2025*.csv
+
+# ── 일반 ──
+.DS_Store
+Thumbs.db
+~$*.xlsx
