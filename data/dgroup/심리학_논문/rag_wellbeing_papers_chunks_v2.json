@@ -1,0 +1,194 @@
+[
+  {
+    "id": "ryff1989_background",
+    "document": "Ryff(1989)는 삶의 질을 행복감이나 만족도 같은 기분 중심(쾌락적) 지표만으로 측정하는 것을 비판하고, 인간이 실제로 잘 기능하고 성장하는지를 보는 심리적 안녕감(psychological well-being) 개념을 제안했다. 즉 \"지금 기분이 좋은가\"와 \"삶이 잘 굴러가고 있는가\"는 다른 차원이라는 것이다.",
+    "metadata": {
+      "indicator": "삶의질",
+      "source": "Ryff (1989). Happiness is everything, or is it? JPSP 57(6), 1069-1081",
+      "year": 1989,
+      "age_group": "전체",
+      "topic": "웰빙이론배경",
+      "doc_type": "논문개념"
+    }
+  },
+  {
+    "id": "ryff1989_six_factors",
+    "document": "Ryff(1989)의 심리적 안녕감은 6개 요인으로 구성된다: 자아수용, 긍정적 대인관계, 자율성, 환경에 대한 통제감, 삶의 목적, 개인적 성장. 이 구조는 삶의 질을 단일 만족도 점수가 아니라 여러 기능 영역의 조합으로 평가해야 함을 시사한다.",
+    "metadata": {
+      "indicator": "삶의질",
+      "source": "Ryff (1989). Happiness is everything, or is it? JPSP 57(6), 1069-1081",
+      "year": 1989,
+      "age_group": "전체",
+      "topic": "웰빙6요인구조",
+      "doc_type": "논문개념"
+    }
+  },
+  {
+    "id": "ryff1989_self_acceptance",
+    "document": "Ryff의 자아수용(self-acceptance)은 자신의 장점과 단점을 포함해 스스로를 긍정적으로 받아들이고, 지나온 삶을 수용하는 태도를 뜻한다. 과거 선택에 대한 후회를 다루는 능력과 직결되는 차원이다.",
+    "metadata": {
+      "indicator": "삶의질",
+      "source": "Ryff (1989). Happiness is everything, or is it? JPSP 57(6), 1069-1081",
+      "year": 1989,
+      "age_group": "전체",
+      "topic": "자아수용",
+      "doc_type": "논문개념"
+    }
+  },
+  {
+    "id": "ryff1989_positive_relations",
+    "document": "Ryff의 긍정적 대인관계(positive relations with others)는 따뜻하고 신뢰할 수 있는 관계를 맺고 타인의 행복에 관심을 가지며 친밀감을 주고받는 능력을 뜻한다. 사회적 고립도나 정서적 지지망 통계와 짝을 이루는 개념 차원이다.",
+    "metadata": {
+      "indicator": "삶의질",
+      "source": "Ryff (1989). Happiness is everything, or is it? JPSP 57(6), 1069-1081",
+      "year": 1989,
+      "age_group": "전체",
+      "topic": "긍정적대인관계",
+      "doc_type": "논문개념"
+    }
+  },
+  {
+    "id": "ryff1989_autonomy",
+    "document": "Ryff의 자율성(autonomy)은 타인의 기대나 사회적 압력에 휩쓸리지 않고 자신의 기준으로 판단하고 행동을 조절하는 능력을 뜻한다. 진로 선택 상황에서 \"남들이 좋다는 길\"과 \"내가 원하는 길\" 사이의 긴장을 설명하는 차원이다.",
+    "metadata": {
+      "indicator": "삶의질",
+      "source": "Ryff (1989). Happiness is everything, or is it? JPSP 57(6), 1069-1081",
+      "year": 1989,
+      "age_group": "전체",
+      "topic": "자율성",
+      "doc_type": "논문개념"
+    }
+  },
+  {
+    "id": "ryff1989_env_mastery",
+    "document": "Ryff의 환경 통제감(environmental mastery)은 자신의 필요와 가치에 맞게 주변 환경과 일상을 관리·선택·변형해내는 유능감을 뜻한다. 소득·주거·근로시간 같은 객관적 조건을 자기 삶에 맞게 다루는 능력의 차원이다.",
+    "metadata": {
+      "indicator": "삶의질",
+      "source": "Ryff (1989). Happiness is everything, or is it? JPSP 57(6), 1069-1081",
+      "year": 1989,
+      "age_group": "전체",
+      "topic": "환경통제감",
+      "doc_type": "논문개념"
+    }
+  },
+  {
+    "id": "ryff1989_purpose",
+    "document": "Ryff의 삶의 목적(purpose in life)은 삶에 방향성과 의미를 부여하는 목표를 가지고, 현재와 과거의 삶이 의미 있다고 느끼는 정도를 뜻한다. \"하는 일이 가치 있다\"는 인식(일의 가치 통계)과 연결되는 차원이다.",
+    "metadata": {
+      "indicator": "삶의질",
+      "source": "Ryff (1989). Happiness is everything, or is it? JPSP 57(6), 1069-1081",
+      "year": 1989,
+      "age_group": "전체",
+      "topic": "삶의목적",
+      "doc_type": "논문개념"
+    }
+  },
+  {
+    "id": "ryff1989_growth",
+    "document": "Ryff의 개인적 성장(personal growth)은 자신이 계속 발전하고 있고 새로운 경험에 열려 있으며 잠재력을 실현해가고 있다는 감각을 뜻한다. 삶을 완성 상태가 아닌 지속적 성장 과정으로 보는 차원으로, 성장가능성 지표의 심리학적 대응물이다.",
+    "metadata": {
+      "indicator": "삶의질",
+      "source": "Ryff (1989). Happiness is everything, or is it? JPSP 57(6), 1069-1081",
+      "year": 1989,
+      "age_group": "전체",
+      "topic": "개인적성장",
+      "doc_type": "논문개념"
+    }
+  },
+  {
+    "id": "ryff1989_implication",
+    "document": "Ryff(1989)의 함의는 진로 선택의 결과를 소득 같은 단일 잣대가 아니라 자율성·목적·성장·관계 등 여러 기능 차원에서 평가해야 한다는 것이다. 어떤 선택은 소득을 높이지만 자율성을 낮출 수 있고, 그 반대도 가능하다.",
+    "metadata": {
+      "indicator": "삶의질",
+      "source": "Ryff (1989). Happiness is everything, or is it? JPSP 57(6), 1069-1081",
+      "year": 1989,
+      "age_group": "전체",
+      "topic": "시나리오적용함의",
+      "doc_type": "논문개념"
+    }
+  },
+  {
+    "id": "ryff1995_validation",
+    "document": "Ryff와 Keyes(1995)는 미국 성인 전국 대표 표본 1,108명을 대상으로 확인적 요인분석을 실시해, 심리적 안녕감이 6개 요인(자아수용·긍정적 대인관계·자율성·환경통제감·삶의 목적·개인적 성장)으로 구성되며 이들이 하나의 상위 요인으로 묶이는 구조임을 통계적으로 확인했다. 단일 요인 모형보다 6요인 모형의 적합도가 크게 우수했다.",
+    "metadata": {
+      "indicator": "삶의질",
+      "source": "Ryff & Keyes (1995). The Structure of Psychological Well-Being Revisited. JPSP 69(4), 719-727",
+      "year": 1995,
+      "age_group": "전체",
+      "topic": "웰빙구조검증",
+      "doc_type": "논문개념"
+    }
+  },
+  {
+    "id": "ryff1995_happiness_gap",
+    "document": "Ryff와 Keyes(1995)의 분석에서 행복감·삶의 만족도 같은 단일 지표는 자아수용, 환경통제감과는 상관이 높았지만 삶의 목적, 개인적 성장, 자율성, 대인관계와는 약한 상관을 보였다. 이는 만족도 점수 하나만으로 삶의 질을 재면 성장·목적·자율 같은 핵심 영역을 놓친다는 뜻으로, 삶의 질을 다차원으로 평가해야 하는 실증적 근거다.",
+    "metadata": {
+      "indicator": "삶의질",
+      "source": "Ryff & Keyes (1995). The Structure of Psychological Well-Being Revisited. JPSP 69(4), 719-727",
+      "year": 1995,
+      "age_group": "전체",
+      "topic": "만족도지표한계",
+      "doc_type": "논문개념"
+    }
+  },
+  {
+    "id": "ryff1995_age_pattern",
+    "document": "Ryff와 Keyes(1995)에 따르면 심리적 안녕감의 요인들은 연령에 따라 다른 궤적을 보인다. 환경통제감과 자율성은 청년기에서 중년기로 가며 높아지는 반면, 삶의 목적과 개인적 성장 감각은 나이가 들며 낮아지는 경향이 있고 자아수용은 연령 차이가 없다. 즉 20~30대는 목적·성장 감각이 상대적으로 높고 통제감·자율성은 아직 발달 중인 시기다.",
+    "metadata": {
+      "indicator": "삶의질",
+      "source": "Ryff & Keyes (1995). The Structure of Psychological Well-Being Revisited. JPSP 69(4), 719-727",
+      "year": 1995,
+      "age_group": "전체",
+      "topic": "웰빙연령패턴",
+      "doc_type": "논문개념"
+    }
+  },
+  {
+    "id": "ryff1995_implication",
+    "document": "Ryff와 Keyes(1995)는 \"행복하고 만족스럽다\"는 것 이상으로 삶이 잘 기능하고 있는지를 봐야 한다고 결론지었다. 인생 전환기(이직·이주 등)가 웰빙의 일부 차원에만 영향을 주고 다른 차원은 그대로일 수 있다는 점도 다차원 평가의 필요성을 뒷받침한다.",
+    "metadata": {
+      "indicator": "삶의질",
+      "source": "Ryff & Keyes (1995). The Structure of Psychological Well-Being Revisited. JPSP 69(4), 719-727",
+      "year": 1995,
+      "age_group": "전체",
+      "topic": "다차원평가함의",
+      "doc_type": "논문개념"
+    }
+  },
+  {
+    "id": "kim2001_korean_validation",
+    "document": "김명소·김혜원·차경호(2001)는 Ryff의 심리적 안녕감 척도를 한국어로 번안해 한국 성인 남녀에게 적용하고 구성개념을 분석한 결과, 자아수용·긍정적 대인관계·자율성·환경통제감·삶의 목적·개인적 성장의 6요인 구조가 한국인에게도 대체로 지지됨을 확인했다. 이 연구는 이후 한국의 심리적 안녕감 연구에서 표준적으로 활용되는 한국판 척도의 기반이 되었다.",
+    "metadata": {
+      "indicator": "삶의질",
+      "source": "김명소·김혜원·차경호 (2001). 심리적 안녕감의 구성개념분석: 한국 성인 남녀를 대상으로. 한국심리학회지: 사회 및 성격 15(2), 19-39",
+      "year": 2001,
+      "age_group": "전체",
+      "topic": "한국타당화",
+      "doc_type": "논문개념"
+    }
+  },
+  {
+    "id": "kim2001_cultural_note",
+    "document": "김명소 등(2001)의 한국 타당화 연구에서는 서구에서 개발된 문항 일부가 한국 문화 맥락에서 다르게 기능할 수 있음이 논의되었다. 특히 자율성처럼 개인주의 문화에서 강조되는 차원은 관계 중심적인 한국 사회에서 의미와 수준이 다르게 나타날 수 있어, 한국인의 삶의 질 해석 시 문화적 맥락을 고려해야 한다.",
+    "metadata": {
+      "indicator": "삶의질",
+      "source": "김명소·김혜원·차경호 (2001). 심리적 안녕감의 구성개념분석: 한국 성인 남녀를 대상으로. 한국심리학회지: 사회 및 성격 15(2), 19-39",
+      "year": 2001,
+      "age_group": "전체",
+      "topic": "문화적맥락",
+      "doc_type": "논문개념"
+    }
+  },
+  {
+    "id": "kim2001_service_rationale",
+    "document": "김명소 등(2001)의 한국 성인 타당화는 Ryff의 6요인 웰빙 구조를 한국인의 삶의 질 평가에 적용할 수 있다는 실증 근거를 제공한다. 즉 한국 청년의 진로 선택 결과를 소득뿐 아니라 자율성·목적·성장·관계 등의 차원으로 평가하는 접근은 한국에서 검증된 심리학적 틀에 기반한 것이다.",
+    "metadata": {
+      "indicator": "삶의질",
+      "source": "김명소·김혜원·차경호 (2001). 심리적 안녕감의 구성개념분석: 한국 성인 남녀를 대상으로. 한국심리학회지: 사회 및 성격 15(2), 19-39",
+      "year": 2001,
+      "age_group": "전체",
+      "topic": "서비스적용근거",
+      "doc_type": "논문개념"
+    }
+  }
+]
