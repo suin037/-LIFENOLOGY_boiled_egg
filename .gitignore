@@ -8,7 +8,10 @@ venv/
 # Data (대용량 원본 / 산출물)
 data/raw/*.SAV
 data/raw/*.sav
+data/raw/**/*.sav
+data/raw/**/*.sas7bdat
 data/processed/*.csv
+data/processed/**/*.csv
 data/goms_clean.csv
 
 # Model artifacts
@@ -28,6 +31,10 @@ frontend/dist/
 *사회통합실태조사_데이터*.xlsx
 *사회통합실태조사*.SAV
 *.sav
+
+# KNHANES / CHS / KWCS 원자료 (개인 단위 — 재배포 금지)
+*.sas7bdat
+*_person_level.csv
 
 # 보고서 PDF 원문 (재배포 이슈)
 *.pdf
