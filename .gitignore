@@ -5,13 +5,16 @@ __pycache__/
 venv/
 .env
 
-# Data 원본은 전부 제외 (.gitkeep만 유지) — GOMS .SAV, 논문 PDF 등
+# Data 원본은 전부 제외 (.gitkeep만 유지) — GOMS .SAV, YP .xlsx, 논문 PDF 등
 data/raw/*
 !data/raw/.gitkeep
-data/processed/*.csv
-data/goms_clean.csv
 
-# RAG 벡터DB: pkl 본체는 공유, 사람이 보는 preview 파일만 제외(재생성 가능)
+# 아래는 의도적으로 공유함(팀원이 원본 없이 바로 작업하도록):
+#   data/clean/*.csv      — 전처리 산출물 (표준변수명 인터페이스)
+#   data/knowledge/*.json — 직접 작성한 지식 카드 (재생성 불가)
+#   data/vectordb/**/*.pkl— RAG 벡터DB
+
+# 사람이 보는 preview 파일만 제외 (pkl에서 재생성 가능)
 data/vectordb/**/psychology_db_preview.*
 
 # Model artifacts
