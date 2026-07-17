@@ -5,13 +5,15 @@ __pycache__/
 venv/
 .env
 
-# Data (대용량 원본 / 산출물)
-data/raw/*.SAV
-data/raw/*.sav
-data/raw/**/*.sav
-data/raw/**/*.sas7bdat
-data/processed/*.csv
-data/processed/**/*.csv
+# ── 원본은 디렉토리 통째로 제외 (.gitkeep만 유지) ──
+# 확장자를 나열하면 새 포맷이 들어올 때마다 구멍이 생긴다.
+# (실제로 *.sav 만 막던 시절 CHS 의 .sas7bdat 368MB 가 그대로 통과했음)
+data/raw/*
+!data/raw/.gitkeep
+
+# 개인 단위 정제본도 제외 — 원자료로 재생성 가능
+data/processed/*
+!data/processed/.gitkeep
 data/goms_clean.csv
 
 # Model artifacts
@@ -26,7 +28,8 @@ frontend/dist/
 .vscode/
 .idea/
 
-# ── 원자료(raw) 미포함 정책 (README 6절) ──
+# ── 전역 안전망 (README 6절) ──
+# 위 디렉토리 규칙을 벗어난 위치에 원자료가 놓여도 잡히도록 확장자로 한 번 더 막는다.
 # 사회통합실태조사 원자료 (개인 단위 데이터 — 재배포 금지)
 *사회통합실태조사_데이터*.xlsx
 *사회통합실태조사*.SAV
