@@ -3,7 +3,7 @@
 정신건강·수면·삶의 질 관련 **국가승인통계 3종**의 조회 테이블(lookup)과, 스트레스 대처·긍정정서 **심리학 이론 카드**를 만드는 전처리 결과물입니다.
 
 - 담당 범위: KNHANES / CHS / KWCS 3종 + 심리학 이론 2계열
-- 최종 산출: lookup 테이블 **4개**(개별 3 + 통합 마스터 1), 이론 카드 **16장**, 교차검증 뷰 1개
+- 최종 산출: RAG 청크 **56개**, lookup 테이블 **4개**(개별 3 + 통합 마스터 1), 이론 카드 **16장**, 교차검증 뷰 1개
 
 ---
 
@@ -14,6 +14,7 @@
 | 접두사 | 용도 | 배포 여부 |
 |---|---|---|
 | `lookup_` | Layer 1 룰베이스 조회 테이블 (pandas로 직접 읽음) | ✅ 서비스 배포 |
+| `rag_` | ChromaDB 적재용 청크 JSON | ✅ 서비스 배포 |
 | `cards_` | 분류·조언용 구조화 카드 JSON (신규) | ✅ 서비스 배포 |
 | `raw2tidy_` | 중간 산출물 / 검증 뷰 | 보관용 |
 
@@ -59,6 +60,40 @@
 - `se`, `n` — 복합표본 설계 기반 표준오차와 관측수. 신뢰구간이 필요하면 `값 ± 1.96×se`.
 - 통합 마스터(`lookup_lanollab_master_v1.csv`, 294행)는 세 조사를 위 스키마로 통일해 세로로 쌓은 것입니다. **서비스는 이 마스터 하나만 읽으면 됩니다.**
 
+### rag_*_chunks_v1.json (청크 56개)
+
+팀 표준(dgroup README 3절) 스키마를 그대로 따릅니다. 필수 메타데이터 6개(`indicator`, `source`, `year`, `age_group`, `topic`, `doc_type`)에 더해 `period`, `population` 두 개를 추가로 넣었습니다.
+
+```json
+{
+  "id": "knhanes_stress_19-29",
+  "document": "국민건강영양조사 제9기 (질병관리청) 2022+2023+2024 기준, 19-29세 성인의 스트레스인지율은 30.7%로 전체 평균(25.7%)보다 5%p 더 높다. 평소 스트레스를 '대단히 많이' 또는 '많이' 느낀다고 응답한 비율이다. 같은 연령대에서 남성은 24.5%, 여성은 37.5%다.",
+  "metadata": {
+    "indicator": "삶의질",
+    "source": "국민건강영양조사 제9기 (질병관리청)",
+    "year": 2024,
+    "age_group": "19-29",
+    "topic": "스트레스",
+    "doc_type": "통계",
+    "period": "2022+2023+2024",
+    "population": "19세 이상 성인"
+  }
+}
+```
+
+지표 하나당 최대 4개 청크를 만듭니다.
+
+| id 접미사 | 내용 | `age_group` |
+|---|---|---|
+| `_by_age` | 전체값 + 전 연령대 나열 | `전체` |
+| `_by_sex` | 성별 비교 + 최고 성별×연령대 | `전체` |
+| `_19-29` | 해당 연령대 상세 + 성별 | `19-29` |
+| `_30-39` | 해당 연령대 상세 + 성별 | `30-39` |
+
+- **`year`는 정수 한 개**라 KNHANES 3개년 통합은 최신 연도(2024)를 넣고, 실제 기간은 `period`와 문장 안에 담았습니다. 연도로 필터링할 때 주의하세요.
+- **`성별×연령대` 168행은 청크로 만들지 않았습니다.** 서사 생성에는 너무 잘고, 정확한 수치가 필요하면 lookup을 직접 조회하는 쪽이 맞습니다. RAG는 맥락, lookup은 정확한 값 — 이렇게 역할을 나눴습니다.
+- 청크는 `preprocess/build_rag_chunks.py`가 lookup 마스터에서 생성합니다. **손으로 고치지 마세요.** lookup이 갱신되면 다시 돌리면 됩니다.
+
 ### cards_*.json
 
 ```json
@@ -96,6 +131,8 @@
 
 `30-39`는 표준과 일치하지만 `19-29` ↔ `~29`는 다릅니다. 라놀랩은 19세 미만을 지표에서 제외했기 때문에(KWCS는 19세 이상 대상) `~29`로 바꾸면 "18세 이하 포함"으로 오독될 수 있어 `19-29`를 유지했습니다. **팀 논의 후 통일 필요.**
 
+⚠️ **이 불일치는 RAG 검색에도 그대로 영향을 줍니다.** `rag_*_chunks_v1.json`의 `metadata.age_group`도 같은 `19-29`를 씁니다. 라놀랩 청크와 dgroup 청크를 같은 ChromaDB에 넣고 `age_group="~29"`로 필터링하면 **라놀랩 청크는 하나도 안 걸립니다.** 적재 전에 반드시 표기를 통일하세요. 값만 바꾸면 되므로 `build_rag_chunks.py`를 다시 돌리면 반영됩니다.
+
 ## 5. ⚠️ 사용 시 주의사항 (함정 목록)
 
 1. **KNHANES와 CHS 값을 혼용 금지.** 같은 지표명이라도 값 차이가 큽니다. EQ5D_불안우울문제 21.7% vs 12.5%(9.2%p), EQ5D_통증문제 38.0% vs 27.3%(10.7%p). 조사 도구·조사 방식·기간이 달라서이며, **어느 쪽이 틀린 게 아닙니다.** 차이 전체는 `raw2tidy_lanollab_crosscheck_v1.csv`에 정리돼 있습니다. 하나의 시나리오 안에서는 한 출처만 인용하세요.
@@ -130,13 +167,17 @@ python preprocess/knhanes_preprocess.py   # → lookup_knhanes_indicators_v1.csv
 python preprocess/chs_preprocess.py       # → lookup_chs_indicators_v1.csv
 python preprocess/kwcs_preprocess.py      # → lookup_kwcs_indicators_v1.csv
 python preprocess/merge_reference_tables.py   # → lookup_lanollab_master_v1.csv + crosscheck
+python preprocess/build_rag_chunks.py         # → rag_*_chunks_v1.json (원자료 불필요)
 ```
+
+`build_rag_chunks.py`는 lookup 마스터만 읽으므로 **원자료 없이도 실행됩니다.**
 
 의존성은 `backend/requirements.txt`의 `pandas`, `numpy`, `pyreadstat`로 충족됩니다.
 
 ## 8. 남은 작업 (TODO)
 
-- [ ] `agegroup` 표기 팀 표준 통일 (4절)
+- [ ] `agegroup` / `metadata.age_group` 표기 팀 표준 통일 (4절) — **ChromaDB 적재 전 필수**
+- [ ] lookup 컬럼명 한글/영문 통일 (dgroup은 `indicator_name`·`value`·`unit` 영문, 라놀랩은 혼재)
 - [ ] `cards_` 접두사 팀 승인 (1절)
 - [ ] dgroup·sohyun 심리학 RAG와 범위 조율 (5절 9번)
 - [ ] `sex` 코드 → 라벨(`남성`/`여성`) 매핑 여부 결정
