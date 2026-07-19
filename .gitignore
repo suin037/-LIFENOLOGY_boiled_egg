@@ -10,6 +10,9 @@ data/raw/*.SAV
 data/raw/*.sav
 data/processed/*.csv
 data/goms_clean.csv
+data/raw/
+data/knowledge/
+
 
 # Model artifacts
 backend/models/artifacts/*.pkl
