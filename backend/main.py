@@ -8,6 +8,7 @@ from schemas import PredictRequest, PredictResponse
 from models.knn_model import find_neighbors
 from models.econml_model import estimate_effect
 from models.lifelines_model import estimate_survival, risk_timeline
+from rulebase import query_life_indicators
 from utils.scoring import build_feature_vector
 from utils.claude_api import generate_narrative
 
@@ -37,6 +38,9 @@ def predict(req: PredictRequest) -> PredictResponse:
     survival = estimate_survival(features)
     timeline = risk_timeline(features)
 
+    # Layer 1: 룰베이스 생활지표 패널 (경제·삶의질·건강·창업 등 넓은 인생 차원)
+    life_indicators = query_life_indicators(features)
+
     expected_wage = sum(n.monthly_wage or 0 for n in neighbors) / max(len(neighbors), 1)
     changed_ratio = sum(1 for n in neighbors if n.job_changed) / max(len(neighbors), 1)
 
@@ -49,5 +53,6 @@ def predict(req: PredictRequest) -> PredictResponse:
         neighbors=neighbors,
         neighbor_changed_ratio=changed_ratio,
         risk_timeline=timeline,
+        life_indicators=life_indicators,
         narrative=narrative,
     )

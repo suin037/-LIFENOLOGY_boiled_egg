@@ -16,7 +16,7 @@ class PredictRequest(BaseModel):
     sex: str = Field(..., description="'1'=남 / '2'=여 (GOMS 코드)")
     major: str = Field(..., description="전공 계열 코드")
     gpa: Optional[float] = Field(None, ge=0, le=4.5)
-    choice: str = Field(..., description="가정할 진로 선택")
+    choice: str = Field(..., description="가정할 진로 선택 (예: 이직 / 창업 / 진학)")
 
     # --- 온보딩 상태·성향 (선택) ---
     monthly_wage: Optional[float] = Field(None, gt=0, description="현재 월소득(만원)")
@@ -38,6 +38,21 @@ class NeighborCase(BaseModel):
     job_changed: Optional[int] = None
 
 
+class LifeIndicator(BaseModel):
+    """Layer 1 룰베이스가 조회한 '인생 지표' 1건.
+
+    경제·삶의질·정신건강·신체건강·직업환경·창업 등 여러 차원을 같은 틀로 담는다.
+    (심리학적 해석은 이 값을 받아 RAG 가 담당 — 엔진은 숫자만 제공)
+    """
+
+    dimension: str = Field(..., description="차원: 경제/삶의질/정신건강/신체건강/직업환경/창업 …")
+    indicator: str
+    value: float
+    unit: str
+    group: str = Field(..., description="이 값이 어떤 집단 기준인지 (예: 성별×연령대, 25-29)")
+    source: str
+
+
 class PredictResponse(BaseModel):
     """평행우주 추정 결과."""
 
@@ -47,5 +62,7 @@ class PredictResponse(BaseModel):
     neighbors: list[NeighborCase] = []
     neighbor_changed_ratio: float = Field(0.0, description="유사집단 중 실제 이직한 비율")
     risk_timeline: dict[int, float] = Field(default_factory=dict,
-        description="{연차: 이직 누적확률} — KLIPS 생존분석")
+        description="{연차: 이직 누적확률} — KLIPS/YP 생존분석")
+    life_indicators: list[LifeIndicator] = Field(default_factory=list,
+        description="Layer1 룰베이스 생활지표 패널(경제·삶의질·건강·창업 등) — 넓은 인생 차원")
     narrative: str = Field("", description="Claude 가 생성한 설명")
