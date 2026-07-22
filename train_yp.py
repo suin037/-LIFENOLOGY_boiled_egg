@@ -125,6 +125,24 @@ def train_econml_yp(d: pd.DataFrame) -> dict:
 
 
 # ---------------------------------------------------------------- L4
+def _cv_concordance(df, cov_cols, dur="duration_months", ev="event", k=5, seed=42):
+    """5-fold 교차검증 C-index → (학습평균, 테스트평균, 테스트표준편차, 갭)."""
+    from lifelines import CoxPHFitter
+
+    d = df[cov_cols + [dur, ev]].dropna()
+    d = d.sample(frac=1, random_state=seed).reset_index(drop=True)
+    folds = np.array_split(np.arange(len(d)), k)
+    tr, te = [], []
+    for i in range(k):
+        te_idx = folds[i]
+        tr_idx = np.concatenate([folds[j] for j in range(k) if j != i])
+        m = CoxPHFitter().fit(d.iloc[tr_idx], dur, ev)
+        tr.append(float(m.score(d.iloc[tr_idx], scoring_method="concordance_index")))
+        te.append(float(m.score(d.iloc[te_idx], scoring_method="concordance_index")))
+    return (float(np.mean(tr)), float(np.mean(te)), float(np.std(te)),
+            float(np.mean(tr) - np.mean(te)))
+
+
 def train_lifelines_yp() -> dict:
     from lifelines import KaplanMeierFitter, CoxPHFitter
 
@@ -139,11 +157,18 @@ def train_lifelines_yp() -> dict:
     km = KaplanMeierFitter()
     km.fit(s["duration_months"], event_observed=s["event"], label="all")
 
+    cov_cols = ["age", "sex", "edu"]
     cox = CoxPHFitter()
-    cox.fit(s[["duration_months", "event", "age", "sex", "edu"]],
+    cox.fit(s[["duration_months", "event"] + cov_cols],
             duration_col="duration_months", event_col="event")
 
-    # 서비스 멘트용: N년 시점 이직(이탈) 누적확률
+    # 예측력 검증: 5-fold 교차검증 C-index
+    cv = _cv_concordance(s, cov_cols)
+    stable = "✓안정" if cv[3] < 0.05 else "⚠과적합 의심"
+    print(f"[L4 YP/CV] 5-fold C-index 학습 {cv[0]:.3f} / 테스트 {cv[1]:.3f}±{cv[2]:.3f} "
+          f"| 갭 {cv[3]:.3f} {stable}")
+
+    # 서비스 멘트용: N년 시점 이직(이탈) 누적확률 (YP는 4웨이브라 관측 범위 내만 유효)
     surv = km.survival_function_
     idx = np.asarray(surv.index, dtype=float)
     for yr in (1, 3, 5):
@@ -154,8 +179,11 @@ def train_lifelines_yp() -> dict:
     medians = {"age": float(s["age"].median()),
                "sex": float(s["sex"].median()),
                "edu": float(s["edu"].median())}
-    return {"km": km, "cox": cox, "cov_cols": ["age", "sex", "edu"],
-            "medians": medians, "source": "YP2021 스펠"}
+    return {"km": km, "cox": cox, "cov_cols": cov_cols, "medians": medians,
+            "source": "YP2021 스펠", "n": len(s), "n_features": len(cov_cols),
+            "max_horizon_years": 5,       # YP 4웨이브 → 5년까지만 신뢰(그 이상은 희박)
+            "cv_concordance": {"train": round(cv[0], 3), "test": round(cv[1], 3),
+                               "test_std": round(cv[2], 3), "gap": round(cv[3], 3)}}
 
 
 # ---------------------------------------------------------------- L2

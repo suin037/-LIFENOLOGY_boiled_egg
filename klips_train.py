@@ -125,6 +125,24 @@ def train_econml_klips(d: pd.DataFrame) -> dict:
 
 
 # ---------------------------------------------------------------- L4
+def _cv_concordance(df, cov_cols, dur="duration_months", ev="event", k=5, seed=42):
+    """5-fold 교차검증 C-index → (학습평균, 테스트평균, 테스트표준편차, 갭). 예측력 검증용."""
+    from lifelines import CoxPHFitter
+
+    d = df[cov_cols + [dur, ev]].dropna()
+    d = d.sample(frac=1, random_state=seed).reset_index(drop=True)
+    folds = np.array_split(np.arange(len(d)), k)
+    tr, te = [], []
+    for i in range(k):
+        te_idx = folds[i]
+        tr_idx = np.concatenate([folds[j] for j in range(k) if j != i])
+        m = CoxPHFitter().fit(d.iloc[tr_idx], dur, ev)
+        tr.append(float(m.score(d.iloc[tr_idx], scoring_method="concordance_index")))
+        te.append(float(m.score(d.iloc[te_idx], scoring_method="concordance_index")))
+    return (float(np.mean(tr)), float(np.mean(te)), float(np.std(te)),
+            float(np.mean(tr) - np.mean(te)))
+
+
 def train_lifelines_klips() -> dict:
     from lifelines import KaplanMeierFitter, CoxPHFitter
 
@@ -147,22 +165,32 @@ def train_lifelines_klips() -> dict:
     km = KaplanMeierFitter()
     km.fit(s["duration_months"], event_observed=s["event"], label="all")
 
+    cov_cols = ["age_start", "sex", "edu"]
     cox = CoxPHFitter()
-    cox.fit(s[["duration_months", "event", "age_start", "sex", "edu"]],
+    cox.fit(s[["duration_months", "event"] + cov_cols],
             duration_col="duration_months", event_col="event")
 
-    # 서비스 멘트용 요약: N년 시점 이직(이탈) 누적확률
+    # 예측력 검증: 5-fold 교차검증 C-index
+    cv = _cv_concordance(s, cov_cols)
+    stable = "✓안정" if cv[3] < 0.05 else "⚠과적합 의심"
+    print(f"[L4 KLIPS/CV] 5-fold C-index 학습 {cv[0]:.3f} / 테스트 {cv[1]:.3f}±{cv[2]:.3f} "
+          f"| 갭 {cv[3]:.3f} {stable}")
+
+    # 서비스 멘트용 요약: N년 시점 이직(이탈) 누적확률 (10년까지)
     surv = km.survival_function_
     idx = np.asarray(surv.index, dtype=float)
-    for yr in (1, 3, 5):
+    for yr in (1, 3, 5, 10):
         m = yr * 12
         p = 1 - float(surv.iloc[int(np.abs(idx - m).argmin())].iloc[0])
         print(f"           {yr}년 후 이직 누적확률 = {p:.1%}")
 
     medians = {"age_start": float(s["age_start"].median()),
                "sex": float(s["sex"].median()), "edu": float(s["edu"].median())}
-    return {"km": km, "cox": cox, "cov_cols": ["age_start", "sex", "edu"],
-            "medians": medians, "source": "KLIPS 스펠"}
+    return {"km": km, "cox": cox, "cov_cols": cov_cols, "medians": medians,
+            "source": "KLIPS 스펠", "n": len(s), "n_features": len(cov_cols),
+            "max_horizon_years": 10,      # KLIPS 18~27차 → 10년까지 신뢰
+            "cv_concordance": {"train": round(cv[0], 3), "test": round(cv[1], 3),
+                               "test_std": round(cv[2], 3), "gap": round(cv[3], 3)}}
 
 
 def main() -> None:

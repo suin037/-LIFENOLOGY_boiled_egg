@@ -74,15 +74,22 @@ def estimate_survival(features: dict) -> float:
     return v
 
 
-def risk_timeline(features: dict, years=(1, 3, 5)) -> dict[int, float]:
-    """N년 후 이직(이탈) 누적확률 - 서비스 '후회 리스크' 멘트용."""
+def risk_timeline(features: dict, years=(1, 3, 5, 10)) -> dict[int, float]:
+    """N년 후 이직(이탈) 누적확률 - 서비스 '후회 리스크' 멘트용.
+
+    관측 범위(모델 스펠 최대 기간)를 크게 벗어나는 연차는 과대추정 방지를 위해 스킵.
+    → KLIPS(≈10년)는 10년까지, YP(≈4년)는 관측 내 연차만.
+    """
     art, enc = _select(features)
     X = pd.DataFrame([[_value(c, features, enc) for c in art["cov_cols"]]],
                      columns=art["cov_cols"])
     sf = art["cox"].predict_survival_function(X)
     idx = np.asarray(sf.index, dtype=float)
+    max_yr = art.get("max_horizon_years", 10)   # 소스별 신뢰 최대 연차(KLIPS10/YP5)
     out = {}
     for yr in years:
+        if yr > max_yr:            # 신뢰 범위 밖 → 스킵(과대추정 방지)
+            continue
         m = yr * 12
         out[yr] = round(1 - float(sf.iloc[int(np.abs(idx - m).argmin()), 0]), 3)
     return out
