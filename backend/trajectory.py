@@ -19,7 +19,9 @@ import pandas as pd
 from config import settings
 
 KLIPS_PATH = settings.goms_clean_abspath.parent / "raw" / "klips" / "klips_base.pkl"
-FEATS = ["나이", "성별", "월임금_실질", "학력"]
+# 매칭 피처: 나이·성별·소득 + 학력·고용형태(정규여부)
+#  ※ 전공/만족도는 KLIPS(노동패널)에 없어 궤적 매칭엔 사용 불가.
+FEATS = ["나이", "성별", "월임금_실질", "학력", "정규여부"]
 
 
 @lru_cache(maxsize=1)
@@ -27,10 +29,14 @@ def _panel():
     if not KLIPS_PATH.exists():
         return None
     b = pd.read_pickle(KLIPS_PATH)[
-        ["pid", "wave", "나이", "성별", "학력", "월임금_실질", "이직"]
+        ["pid", "wave", "나이", "성별", "학력", "종사상지위", "월임금_실질", "이직"]
     ].copy()
     b = b[b["월임금_실질"] > 0].dropna(subset=["나이", "성별", "월임금_실질"])
     b["학력"] = b["학력"].fillna(b["학력"].median())
+    # 고용형태 → 정규여부 (상용1=정규, 임시2·일용3=비정규; 자영/무급은 결측→중앙값)
+    st = pd.to_numeric(b["종사상지위"], errors="coerce")
+    b["정규여부"] = np.where(st == 1, 1.0, np.where(st.isin([2, 3]), 2.0, np.nan))
+    b["정규여부"] = b["정규여부"].fillna(b["정규여부"].median())
     b["이직"] = pd.to_numeric(b["이직"], errors="coerce").fillna(0)
     mu, sd = b[FEATS].mean(), b[FEATS].std().replace(0, 1)
     by_pid = {pid: g.set_index("wave") for pid, g in b.groupby("pid")}
@@ -56,16 +62,18 @@ def project_trajectory(features: dict, horizon: int = 10, k: int = 300,
     if W is None:
         near = b[b["나이"].between(A - 1, A + 1)]["월임금_실질"]
         W = float(near.median()) if len(near) else float(b["월임금_실질"].median())
-    edu = float(b["학력"].median())
+    # 학력·고용형태: 입력에 있으면 매칭에 사용, 없으면 중앙값(=중립)
+    edu = features.get("edu_level")
+    edu = float(edu) if edu is not None else float(b["학력"].median())
+    reg = features.get("is_regular")
+    reg = float(reg) if reg is not None else float(b["정규여부"].median())
 
     # 시작 후보: 시작 나이 ±1
     cand = b[b["나이"].between(A - 1, A + 1)]
     if len(cand) < min_n:
         return []
-    zq = np.array([
-        (A - mu["나이"]) / sd["나이"], (sex - mu["성별"]) / sd["성별"],
-        (float(W) - mu["월임금_실질"]) / sd["월임금_실질"], (edu - mu["학력"]) / sd["학력"],
-    ])
+    q = {"나이": A, "성별": sex, "월임금_실질": float(W), "학력": edu, "정규여부": reg}
+    zq = np.array([(q[c] - mu[c]) / sd[c] for c in FEATS])
     Z = ((cand[FEATS] - mu) / sd).to_numpy()
     dist = np.sqrt(((Z - zq) ** 2).sum(axis=1))
     starts = cand.assign(_d=dist).nsmallest(k, "_d")[["pid", "wave"]].to_numpy()

@@ -20,4 +20,5 @@ def build_feature_vector(req: PredictRequest) -> dict:
         "happy": req.happy,
         "is_regular": req.is_regular,
         "firm_size": req.firm_size,
+        "edu_level": req.edu_level,
     }

@@ -25,6 +25,8 @@ class PredictRequest(BaseModel):
     happy: Optional[int] = Field(None, ge=1, le=7, description="행복감 1~7")
     is_regular: Optional[int] = Field(None, ge=1, le=2, description="1=정규직 2=비정규직")
     firm_size: Optional[int] = Field(None, ge=1, le=9, description="기업규모 코드 1~9")
+    edu_level: Optional[int] = Field(None, ge=2, le=9,
+        description="교육수준(KLIPS 학력코드: 5=고졸 6=전문대 7=대졸 8=석사 9=박사) — 궤적 매칭 정교화용(선택)")
 
 
 class NeighborCase(BaseModel):
