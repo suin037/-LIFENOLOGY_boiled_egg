@@ -90,4 +90,6 @@ class PredictResponse(BaseModel):
         description="Layer1 룰베이스 생활지표 패널(경제·삶의질·건강·창업 등) — 넓은 인생 차원")
     trajectory: list[TrajectoryPoint] = Field(default_factory=list,
         description="종단 궤적 — 비슷한 사람들의 향후 N년 소득·이직 실제 분포(데이터 기반 미래 예측)")
+    scenario_trajectories: dict[str, list[TrajectoryPoint]] = Field(default_factory=dict,
+        description="선택지 평행우주 — {'유지': 기준경로, '이직': 기준+L3인과효과}. 이직 choice에서만 제공")
     narrative: str = Field("", description="Claude 가 생성한 설명")

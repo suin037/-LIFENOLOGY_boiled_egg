@@ -50,6 +50,7 @@ def predict(req: PredictRequest) -> PredictResponse:
 
     # Layer 5: 종단 궤적 — 비슷한 사람들의 향후 N년 실제 경로 분포 (데이터 기반 미래 예측)
     trajectory = project_trajectory(features)
+    scenario_trajectories: dict = {}
 
     # 개인단위 레이어(L2/L3/L4)는 '이직'에만 인과 데이터가 있어 적용. 나머지는 None.
     neighbors: list = []
@@ -64,6 +65,17 @@ def predict(req: PredictRequest) -> PredictResponse:
         expected_wage = sum(n.monthly_wage or 0 for n in neighbors) / max(len(neighbors), 1)
         changed_ratio = sum(1 for n in neighbors if n.job_changed) / max(len(neighbors), 1)
         coverage = "이직: 개인단위 매칭(L2)·인과(L3)·생존(L4) + 생활지표(L1)"
+
+        # 평행우주: 기준 경로(유지) vs 이직(기준 + L3 인과효과, 지속 가정)
+        if trajectory and effect is not None:
+            move = [
+                {**p,
+                 "income_p25": round(p["income_p25"] + effect, 1),
+                 "income_p50": round(p["income_p50"] + effect, 1),
+                 "income_p75": round(p["income_p75"] + effect, 1)}
+                for p in trajectory
+            ]
+            scenario_trajectories = {"유지": trajectory, "이직": move}
     elif kind == "창업":
         timeline = startup_closure_timeline(features)      # 폐업 누적확률
         coverage = ("창업: 생활지표(L1) + 창업 생존/폐업 통계. "
@@ -90,5 +102,6 @@ def predict(req: PredictRequest) -> PredictResponse:
         risk_timeline=timeline,
         life_indicators=life_indicators,
         trajectory=trajectory,
+        scenario_trajectories=scenario_trajectories,
         narrative=narrative,
     )

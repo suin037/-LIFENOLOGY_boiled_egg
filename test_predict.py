@@ -55,6 +55,12 @@ def run(case: dict) -> None:
         for t in r.trajectory:
             band = f"{t.income_p25:.0f}~{t.income_p50:.0f}~{t.income_p75:.0f}"
             print(f"     {t.year:>3} {t.age:>3} {t.sample_n:>4} {band:>18} {str(t.job_change_cum):>7}")
+    if r.scenario_trajectories:
+        stay = {p.year: p for p in r.scenario_trajectories["유지"]}
+        move = {p.year: p for p in r.scenario_trajectories["이직"]}
+        print("  평행우주(유지 vs 이직 중앙소득, 격차=L3 인과효과):")
+        for y in sorted(stay):
+            print(f"     {y}년차: 유지 {stay[y].income_p50:.0f}만  /  이직 {move[y].income_p50:.0f}만")
 
 
 if __name__ == "__main__":
