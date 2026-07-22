@@ -1,6 +1,9 @@
-"""lifelines: 재직기간 생존분석.
+"""lifelines: 재직기간 생존분석 (L4 — '후회 리스크' 타임라인).
 
-v2: KLIPS 실데이터 스펠 모델(lifelines_klips.pkl) 우선, 없으면 폴백.
+v3: 종단 스펠 모델을 '연령대'로 라우팅한다.
+    · 청년(age ≤ YOUTH_MAX)  → lifelines_yp.pkl     (YP2021 청년패널 스펠)
+    · 그 외                  → lifelines_klips.pkl  (KLIPS 스펠)
+    · 둘 다 없으면            → lifelines.pkl        (GOMS 폴백; encoders 별도)
 """
 
 from functools import lru_cache
@@ -11,16 +14,35 @@ import pandas as pd
 
 from config import settings
 
+YOUTH_MAX = 31
+
 
 @lru_cache(maxsize=1)
-def _load():
-    klips = settings.artifacts_abspath / "lifelines_klips.pkl"
-    if klips.exists():
-        art = joblib.load(klips)
-        return art, art
-    art = joblib.load(settings.artifacts_abspath / "lifelines.pkl")
-    enc = joblib.load(settings.artifacts_abspath / "encoders.pkl")
-    return art, enc
+def _load_all() -> dict:
+    A = settings.artifacts_abspath
+    arts: dict = {}
+    for key, fname in (("yp", "lifelines_yp.pkl"), ("klips", "lifelines_klips.pkl")):
+        p = A / fname
+        if p.exists():
+            art = joblib.load(p)
+            arts[key] = (art, art)
+    goms = A / "lifelines.pkl"
+    if goms.exists():
+        arts["goms"] = (joblib.load(goms), joblib.load(A / "encoders.pkl"))
+    return arts
+
+
+def _select(features: dict) -> tuple:
+    arts = _load_all()
+    age = features.get("age")
+    if age is not None and float(age) <= YOUTH_MAX:
+        order = ("yp", "klips", "goms")
+    else:
+        order = ("klips", "yp", "goms")
+    for key in order:
+        if key in arts:
+            return arts[key]
+    raise RuntimeError("lifelines artifact 가 하나도 없습니다.")
 
 
 def _value(col: str, features: dict, enc: dict) -> float:
@@ -42,7 +64,7 @@ def _value(col: str, features: dict, enc: dict) -> float:
 
 def estimate_survival(features: dict) -> float:
     """예상 재직기간 중앙값(개월)."""
-    art, enc = _load()
+    art, enc = _select(features)
     X = pd.DataFrame([[_value(c, features, enc) for c in art["cov_cols"]]],
                      columns=art["cov_cols"])
     med = art["cox"].predict_median(X)
@@ -54,7 +76,7 @@ def estimate_survival(features: dict) -> float:
 
 def risk_timeline(features: dict, years=(1, 3, 5)) -> dict[int, float]:
     """N년 후 이직(이탈) 누적확률 - 서비스 '후회 리스크' 멘트용."""
-    art, enc = _load()
+    art, enc = _select(features)
     X = pd.DataFrame([[_value(c, features, enc) for c in art["cov_cols"]]],
                      columns=art["cov_cols"])
     sf = art["cox"].predict_survival_function(X)
