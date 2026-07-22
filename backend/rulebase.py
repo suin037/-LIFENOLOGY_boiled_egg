@@ -31,7 +31,11 @@ ELFS_AGE = DGROUP / "kosis_고용형태별근로실태조사_연령별/lookup_el
 BIZSURV = DGROUP / "kosis_기업생멸행정통계/lookup_bizsurvival_survival_v1.csv"
 QOL = DGROUP / "kosis_사회통합실태조사/lookup_qol_indicators_v2.csv"
 YOUTHQOL = DGROUP / "국가데이터처_청년삶의질2025/lookup_youthqol_indicators_v1.csv"
+KEDI = DGROUP / "한국교육개발원_고등교육기관_졸업자_학과별_상황/lookup_kedi_emp_rate_by_field_v1.csv"
 MASTER = LANOLLAB / "lookup_lanollab_master_v1.csv"
+
+# 계열명 목록 (profile.major 매칭용)
+_FIELDS = ["인문", "사회", "교육", "공학", "자연", "의약", "예체능", "기타"]
 
 
 @lru_cache(maxsize=16)
@@ -196,6 +200,36 @@ def _src_youth(profile: dict) -> list[dict]:
     return out
 
 
+def _src_education(profile: dict) -> list[dict]:
+    """계열별 취업률·진학률 (KEDI 고등교육 졸업 후 상황).
+
+    진학 vs 취업 저울질에 핵심. profile.major 가 계열명과 매칭되면 그 계열,
+    아니면 '전체' 기준값을 제공한다.
+    """
+    df = _csv(str(KEDI))
+    if df is None:
+        return []
+    major = str(profile.get("major", ""))
+    field = next((f for f in _FIELDS if f in major), None)
+    row = df[df["major_field"] == field] if field else df[df["major_field"] == "전체"]
+    if row.empty:
+        row = df[df["major_field"] == "전체"]
+    if row.empty:
+        return []
+    r = row.iloc[0]
+    label = str(r["major_field"])
+    out = []
+    if pd.notna(r.get("emp_rate")):
+        out.append({"dimension": "진학/취업", "indicator": f"{label} 계열 취업률",
+                    "value": round(float(r["emp_rate"]), 1), "unit": "%",
+                    "group": f"{label}·{r.get('year', '')}", "source": "KEDI 고등교육 졸업 후 상황"})
+    if pd.notna(r.get("advance_rate")):
+        out.append({"dimension": "진학/취업", "indicator": f"{label} 계열 진학률(대학원 등)",
+                    "value": round(float(r["advance_rate"]), 1), "unit": "%",
+                    "group": f"{label}·{r.get('year', '')}", "source": "KEDI 고등교육 졸업 후 상황"})
+    return out
+
+
 def _src_startup(profile: dict) -> list[dict]:
     """창업 선택 시 — 창업 N년 생존율."""
     if "창업" not in str(profile.get("choice", "")):
@@ -224,6 +258,7 @@ _SOURCES = [
     _src_health,              # 정신/신체건강 · 직업환경
     _src_qol,                 # 삶의질
     _src_youth,               # 청년 삶의질
+    _src_education,           # 진학/취업 — 계열별 취업률·진학률 (KEDI)
     _src_startup,             # 창업 (choice=창업)
 ]
 

@@ -65,8 +65,8 @@ def predict(req: PredictRequest) -> PredictResponse:
         coverage = ("창업: 생활지표(L1) + 창업 생존/폐업 통계. "
                     "개인단위 인과·매칭은 창업 추적 데이터 부재로 미제공")
     else:  # 진학
-        coverage = ("진학: 생활지표(L1) 중심. "
-                    "취업률(KEDI)·개인단위 모델은 데이터 확보 후 확장 예정")
+        coverage = ("진학: 생활지표(L1) + 계열별 취업률·진학률(KEDI). "
+                    "개인단위 인과·매칭은 진학 추적 데이터 부재로 미제공")
 
     narrative = generate_narrative(req, expected_wage or 0, effect or 0, survival or 0)
 
