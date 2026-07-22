@@ -55,6 +55,9 @@ def run(case: dict) -> None:
         for t in r.trajectory:
             band = f"{t.income_p25:.0f}~{t.income_p50:.0f}~{t.income_p75:.0f}"
             print(f"     {t.year:>3} {t.age:>3} {t.sample_n:>4} {band:>18} {str(t.job_change_cum):>7}")
+    if r.wellbeing_trajectory:
+        wb = " → ".join(f"{p.satis_p50:.1f}" for p in r.wellbeing_trajectory)
+        print(f"  만족도 궤적(종합 1~5, 청년): {wb}")
     if r.scenario_trajectories:
         stay = {p.year: p for p in r.scenario_trajectories["유지"]}
         move = {p.year: p for p in r.scenario_trajectories["이직"]}

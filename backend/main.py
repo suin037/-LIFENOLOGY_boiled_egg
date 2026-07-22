@@ -9,7 +9,7 @@ from models.knn_model import find_neighbors
 from models.econml_model import estimate_effect
 from models.lifelines_model import estimate_survival, risk_timeline
 from rulebase import query_life_indicators, startup_closure_timeline
-from trajectory import project_trajectory
+from trajectory import project_trajectory, project_wellbeing_trajectory
 from utils.scoring import build_feature_vector
 from utils.claude_api import generate_narrative
 
@@ -49,7 +49,8 @@ def predict(req: PredictRequest) -> PredictResponse:
     life_indicators = query_life_indicators(features)
 
     # Layer 5: 종단 궤적 — 비슷한 사람들의 향후 N년 실제 경로 분포 (데이터 기반 미래 예측)
-    trajectory = project_trajectory(features)
+    trajectory = project_trajectory(features)                       # 소득(KLIPS, 10년)
+    wellbeing_trajectory = project_wellbeing_trajectory(features)   # 만족도(YP, 청년·단기)
     scenario_trajectories: dict = {}
 
     # 개인단위 레이어(L2/L3/L4)는 '이직'에만 인과 데이터가 있어 적용. 나머지는 None.
@@ -102,6 +103,7 @@ def predict(req: PredictRequest) -> PredictResponse:
         risk_timeline=timeline,
         life_indicators=life_indicators,
         trajectory=trajectory,
+        wellbeing_trajectory=wellbeing_trajectory,
         scenario_trajectories=scenario_trajectories,
         narrative=narrative,
     )

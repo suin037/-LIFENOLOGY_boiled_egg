@@ -68,6 +68,17 @@ class TrajectoryPoint(BaseModel):
     job_change_cum: Optional[float] = Field(None, description="시작 이후 누적 이직 경험 비율")
 
 
+class WellbeingPoint(BaseModel):
+    """만족도 궤적 한 시점 — 종합 만족도(1~5)의 시간 변화 (청년·YP)."""
+
+    year: int = Field(..., description="시작 기준 경과 연수(0=현재)")
+    age: int
+    sample_n: int
+    satis_p25: float = Field(..., description="종합 만족도 하위25%(1~5)")
+    satis_p50: float = Field(..., description="종합 만족도 중앙값(1~5)")
+    satis_p75: float = Field(..., description="종합 만족도 상위25%(1~5)")
+
+
 class PredictResponse(BaseModel):
     """평행우주 추정 결과.
 
@@ -92,6 +103,8 @@ class PredictResponse(BaseModel):
         description="Layer1 룰베이스 생활지표 패널(경제·삶의질·건강·창업 등) — 넓은 인생 차원")
     trajectory: list[TrajectoryPoint] = Field(default_factory=list,
         description="종단 궤적 — 비슷한 사람들의 향후 N년 소득·이직 실제 분포(데이터 기반 미래 예측)")
+    wellbeing_trajectory: list[WellbeingPoint] = Field(default_factory=list,
+        description="만족도 궤적 — 종합 만족도(1~5)의 시간 변화(청년·YP). 소득 궤적과 짝지어 해석")
     scenario_trajectories: dict[str, list[TrajectoryPoint]] = Field(default_factory=dict,
         description="선택지 평행우주 — {'유지': 기준경로, '이직': 기준+L3인과효과}. 이직 choice에서만 제공")
     narrative: str = Field("", description="Claude 가 생성한 설명")

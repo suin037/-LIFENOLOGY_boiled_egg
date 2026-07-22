@@ -19,6 +19,9 @@ import pandas as pd
 from config import settings
 
 KLIPS_PATH = settings.goms_clean_abspath.parent / "raw" / "klips" / "klips_base.pkl"
+YP_PATH = settings.goms_clean_abspath.parent / "clean" / "yp_clean.csv"
+SATIS = ["satis_work", "satis_growth", "satis_income", "satis_stability", "satis_future"]
+YP_FEATS = ["age", "sex", "income_now", "edu_level"]
 # 매칭 피처: 나이·성별·소득 + 학력·고용형태(정규여부)
 #  ※ 전공/만족도는 KLIPS(노동패널)에 없어 궤적 매칭엔 사용 불가.
 FEATS = ["나이", "성별", "월임금_실질", "학력", "정규여부"]
@@ -101,5 +104,84 @@ def project_trajectory(features: dict, horizon: int = 10, k: int = 300,
                 "income_p50": int(np.percentile(incs, 50)),
                 "income_p75": int(np.percentile(incs, 75)),
                 "job_change_cum": round(moved / tot, 3) if tot else None,
+            })
+    return out
+
+
+# ---------------------------------------------------------------- 만족도 궤적 (YP)
+@lru_cache(maxsize=1)
+def _yp_panel():
+    """YP 청년패널 — 웨이브별 종합 만족도(1~5) 추적용. (KLIPS 엔 만족도 없음)"""
+    if not YP_PATH.exists():
+        return None
+    y = pd.read_csv(YP_PATH)
+    for c in SATIS + YP_FEATS:
+        if c in y.columns:
+            y[c] = pd.to_numeric(y[c], errors="coerce")
+    have = [c for c in SATIS if c in y.columns]
+    if not have:
+        return None
+    y["만족도"] = y[have].mean(axis=1)
+    y = y.dropna(subset=["age", "sex", "만족도"])
+    match = y.dropna(subset=YP_FEATS)
+    if len(match) < 50:
+        return None
+    mu, sd = match[YP_FEATS].mean(), match[YP_FEATS].std().replace(0, 1)
+    by_pid = {p: g.set_index("wave") for p, g in y.groupby("person_id")}
+    return {"match": match, "mu": mu, "sd": sd, "by_pid": by_pid}
+
+
+def project_wellbeing_trajectory(features: dict, horizon: int = 3, k: int = 300,
+                                 min_n: int = 15) -> list[dict]:
+    """프로필 → 향후 몇 년 '종합 만족도(1~5)' 궤적 (청년·YP 4웨이브 기준).
+
+    소득 궤적과 짝지어 "돈은 늘지만 만족도는?"에 답한다. 청년 범위 밖이면 빈 리스트.
+    """
+    P = _yp_panel()
+    if P is None:
+        return []
+    match, mu, sd, by_pid = P["match"], P["mu"], P["sd"], P["by_pid"]
+    A = features.get("age")
+    if A is None:
+        return []
+    try:
+        sex = float(features.get("sex"))
+    except (TypeError, ValueError):
+        sex = float(match["sex"].median())
+    W = features.get("monthly_wage")
+    if W is None:
+        near = match[match["age"].between(A - 1, A + 1)]["income_now"]
+        W = float(near.median()) if len(near) else float(match["income_now"].median())
+    edu = features.get("edu_level")
+    edu = float(edu) if edu is not None else float(match["edu_level"].median())
+
+    cand = match[match["age"].between(A - 1, A + 1)]
+    if len(cand) < min_n:
+        return []
+    q = {"age": A, "sex": sex, "income_now": float(W), "edu_level": edu}
+    zq = np.array([(q[c] - mu[c]) / sd[c] for c in YP_FEATS])
+    Z = ((cand[YP_FEATS] - mu) / sd).to_numpy()
+    dist = np.sqrt(((Z - zq) ** 2).sum(axis=1))
+    starts = cand.assign(_d=dist).nsmallest(k, "_d")[["person_id", "wave"]].to_numpy()
+
+    out = []
+    for h in range(horizon + 1):
+        vals = []
+        for pid, w0 in starts:
+            g = by_pid.get(pid)
+            if g is None:
+                continue
+            w = int(w0) + h
+            if w in g.index:
+                r = g.loc[w]
+                r = r.iloc[0] if isinstance(r, pd.DataFrame) else r
+                if pd.notna(r["만족도"]):
+                    vals.append(float(r["만족도"]))
+        if len(vals) >= min_n:
+            out.append({
+                "year": h, "age": int(A) + h, "sample_n": len(vals),
+                "satis_p25": round(float(np.percentile(vals, 25)), 2),
+                "satis_p50": round(float(np.percentile(vals, 50)), 2),
+                "satis_p75": round(float(np.percentile(vals, 75)), 2),
             })
     return out
