@@ -54,15 +54,25 @@ class LifeIndicator(BaseModel):
 
 
 class PredictResponse(BaseModel):
-    """평행우주 추정 결과."""
+    """평행우주 추정 결과.
 
-    expected_wage: float
-    causal_effect: float = Field(..., description="선택이 임금에 미친 인과효과(EconML)")
-    survival_months: float = Field(..., description="해당 직무 평균 재직기간(lifelines)")
+    선택지(choice)에 따라 제공되는 레이어가 다르다:
+      · 이직 — 개인단위 매칭(L2)·인과(L3)·생존(L4) 전부 + 생활지표(L1)
+      · 창업 — 생활지표(L1) + 창업 폐업 타임라인. 개인단위 필드는 None
+      · 진학 — 생활지표(L1) 중심. 개인단위 필드는 None
+    그래서 개인단위 수치 필드는 Optional 이며, coverage 로 무엇이 제공됐는지 알린다.
+    """
+
+    choice: str = Field(..., description="적용된 선택지 (이직/창업/진학)")
+    coverage: str = Field("", description="이 선택지에 어떤 레이어가 적용됐는지 설명")
+
+    expected_wage: Optional[float] = Field(None, description="유사집단 기대 월소득(L2, 이직만)")
+    causal_effect: Optional[float] = Field(None, description="선택이 임금에 미친 인과효과(L3 EconML, 이직만)")
+    survival_months: Optional[float] = Field(None, description="평균 재직기간(L4 lifelines, 이직만)")
     neighbors: list[NeighborCase] = []
-    neighbor_changed_ratio: float = Field(0.0, description="유사집단 중 실제 이직한 비율")
+    neighbor_changed_ratio: Optional[float] = Field(None, description="유사집단 중 실제 이직 비율(이직만)")
     risk_timeline: dict[int, float] = Field(default_factory=dict,
-        description="{연차: 이직 누적확률} — KLIPS/YP 생존분석")
+        description="{연차: 누적확률} — 이직=이직확률(L4), 창업=폐업확률(생멸통계)")
     life_indicators: list[LifeIndicator] = Field(default_factory=list,
         description="Layer1 룰베이스 생활지표 패널(경제·삶의질·건강·창업 등) — 넓은 인생 차원")
     narrative: str = Field("", description="Claude 가 생성한 설명")

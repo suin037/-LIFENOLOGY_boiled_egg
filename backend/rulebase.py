@@ -237,3 +237,25 @@ def query_life_indicators(profile: dict) -> list[dict]:
         except Exception:
             continue
     return out
+
+
+def startup_closure_timeline(profile: dict, years=(1, 3, 5)) -> dict:
+    """창업 폐업 누적확률 타임라인 (L4 '후회 리스크'의 창업판).
+
+    창업은 개인단위 인과 데이터가 없어 이직의 L3/L4 를 못 쓴다.
+    대신 기업생멸통계 생존율(전체 업종)을 폐업확률(=1-생존율)로 바꿔
+    '시간이 지날수록 접을 확률' 타임라인을 제공한다.
+    """
+    df = _csv(str(BIZSURV))
+    if df is None:
+        return {}
+    d = df[(df["industry"] == "전체") & (df["ksic_section"] == "전체") & (df["firm_size"] == "계")]
+    if d.empty:
+        return {}
+    d = d[d["ref_year"] == d["ref_year"].max()]
+    out = {}
+    for h in years:
+        m = d[d["survival_horizon_yr"] == h]
+        if not m.empty:
+            out[h] = round(1 - float(m["survival_rate"].iloc[0]) / 100.0, 3)
+    return out
