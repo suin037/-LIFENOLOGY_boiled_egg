@@ -54,6 +54,18 @@ class LifeIndicator(BaseModel):
     source: str
 
 
+class TrajectoryPoint(BaseModel):
+    """종단 궤적 한 시점 — '너와 비슷한 사람들'의 실제 관측 분포."""
+
+    year: int = Field(..., description="시작 시점 기준 경과 연수(0=현재)")
+    age: int
+    sample_n: int = Field(..., description="이 시점까지 추적된 유사인 수 (작을수록 불확실)")
+    income_p25: float = Field(..., description="월소득 하위 25%(만원)")
+    income_p50: float = Field(..., description="월소득 중앙값(만원)")
+    income_p75: float = Field(..., description="월소득 상위 25%(만원)")
+    job_change_cum: Optional[float] = Field(None, description="시작 이후 누적 이직 경험 비율")
+
+
 class PredictResponse(BaseModel):
     """평행우주 추정 결과.
 
@@ -76,4 +88,6 @@ class PredictResponse(BaseModel):
         description="{연차: 누적확률} — 이직=이직확률(L4), 창업=폐업확률(생멸통계)")
     life_indicators: list[LifeIndicator] = Field(default_factory=list,
         description="Layer1 룰베이스 생활지표 패널(경제·삶의질·건강·창업 등) — 넓은 인생 차원")
+    trajectory: list[TrajectoryPoint] = Field(default_factory=list,
+        description="종단 궤적 — 비슷한 사람들의 향후 N년 소득·이직 실제 분포(데이터 기반 미래 예측)")
     narrative: str = Field("", description="Claude 가 생성한 설명")

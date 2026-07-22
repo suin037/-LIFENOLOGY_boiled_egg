@@ -9,6 +9,7 @@ from models.knn_model import find_neighbors
 from models.econml_model import estimate_effect
 from models.lifelines_model import estimate_survival, risk_timeline
 from rulebase import query_life_indicators, startup_closure_timeline
+from trajectory import project_trajectory
 from utils.scoring import build_feature_vector
 from utils.claude_api import generate_narrative
 
@@ -47,6 +48,9 @@ def predict(req: PredictRequest) -> PredictResponse:
     # Layer 1: 룰베이스 생활지표 패널 — 선택지 무관 항상 제공 (choice 는 창업 지표 포함 여부에 반영됨)
     life_indicators = query_life_indicators(features)
 
+    # Layer 5: 종단 궤적 — 비슷한 사람들의 향후 N년 실제 경로 분포 (데이터 기반 미래 예측)
+    trajectory = project_trajectory(features)
+
     # 개인단위 레이어(L2/L3/L4)는 '이직'에만 인과 데이터가 있어 적용. 나머지는 None.
     neighbors: list = []
     expected_wage = changed_ratio = effect = survival = None
@@ -68,7 +72,12 @@ def predict(req: PredictRequest) -> PredictResponse:
         coverage = ("진학: 생활지표(L1) + 계열별 취업률·진학률(KEDI). "
                     "개인단위 인과·매칭은 진학 추적 데이터 부재로 미제공")
 
-    narrative = generate_narrative(req, expected_wage or 0, effect or 0, survival or 0)
+    # narrative 는 3번 팀원 RAG/Claude API 담당. 키 미설정·호출 실패 시에도
+    # 예측(L1~L4)은 정상 반환되도록 방어. (테스트/개발 중 API 키 없이 구동 가능)
+    try:
+        narrative = generate_narrative(req, expected_wage or 0, effect or 0, survival or 0)
+    except Exception:
+        narrative = ""
 
     return PredictResponse(
         choice=req.choice,
@@ -80,5 +89,6 @@ def predict(req: PredictRequest) -> PredictResponse:
         neighbor_changed_ratio=changed_ratio,
         risk_timeline=timeline,
         life_indicators=life_indicators,
+        trajectory=trajectory,
         narrative=narrative,
     )
