@@ -35,6 +35,9 @@ ARTIFACTS = Path("backend/models/artifacts")
 # YP 표본은 19~31세. 타겟(25~35)보다 약간 넓게 잡아 표본 확보(데이터 밖은 자동 무효).
 AGE_MIN, AGE_MAX = 19, 34
 
+# L2 매칭 피처: GOMS 와 요청이 공유하는 항목만 (YP 엔 전공 major 가 없어 제외)
+YP_KNN_FEATURES = ["sex", "age", "monthly_wage", "satis_overall", "firm_size"]
+
 
 # ---------------------------------------------------------------- L3
 def build_causal_panel() -> pd.DataFrame:
@@ -155,11 +158,46 @@ def train_lifelines_yp() -> dict:
             "medians": medians, "source": "YP2021 스펠"}
 
 
+# ---------------------------------------------------------------- L2
+def train_knn_yp() -> dict:
+    """청년 매칭 풀 — YP 응답자 중 유효 소득자로 KNN 구성.
+
+    GOMS 매칭(전공 포함)을 대체하지 않고, 서빙에서 청년에게 GOMS 와 '섞어서'
+    제공된다. YP 엔 전공이 없어 매칭 피처에서 major 를 뺀다.
+    """
+    from sklearn.neighbors import NearestNeighbors
+    from sklearn.preprocessing import StandardScaler
+
+    p = pd.read_csv(CLEAN_DIR / "yp_clean.csv")
+    d = p.rename(columns={"income_now": "monthly_wage", "satis_work": "satis_overall"})
+    keep = ["sex", "age", "monthly_wage", "satis_overall", "firm_size",
+            "changed_job", "occupation_raw"]
+    d = d[[c for c in keep if c in d.columns]].copy()
+    d = d.dropna(subset=["sex", "age", "monthly_wage"])
+    d = d[d["monthly_wage"] > 0]
+    d = d[d["age"].between(AGE_MIN, AGE_MAX)]
+    for c in ("satis_overall", "firm_size"):
+        d[c] = pd.to_numeric(d[c], errors="coerce")
+        d[c] = d[c].fillna(d[c].median())
+    d["changed_job"] = pd.to_numeric(d["changed_job"], errors="coerce").fillna(0).astype(int)
+
+    scaler = StandardScaler()
+    X = scaler.fit_transform(d[YP_KNN_FEATURES])
+    knn = NearestNeighbors(n_neighbors=10, metric="euclidean").fit(X)
+    print(f"[L2 YP KNN] fit 완료 (n={len(d):,}, 피처 {YP_KNN_FEATURES})")
+
+    ref = d[["monthly_wage", "satis_overall", "changed_job"]].reset_index(drop=True)
+    medians = {c: float(d[c].median()) for c in YP_KNN_FEATURES}
+    return {"model": knn, "scaler": scaler, "feature_cols": YP_KNN_FEATURES,
+            "ref": ref, "medians": medians, "source": "YP2021 청년패널"}
+
+
 def main() -> None:
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
     d = build_causal_panel()
     joblib.dump(train_econml_yp(d), ARTIFACTS / "econml_yp.pkl")
     joblib.dump(train_lifelines_yp(), ARTIFACTS / "lifelines_yp.pkl")
+    joblib.dump(train_knn_yp(), ARTIFACTS / "knn_yp.pkl")
     print(f"[done] YP artifacts -> {ARTIFACTS}/")
 
 

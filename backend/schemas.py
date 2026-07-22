@@ -30,6 +30,7 @@ class PredictRequest(BaseModel):
 class NeighborCase(BaseModel):
     """KNN 으로 찾은 유사 사례 1건."""
 
+    source: Optional[str] = Field(None, description="매칭 풀 출처: GOMS(전공 매칭) / YP(청년패널)")
     similarity: float
     monthly_wage: Optional[float] = None
     job_category: Optional[str] = None
