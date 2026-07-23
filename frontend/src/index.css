@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-bg text-ink font-sans antialiased;
+    /* 성도(star chart) 배경 그라디언트 */
+    background: radial-gradient(120% 90% at 50% -10%, #1a2138 0%, #0b0f1c 55%, #05070f 100%);
+    margin: 0;
+  }
+  /* 터치 하이라이트 제거 */
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+@layer utilities {
+  /* 스크롤바 숨김 (폰 화면 느낌) */
+  .no-scrollbar::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  /* 최소 터치 타겟 44px */
+  .tap {
+    min-height: 44px;
+  }
+}
