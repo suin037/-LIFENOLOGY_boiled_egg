@@ -44,20 +44,3 @@ frontend/dist/
 .DS_Store
 Thumbs.db
 ~$*.xlsx
-
-# ===== Ãß°¡ =====
-*.pt
-*.pth
-*.pkl
-*.parquet
-*.log
-data/clean/
-data_backup/
-raw/
-ckpt/
-ckpt_*/
-diary_eval.py
-tempCodeRunnerFile.py
-aihubshell
-python
-scp
