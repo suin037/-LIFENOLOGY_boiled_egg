@@ -11,3 +11,5 @@ lifelines>=0.28
 pyreadstat>=1.2
 anthropic>=0.40
 joblib>=1.3
+chromadb>=0.5
+sentence-transformers>=2.7

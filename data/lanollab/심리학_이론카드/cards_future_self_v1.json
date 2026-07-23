@@ -1,0 +1,62 @@
+{
+  "theory_ko": "미래자기 (가능자기·미래자기 연속성)",
+  "theory_en": "Future Self (Possible Selves & Future Self-Continuity)",
+  "schema_version": "v1",
+  "_authoring_note": "팀 원본 카드 파일이 없어 이론(Markus & Nurius, 1986 가능자기 / Hershfield, 2011 미래자기 연속성)에 근거해 AI가 신규 초안 작성함. 팀 검수 후 확정 필요. 이 이론은 Parallel Me의 '미래·평행 자기 시뮬레이션' 콘셉트의 이론적 근거이므로 우선순위 높음.",
+  "cards": [
+    {
+      "card_id": "future_self_possible_001",
+      "theory_ko": "미래자기 (가능자기·미래자기 연속성)",
+      "theory_en": "Future Self (Possible Selves & Future Self-Continuity)",
+      "theorist": "Markus & Nurius",
+      "year": 1986,
+      "concept_ko": "가능자기 (Possible selves)",
+      "summary": "'되고 싶은 나(hoped-for self)', '되기 두려운 나(feared self)', '될 것 같은 나(expected self)'처럼 미래의 자기에 대한 구체적 표상. 가능자기는 현재 행동의 동기와 방향을 제공한다. 막연한 목표보다 생생하게 그려진 미래 자기가 행동을 더 강하게 이끈다.",
+      "applicable_situations": {
+        "indicator": ["성장_가능성"],
+        "direction": "낮을수록_적용",
+        "emotion_keywords": ["막막함", "방향_상실", "무기력", "공허함"],
+        "decision_types": ["이직", "진학", "창업", "거주지_이동"]
+      },
+      "interventions": [
+        "3년 뒤 '되고 싶은 나'의 하루를 구체적 장면 하나로 적어보기(어디서·무엇을·누구와).",
+        "'절대 되고 싶지 않은 나'도 한 장면 적고, 지금 그쪽으로 가지 않기 위해 이번 주 바꿀 작은 습관 하나 정하기."
+      ],
+      "narrative_guidance": "결과 예측이 막연할 때, 추상적 조언 대신 사용자가 '구체적 미래 자기 장면'을 그리도록 돕는다. 되고 싶은 자기와 피하고 싶은 자기를 함께 그려 현재 선택의 방향성을 또렷하게 만든다.",
+      "source": {
+        "citation": "Markus, H., & Nurius, P. (1986). Possible selves. American Psychologist, 41(9), 954-969.",
+        "doi_or_url": "https://doi.org/10.1037/0003-066X.41.9.954",
+        "evidence_level": "이론"
+      },
+      "tags": ["미래자기", "가능자기", "동기", "목표", "정체성"],
+      "version": "v1"
+    },
+    {
+      "card_id": "future_self_continuity_002",
+      "theory_ko": "미래자기 (가능자기·미래자기 연속성)",
+      "theory_en": "Future Self (Possible Selves & Future Self-Continuity)",
+      "theorist": "Hershfield",
+      "year": 2011,
+      "concept_ko": "미래자기 연속성 (Future self-continuity)",
+      "summary": "미래의 나를 '남'이 아니라 '지금의 나와 이어진 같은 사람'으로 느끼는 정도. 이 연속감이 높을수록 미래의 나를 위한 선택(저축·건강·역량 투자)을 더 잘 하고, 낮으면 현재의 만족을 위해 미래를 희생하는 근시안적 선택을 하기 쉽다. 미래 자기와의 정서적 연결을 강화하면 장기적 의사결정이 개선된다.",
+      "applicable_situations": {
+        "indicator": ["경제적_안정도", "성장_가능성"],
+        "direction": "낮을수록_적용",
+        "emotion_keywords": ["조급함", "불안", "근시안", "현재편향"],
+        "decision_types": ["이직", "진학", "창업", "거주지_이동"]
+      },
+      "interventions": [
+        "10년 뒤의 나에게 지금의 고민을 설명하는 짧은 편지를 써보고, 그 미래의 내가 뭐라고 답할지도 적어보기.",
+        "이번 선택을 '지금의 나'가 아니라 '10년 뒤의 나'가 고맙게 여길 기준으로 다시 평가해보기."
+      ],
+      "narrative_guidance": "눈앞의 조급함으로 장기 손해를 볼 위험이 보일 때, 미래의 나를 생생한 인격체로 등장시켜 현재의 나와 대화하게 한다. 단, 현재의 고통이 절박한 경우엔 미래를 위한 인내를 강요하지 않고 현재의 필요를 먼저 인정한다.",
+      "source": {
+        "citation": "Hershfield, H. E. (2011). Future self-continuity: How conceptions of the future self transform intertemporal choice. Annals of the New York Academy of Sciences, 1235, 30-43.",
+        "doi_or_url": "https://doi.org/10.1111/j.1749-6632.2011.06201.x",
+        "evidence_level": "실증연구"
+      },
+      "tags": ["미래자기", "미래자기연속성", "시간할인", "장기의사결정", "현재편향"],
+      "version": "v1"
+    }
+  ]
+}

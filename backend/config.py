@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     # Claude 모델 (최신 권장)
     claude_model: str = "claude-opus-4-8"
 
+    # True면 실제 Claude를 호출하지 않고 결정적 가짜 서사를 반환한다.
+    # (무료 파이프라인 테스트·프론트 개발용. .env 에 MOCK_LLM=true 로 켠다.)
+    mock_llm: bool = False
+
     @property
     def goms_clean_abspath(self) -> Path:
         return ROOT / self.goms_clean_path

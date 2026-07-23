@@ -16,6 +16,10 @@ data/processed/*
 !data/processed/.gitkeep
 data/goms_clean.csv
 
+# 데모용 합성 데이터 (가짜) — training/make_synthetic.py 로 재생성
+data/klips_clean.csv
+data/klips_survival.csv
+
 # Model artifacts
 backend/models/artifacts/*.pkl
 
@@ -54,3 +58,6 @@ frontend/dist/
 .DS_Store
 Thumbs.db
 ~$*.xlsx
+
+# 심리카드 벡터DB(재생성 가능, 커밋 안 함)
+data/vectordb/
