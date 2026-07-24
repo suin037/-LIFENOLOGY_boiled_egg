@@ -19,8 +19,9 @@ class Settings(BaseSettings):
     goms_clean_path: str = "data/goms_clean.csv"
     artifacts_dir: str = "backend/models/artifacts"
 
-    # Claude 모델 (최신 권장)
-    claude_model: str = "claude-opus-4-8"
+    # Claude 모델 — 서사 생성용. 저렴+적당 기본값(Haiku).
+    # 환경변수 CLAUDE_MODEL 로 덮어쓸 수 있음(예: claude-sonnet-5 / claude-opus-4-8).
+    claude_model: str = "claude-haiku-4-5"
 
     @property
     def goms_clean_abspath(self) -> Path:
