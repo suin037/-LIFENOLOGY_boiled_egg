@@ -1,0 +1,116 @@
+{
+  "theory_ko": "회복탄력성 (CD-RISC)",
+  "theory_en": "Resilience (Connor-Davidson Resilience Scale)",
+  "schema_version": "v1",
+  "_authoring_note": "팀 원본 카드 파일이 없어 이론(Connor & Davidson, 2003 및 회복탄력성 문헌)에 근거해 AI가 신규 초안 작성함. 팀 검수 후 확정 필요. ⚠️ 중복 주의: WORKLOG §8 기준 CD-RISC는 sohyunio가 paper_rag.py(논문 청킹 RAG)로 별도 진행 중 — 이 카드 접근과 중복/충돌 가능하니 통합 전 조율 필요. CD-RISC 척도 원 문항은 저작물이므로 미포함, 요인 개념만 재구성. CD-RISC 요인 구조는 표본에 따라 달라진다고 보고되므로 아래는 '척도 요인'이 아닌 '실무 개입 개념 단위'로 재구성.",
+  "cards": [
+    {
+      "card_id": "resilience_control_001",
+      "theory_ko": "회복탄력성 (CD-RISC)",
+      "theory_en": "Resilience (Connor-Davidson Resilience Scale)",
+      "theorist": "Connor & Davidson",
+      "year": 2003,
+      "concept_ko": "통제감 (Sense of control)",
+      "summary": "역경 속에서도 '내가 영향을 줄 수 있는 부분이 있다'고 느끼는 정도. 회복탄력성이 높은 사람은 통제 불가능한 것과 통제 가능한 것을 구분하고, 통제 가능한 곳에 에너지를 집중한다. 통제감은 무력감을 줄이고 실제 행동을 촉발한다.",
+      "applicable_situations": {
+        "indicator": ["삶의_질", "경제적_안정도"],
+        "direction": "낮을수록_적용",
+        "emotion_keywords": ["무력감", "압도감", "불안", "체념"],
+        "decision_types": ["이직", "창업", "거주지_이동", "진학"]
+      },
+      "interventions": [
+        "지금 걱정거리를 '내가 바꿀 수 있는 것'과 '바꿀 수 없는 것' 두 칸으로 나눠 적고, 바꿀 수 있는 칸에서 오늘 할 일 하나만 정하기.",
+        "통제 밖의 결과(합격 여부, 상대의 반응)에 쏟던 생각을, 내가 통제하는 준비 행동 하나로 옮겨 실행하기."
+      ],
+      "narrative_guidance": "결과가 불확실할 때, 통제 불가능한 변수에 대한 불안을 인정하되 사용자가 '지금 손댈 수 있는 영역'으로 초점을 옮기도록 돕는다. 억지 낙관 대신 '작은 통제감의 회복'을 강조.",
+      "source": {
+        "citation": "Connor, K. M., & Davidson, J. R. T. (2003). Development of a new resilience scale: The Connor-Davidson Resilience Scale (CD-RISC). Depression and Anxiety, 18(2), 76-82.",
+        "doi_or_url": "https://doi.org/10.1002/da.10113",
+        "evidence_level": "척도"
+      },
+      "tags": ["회복탄력성", "통제감", "무력감", "행동"],
+      "version": "v1"
+    },
+    {
+      "card_id": "resilience_adaptability_002",
+      "theory_ko": "회복탄력성 (CD-RISC)",
+      "theory_en": "Resilience (Connor-Davidson Resilience Scale)",
+      "theorist": "Connor & Davidson",
+      "year": 2003,
+      "concept_ko": "변화 수용과 적응 유연성 (Adaptability)",
+      "summary": "예상치 못한 변화나 좌절을 위협이 아니라 적응해야 할 새로운 조건으로 받아들이는 능력. 회복탄력적인 사람은 계획이 틀어졌을 때 한 길에 고착되지 않고 대안 경로로 유연하게 전환한다. 변화를 성장의 기회로 재해석하는 태도가 핵심이다.",
+      "applicable_situations": {
+        "indicator": ["성장_가능성", "삶의_질"],
+        "direction": "낮을수록_적용",
+        "emotion_keywords": ["막막함", "혼란", "상실감", "두려움"],
+        "decision_types": ["이직", "진학", "창업", "거주지_이동"]
+      },
+      "interventions": [
+        "원래 계획이 막혔다면, 같은 목표에 도달하는 '다른 경로' 두 가지를 억지로라도 적어보기.",
+        "이번 변화가 강제로 열어준 새로운 선택지·자유가 있다면 한 가지 찾아 적기(재해석 연습)."
+      ],
+      "narrative_guidance": "계획이 틀어진 상황에서, 상실을 충분히 인정한 뒤 '닫힌 문'이 아니라 '열린 다른 문'으로 시선을 확장하도록 돕는다. 변화 자체를 부정하거나 미화하지 않는다.",
+      "source": {
+        "citation": "Connor, K. M., & Davidson, J. R. T. (2003). Development of a new resilience scale: The Connor-Davidson Resilience Scale (CD-RISC). Depression and Anxiety, 18(2), 76-82.",
+        "doi_or_url": "https://doi.org/10.1002/da.10113",
+        "evidence_level": "척도"
+      },
+      "tags": ["회복탄력성", "적응", "유연성", "변화수용", "재해석"],
+      "version": "v1"
+    },
+    {
+      "card_id": "resilience_tenacity_003",
+      "theory_ko": "회복탄력성 (CD-RISC)",
+      "theory_en": "Resilience (Connor-Davidson Resilience Scale)",
+      "theorist": "Connor & Davidson",
+      "year": 2003,
+      "concept_ko": "끈기와 회복력 (Tenacity / bounce-back)",
+      "summary": "실패나 좌절 뒤에도 다시 일어나 목표를 향해 나아가는 힘. 회복탄력성이 높은 사람은 어려움을 '끝'이 아니라 '지나가는 국면'으로 보고, 스트레스 경험이 자신을 단련시킨다고 믿는다. 한 번의 실패를 정체성이 아니라 사건으로 다룬다.",
+      "applicable_situations": {
+        "indicator": ["성장_가능성", "삶의_질"],
+        "direction": "낮을수록_적용",
+        "emotion_keywords": ["좌절", "자책", "포기하고_싶음", "지침"],
+        "decision_types": ["이직", "진학", "창업"]
+      },
+      "interventions": [
+        "이번 좌절을 '나는 안 된다'가 아니라 '이번엔 이게 안 됐다'로 바꿔 한 문장으로 다시 쓰기(사건 vs 정체성 분리).",
+        "과거에 힘들었지만 결국 지나갔던 일 하나를 떠올려, 그때 나를 버티게 한 것이 무엇이었는지 적기."
+      ],
+      "narrative_guidance": "실패 직후에는 성급한 '다시 도전하라'는 압박을 피하고, 먼저 좌절감을 인정한 뒤 과거의 회복 경험을 근거로 '이번에도 지나갈 수 있다'는 감각을 되살린다.",
+      "source": {
+        "citation": "Connor, K. M., & Davidson, J. R. T. (2003). Development of a new resilience scale: The Connor-Davidson Resilience Scale (CD-RISC). Depression and Anxiety, 18(2), 76-82.",
+        "doi_or_url": "https://doi.org/10.1002/da.10113",
+        "evidence_level": "척도"
+      },
+      "tags": ["회복탄력성", "끈기", "회복력", "실패", "정체성분리"],
+      "version": "v1"
+    },
+    {
+      "card_id": "resilience_support_004",
+      "theory_ko": "회복탄력성 (CD-RISC)",
+      "theory_en": "Resilience (Connor-Davidson Resilience Scale)",
+      "theorist": "Connor & Davidson",
+      "year": 2003,
+      "concept_ko": "안정적 관계와 지지 자원 (Secure relationships)",
+      "summary": "믿고 기댈 수 있는 관계가 회복탄력성의 핵심 자원이다. 회복탄력적인 사람은 어려울 때 혼자 견디기보다 신뢰하는 사람에게 도움을 요청하고, 안정적 애착이 스트레스의 완충 역할을 한다. 지지를 구하는 것은 약함이 아니라 자원 활용이다.",
+      "applicable_situations": {
+        "indicator": ["삶의_질"],
+        "direction": "낮을수록_적용",
+        "emotion_keywords": ["외로움", "고립", "부담감", "막막함"],
+        "decision_types": ["이직", "결혼", "거주지_이동", "진학"]
+      },
+      "interventions": [
+        "지금 겪는 일을 털어놓을 수 있는 사람 한 명을 정해, 오늘 짧게라도 연락해 상황을 나누기.",
+        "도움이 필요한 구체적 부분 한 가지를 정해, '무엇을 도와달라'고 명확히 요청하는 문장을 미리 적어보기."
+      ],
+      "narrative_guidance": "고립감을 겪는 사용자에게, 도움 요청을 약점이 아니라 회복탄력성의 자원 활용으로 재구성해 준다. 관계 단절이 깊을 경우 아주 작은 연결 행동부터 제안한다.",
+      "source": {
+        "citation": "Connor, K. M., & Davidson, J. R. T. (2003). Development of a new resilience scale: The Connor-Davidson Resilience Scale (CD-RISC). Depression and Anxiety, 18(2), 76-82.",
+        "doi_or_url": "https://doi.org/10.1002/da.10113",
+        "evidence_level": "척도"
+      },
+      "tags": ["회복탄력성", "사회적지지", "관계", "애착", "도움요청"],
+      "version": "v1"
+    }
+  ]
+}
