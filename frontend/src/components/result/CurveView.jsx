@@ -14,13 +14,16 @@ import { A_COLOR } from "../../data/result.js";
 export default function CurveView({ result }) {
   const { points } = result.survival;
   const data = points.map((p) => ({ year: `${p.year}년`, risk: Math.round(p.risk * 100) }));
+  const last = points[points.length - 1] || { year: 0, risk: 0 };
+  const lastPct = Math.round(last.risk * 100);
+  const aLabel = result.option_a?.label || "이직";
 
   return (
     <Card>
       <h2 className="mb-2 flex items-center gap-2 text-base font-semibold">
-        재이직 리스크
+        이탈·후회 리스크
         <span className="rounded-[10px] border border-line px-1.5 py-0.5 text-[10px] font-normal text-mut">
-          관찰 3년
+          관찰 {last.year}년
         </span>
       </h2>
       <div className="h-[170px] w-full">
@@ -62,7 +65,7 @@ export default function CurveView({ result }) {
         </ResponsiveContainer>
       </div>
       <Caption>
-        이직한 사람 중 3년 내 42%가 또 옮겼습니다. 데이터가 3년까지라, 5·10년은 보여주지 않습니다.
+        {aLabel}한 사람들의 {last.year}년째 이탈·후회 리스크는 약 {lastPct}%입니다. 데이터가 있는 시점까지만 보여줍니다.
       </Caption>
     </Card>
   );

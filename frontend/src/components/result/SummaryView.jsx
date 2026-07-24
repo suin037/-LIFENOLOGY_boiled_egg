@@ -21,7 +21,7 @@ export default function SummaryView({ result }) {
       </p>
 
       <Card>
-        <h2 className="mb-1 text-base font-semibold">이직(A) vs 잔류(B), 실제 결과</h2>
+        <h2 className="mb-1 text-base font-semibold">{a.label}(A) vs {b.label}(B), 실제 결과</h2>
         <Row label="소득 변화 (중앙값)">
           <span className="font-bold text-cyan">+{a.income_change_med}%</span> <Sample n={a.n} /> vs{" "}
           <span className="font-bold text-gold">{b.income_change_med}%</span> <Sample n={b.n} />
@@ -31,17 +31,17 @@ export default function SummaryView({ result }) {
           <span className="text-sub">{b.income_down_pct}%</span>
         </Row>
         <Row label="표본">
-          이직 {a.n}명 / 잔류 {b.n}명
+          {a.label} {a.n}명 / {b.label} {b.n}명
         </Row>
       </Card>
 
       {/* Claude 서사 3블록 */}
       <Card highlight>
-        <div className="mb-1.5 text-xs font-bold text-cyan">UNIVERSE A · 이직한 사람들</div>
+        <div className="mb-1.5 text-xs font-bold text-cyan">UNIVERSE A · {a.label} 선택</div>
         <p className="text-[13px] leading-relaxed text-sub">{scenario.a}</p>
       </Card>
       <Card highlight>
-        <div className="mb-1.5 text-xs font-bold text-gold">UNIVERSE B · 현직에 남은 사람들</div>
+        <div className="mb-1.5 text-xs font-bold text-gold">UNIVERSE B · {b.label} 선택</div>
         <p className="text-[13px] leading-relaxed text-sub">{scenario.b}</p>
       </Card>
       <Card>

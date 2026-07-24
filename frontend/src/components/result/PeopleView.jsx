@@ -24,10 +24,10 @@ export default function PeopleView({ result }) {
           />
         ))}
       </div>
-      <Row label={<><span className="mr-1 inline-block h-2 w-2 rounded-full align-middle" style={{ background: A_COLOR }} />이직 선택</>}>
+      <Row label={<><span className="mr-1 inline-block h-2 w-2 rounded-full align-middle" style={{ background: A_COLOR }} />{a.label} 선택</>}>
         {a.n}명
       </Row>
-      <Row label={<><span className="mr-1 inline-block h-2 w-2 rounded-full align-middle" style={{ background: B_COLOR }} />현직 유지</>}>
+      <Row label={<><span className="mr-1 inline-block h-2 w-2 rounded-full align-middle" style={{ background: B_COLOR }} />{b.label} 선택</>}>
         {b.n}명
       </Row>
       <Caption>각 점은 GOMS·YP의 실제 응답자입니다. 지어낸 사람이 아닙니다.</Caption>

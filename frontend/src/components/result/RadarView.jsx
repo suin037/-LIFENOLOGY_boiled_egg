@@ -32,7 +32,7 @@ export default function RadarView({ result }) {
             />
             <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
             <Radar
-              name={`이직 A (${a.n}명)`}
+              name={`${a.label} A (${a.n}명)`}
               dataKey="A"
               stroke={A_COLOR}
               strokeWidth={1.5}
@@ -40,7 +40,7 @@ export default function RadarView({ result }) {
               fillOpacity={0.22}
             />
             <Radar
-              name={`잔류 B (${b.n}명)`}
+              name={`${b.label} B (${b.n}명)`}
               dataKey="B"
               stroke={B_COLOR}
               strokeWidth={1.5}
