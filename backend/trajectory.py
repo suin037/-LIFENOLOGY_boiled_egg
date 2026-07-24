@@ -185,3 +185,67 @@ def project_wellbeing_trajectory(features: dict, horizon: int = 3, k: int = 300,
                 "satis_p75": round(float(np.percentile(vals, 75)), 2),
             })
     return out
+
+
+def project_satisfaction_facets(features: dict, horizon: int = 3, k: int = 300,
+                                min_n: int = 15) -> dict:
+    """프로필 → 만족도 세부 facet별 궤적(중앙값, 청년·YP).
+
+    종합 만족도(project_wellbeing_trajectory) 하나로 뭉치지 않고, 5개 facet
+    (직무·자기발전·소득·고용안정·장래성)을 각각 보여준다. "이 길 간 사람들은
+    소득 만족은 높은데 장래성 만족은 낮더라" 같은 결을 만든다.
+    선택별로 갈리진 않지만(YP 직무만족은 취업자만 관측), '너와 비슷한 사람들'의
+    facet별 변화를 개인화해 보여주는 용도.
+
+    반환: {facet_key: [{year, age, sample_n, mean}], ...} (표본 부족 facet/연차는 생략)
+          (facet 은 1~5 정수라 중앙값이 4로 뭉개져 → 평균값 사용)
+    """
+    P = _yp_panel()
+    if P is None:
+        return {}
+    match, mu, sd, by_pid = P["match"], P["mu"], P["sd"], P["by_pid"]
+    A = features.get("age")
+    if A is None:
+        return {}
+    try:
+        sex = float(features.get("sex"))
+    except (TypeError, ValueError):
+        sex = float(match["sex"].median())
+    W = features.get("monthly_wage")
+    if W is None:
+        near = match[match["age"].between(A - 1, A + 1)]["income_now"]
+        W = float(near.median()) if len(near) else float(match["income_now"].median())
+    edu = features.get("edu_level")
+    edu = float(edu) if edu is not None else float(match["edu_level"].median())
+
+    cand = match[match["age"].between(A - 1, A + 1)]
+    if len(cand) < min_n:
+        return {}
+    q = {"age": A, "sex": sex, "income_now": float(W), "edu_level": edu}
+    zq = np.array([(q[c] - mu[c]) / sd[c] for c in YP_FEATS])
+    Z = ((cand[YP_FEATS] - mu) / sd).to_numpy()
+    dist = np.sqrt(((Z - zq) ** 2).sum(axis=1))
+    starts = cand.assign(_d=dist).nsmallest(k, "_d")[["person_id", "wave"]].to_numpy()
+
+    out: dict = {}
+    for facet in SATIS:
+        series = []
+        for h in range(horizon + 1):
+            vals = []
+            for pid, w0 in starts:
+                g = by_pid.get(pid)
+                if g is None or facet not in g.columns:
+                    continue
+                w = int(w0) + h
+                if w in g.index:
+                    r = g.loc[w]
+                    r = r.iloc[0] if isinstance(r, pd.DataFrame) else r
+                    if pd.notna(r[facet]):
+                        vals.append(float(r[facet]))
+            if len(vals) >= min_n:
+                # facet 은 1~5 정수라 중앙값이면 대부분 4로 뭉개짐 → 평균으로 결을 살림
+                series.append({"year": h, "age": int(A) + h, "sample_n": len(vals),
+                               "mean": round(float(np.mean(vals)), 2)})
+        if series:
+            out[facet] = series
+    return out

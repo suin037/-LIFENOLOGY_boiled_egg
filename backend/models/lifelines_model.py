@@ -74,6 +74,30 @@ def estimate_survival(features: dict) -> float:
     return v
 
 
+def model_confidence(features: dict) -> dict | None:
+    """이 입력에 쓰인 L4 생존모델의 신뢰지표(5-fold C-index 등). 없으면 None.
+
+    학습 시 저장된 `cv_concordance`(train/test/gap)와 표본수·관측범위를 그대로 노출한다.
+    ('정직한 불확실성' 차별점 — UI/응답에 예측력 지표를 함께 보여주기 위함)
+    """
+    try:
+        art, _ = _select(features)
+    except RuntimeError:
+        return None
+    cv = art.get("cv_concordance")
+    if not cv:
+        return None
+    return {
+        "metric": "5-fold C-index",
+        "c_index_test": cv.get("test"),
+        "c_index_train": cv.get("train"),
+        "overfit_gap": cv.get("gap"),
+        "n_spells": art.get("n"),
+        "source": art.get("source"),
+        "max_horizon_years": art.get("max_horizon_years"),
+    }
+
+
 def risk_timeline(features: dict, years=(1, 3, 5, 10)) -> dict[int, float]:
     """N년 후 이직(이탈) 누적확률 - 서비스 '후회 리스크' 멘트용.
 

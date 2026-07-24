@@ -14,6 +14,14 @@ data/goms_clean.csv
 # Model artifacts
 backend/models/artifacts/*.pkl
 
+# ── 개인 단위 데이터 확실 차단 (개인정보/재배포 금지) ──
+# .gitignore 구멍 방지: data/clean·data/raw 전체를 무시(개인단위 패널·원본 설문).
+# 공개 집계표는 data/dgroup·data/lanollab 에만 두고 그건 추적 유지.
+data/clean/
+data/raw/
+*.pkl
+*.sas7bdat
+
 # Node / frontend
 node_modules/
 frontend/dist/

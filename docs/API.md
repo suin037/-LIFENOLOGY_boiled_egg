@@ -15,7 +15,10 @@
 | 메서드 | 경로 | 설명 |
 |---|---|---|
 | `GET` | `/health` | 상태 확인 |
-| `POST` | `/predict` | 현재의 나 + 진로 선택 → 평행우주 추정 결과 |
+| `POST` | `/predict` | 현재의 나 + 진로 선택 **1개** → 평행우주 추정 결과(원자료·전 레이어) |
+| `POST` | `/compare` | 현재의 나 + 진로 선택 **A/B 2개** → **발표 카드용 비교 뷰**(3지표×1·3·5·10년) |
+
+> **사이트(4번)·일기(2번)는 화면 렌더링에 `/compare` 를 기준으로 붙이세요.** `/predict` 는 단일 선택 원자료가 필요할 때(또는 `/compare` 응답의 `scenarios.*.raw` 로도 동일하게) 사용합니다.
 
 ---
 
@@ -146,10 +149,114 @@
 
 ---
 
+## 5-B. `/compare` — A vs B 평행우주 비교 (⭐ 발표 화면 표준)
+
+핵심 서사 = **"너와 데이터가 비슷한 사람들이 이 길(A/B)을 갔을 때"**. 주인공 3지표는 **만족도 · 소득 · 후회**.
+선택 A·B를 나란히, 각 지표를 1·3·5·10년 스냅샷으로(데이터 없는 시점은 정직하게 비움) 보여줍니다.
+`/predict` 를 A/B 두 번 호출해 정규화한 얇은 계층이라 **엔진(L1~L5)·`/predict` 계약은 그대로**입니다.
+형태 예시 파일: `docs/compare_example.json` (숫자는 placeholder, 필드 구조는 실제와 동일).
+
+> **시점은 데이터가 지지하는 데까지만.** 우리 패널은 방대하지 않아 만족도(YP)는 약 4년, 소득(KLIPS)·후회도
+> 관측범위까지만 값이 있고 나머지 시점은 `available:false`. "10년 그리드를 강제로 채우지 않는다"가 원칙입니다.
+
+### 입력 — `POST /compare`
+```json
+{
+  "profile": { "age": 27, "sex": "2", "major": "사회", "monthly_wage": 250, "edu_level": 7 },
+  "choice_a": "이직",
+  "choice_b": "대학원 진학"
+}
+```
+`profile` 필드는 `/predict` 입력에서 `choice` 만 뺀 것과 동일(2절 참고). `choice_a`/`choice_b` 는 자유 텍스트(이직/창업/진학으로 자동 분류).
+
+### 출력 — `CompareResponse`
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `profile` | Profile | 입력 프로필 에코 |
+| `snapshots` | int[] | 지표 카드 시점 = `[1,3,5,10]` |
+| `choice_a` / `choice_b` | string | 입력 선택 에코 |
+| `scenarios` | `{ "A": ScenarioView, "B": ScenarioView }` | 두 평행우주 |
+| `note` | string | 비교 주의사항(동일 유형 경고·인과 적용 범위 등). 빈 문자열이면 없음 |
+
+### `ScenarioView` (선택지 하나의 카드 묶음)
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `choice` / `kind` | string | 입력 선택 / 정규화 유형(이직·창업·진학) |
+| `coverage` | string | 어떤 레이어가 적용됐는지(사람이 읽는 설명) |
+| `satisfaction` | `IndicatorPoint[]` | ⭐ **만족도(종합)** — 삶의 만족도 궤적(1~5, 청년·YP). "이 길 간 사람 만족도가 이렇게 변함" |
+| `satisfaction_summary` | object \| null | 종합 만족도 변화 한 줄 요약 `{start, latest, delta, direction(상승/하락/유지), span_years, sample_n, scale, source}` |
+| `satisfaction_facets` | `FacetTrajectory[]` | ⭐ **만족도 세부 5축** — 직무·자기발전·소득·고용안정·장래성 각각의 궤적. "소득 만족은 낮은데 직무는 높더라" |
+| `income` | `IndicatorPoint[]` | ⭐ **소득** — 비슷한 사람들의 월소득 중앙값·분포(만원, L5). 이직은 L3 인과 반영 |
+| `regret` | `IndicatorPoint[]` | ⭐ **후회 리스크** — 이직=이탈확률(L4)/창업=폐업확률(생멸)/진학=미제공 |
+| `regret_summary` | object \| null | 후회 리스크 요약 `{label, worst_year, worst_value, unit, source}`. 진학=null |
+| `growth_potential` | `IndicatorPoint[]` | (보조) 성장 가능성 — 현재(0년) 대비 소득 상승률 |
+| `health_context` | `LifeIndicator[]` | 건강 맥락(정신·신체·직업환경). **집단 기준이라 선택 A/B로 안 갈림 — 참고값** |
+| `choice_context` | `LifeIndicator[]` | 선택 맥락(창업=생존율 / 진학=계열 취업률·진학률 / 이직=`[]`) |
+| `confidence` | object | 신뢰지표(아래). 이직에서 채워짐 |
+| `raw` | `PredictResponse` | 원본 `/predict` 응답 전체(만족도 원자료 등 포함, 프론트 자유 사용) |
+
+세 주인공 카드(`satisfaction`·`income`·`regret`)는 각각 `snapshots`(1·3·5·10) 4개 시점의 `IndicatorPoint` 배열입니다.
+
+> ⚠️ **만족도는 아직 선택 A/B로 분기되지 않습니다**(현재는 프로필 기준 궤적이라 A·B가 동일). "비슷한 사람들의
+> 전반적 만족도 변화" 배경으로 해석하세요. 선택별(대학원 간 사람 vs 취업한 사람) 만족도 분기는 **데이터 확장 과제**이며,
+> 해당 상황이면 `note` 에 안내가 실립니다.
+
+### `IndicatorPoint` (카드 한 시점)
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `year` | int | 시점(1·3·5·10) |
+| `available` | bool | **데이터 있으면 true.** false면 그 시점 값 없음(값을 지어내지 않음) |
+| `value` | float \| null | 대표값(소득 중앙값 / 상승률% / 확률%) |
+| `p25` / `p75` | float \| null | 분포 밴드(경제 카드에서 소득 하위·상위 25%) |
+| `unit` | string \| null | 예: `만원`, `%(현재 대비 소득)`, `%(이탈확률)` |
+| `sample_n` | int \| null | 추적 표본 수(작을수록 불확실 — 흐리게 표시 권장) |
+| `source` | string \| null | 출처 레이어/조사 |
+| `note` | string \| null | `available=false` 사유 등 |
+
+### `FacetTrajectory` (만족도 세부 축 1개 — `satisfaction_facets[]`)
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `key` | string | 원변수(`satis_work`·`satis_growth`·`satis_income`·`satis_stability`·`satis_future`) |
+| `label` / `dimension` | string | 표시 이름(예: "소득 만족") / 묶음(직무·성장·소득·안정·미래) |
+| `points` | `{year, value(1~5), sample_n}[]` | facet 궤적(값은 매칭집단 **평균** — 1~5 정수라 중앙값은 4로 뭉개져 평균 사용) |
+| `start` / `latest` / `delta` / `direction` | float / string | 시작·최근 값, 변화량, 방향(상승/하락/유지) |
+| `scale` / `source` | string | `"1~5"` / 출처 |
+
+> 만족도 세부 축은 **선택 A/B로는 안 갈리지만**(YP 직무만족은 취업자만 관측), 입력 프로필에 따라 값이 달라져
+> "너와 비슷한 사람들은 소득 만족이 낮고 직무 만족은 높더라"처럼 개인화된 결을 준다. `satisfaction`(종합)과 짝지어 해석.
+
+### `confidence` (신뢰지표 — '정직한 불확실성' 차별점)
+```json
+"confidence": {
+  "survival_c_index": { "metric": "5-fold C-index", "c_index_test": 0.75, "c_index_train": 0.79,
+                        "overfit_gap": 0.04, "n_spells": 10173, "source": "YP2021 스펠", "max_horizon_years": 5 },
+  "causal_effect_ci": { "ate": 27.8, "ci95_low": 21.0, "ci95_high": 34.6, "unit": "만원",
+                        "method": "LinearDML (analytic 95% CI)", "source": "YP2021 청년패널 종단" }
+}
+```
+> `causal_effect_ci` 는 **LinearDML 의 analytic 95% CI** 를 노출한다. (CausalForestDML 의 ATE 구간은
+> 표본 분산이 커서 0을 포함할 만큼 넓게 나오지만, 같은 데이터 LinearDML CI 는 정밀하며 점추정은 동일 ≈+27만.)
+> 소득 격차를 "확실한 효과"로 말할 수 있는지는 이 CI 로 판단 — YP 이직 효과는 +21~+35만으로 **0을 넘어 유의**.
+
+### 선택 유형별로 채워지는 것
+| 카드/필드 | 이직 | 창업 | 진학 |
+|---|---|---|---|
+| `satisfaction` | 관측범위(≈4년)까지 ✅ | 〃 | 〃 (선택 무관 공통 궤적) |
+| `income` | ✅ (L3 인과 반영) | ✅ (관측 궤적) | ✅ (관측 궤적) |
+| `regret` | ✅ 이탈확률 | ✅ 폐업확률 | ❌ 전부 `available:false` |
+| `choice_context` | `[]` | 창업 생존율 | 계열 취업률·진학률 |
+| `confidence` | ✅ (C-index·인과 CI) | `{}` | `{}` |
+
+> **화면 렌더 팁**: 세 카드(만족도·소득·후회)를 A/B 나란히, 각 카드 안에 시점 스냅샷. `available:false` 칸은 "데이터 없음"으로(회색, 강제로 채우지 않기). 소득·만족도는 `p25~p75` 밴드로 불확실성 표시. 만족도는 `satisfaction_summary` 로 "3.5→3.3 (하락)" 같은 한 줄도 가능. `note` 는 배너로 노출(만족도 미분기·인과 CI 0 포함·동일 유형 경고 등 — 오독 방지).
+
+---
+
 ## 6. 연동 노트
 
 ### 사이트 담당 (입력·화면)
-- 필수 입력 `age·sex·major·choice`. **`edu_level`(최종학력) 한 칸 추가 강력 권장** — 궤적 개인화의 핵심.
+- **화면(두 행성·3지표 카드·타임라인)은 `/compare` 하나로 렌더** (5-B절). 단일 선택 원자료가 필요하면 `/predict` 또는 `/compare` 응답의 `scenarios.*.raw`.
+- 필수 입력 `age·sex·major·choice`(단일) 또는 `profile + choice_a/b`(비교). **`edu_level`(최종학력) 한 칸 추가 강력 권장** — 궤적 개인화의 핵심.
+- ⚠️ 현재 프론트 스캐폴드는 성별을 `"F"/"M"` 로 보냄 → API 는 `"1"(남)/"2"(여)` 기대. **입력 폼에서 `"1"/"2"` 로 매핑 필요.**
 - **`coverage` 먼저 읽고** 화면 구성. 창업/진학이면 개인단위 카드는 숨기거나 "통계 기반" 안내로.
 - **`trajectory`** → 소득 궤적 곡선(p25~p75 밴드 포함). `sample_n`이 작아지는 뒤 연차는 흐리게/불확실 표시.
 - **`scenario_trajectories`** → 유지 vs 이직 **두 곡선 겹쳐** 평행우주 시각화. 두 선의 격차 = L3 인과효과.

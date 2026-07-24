@@ -5,18 +5,18 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 
-class PredictRequest(BaseModel):
-    """사용자가 입력하는 '현재의 나' + 비교할 진로 선택.
+class Profile(BaseModel):
+    """'현재의 나' — 선택(choice)을 뺀 사용자 상태·성향.
 
     스펙(필수) + 온보딩 상태·성향(선택). 상태·성향을 안 보내면
     학습 데이터 중앙값으로 대체되지만, 보낼수록 매칭이 개인화된다.
+    (PredictRequest 는 여기에 choice 하나를, CompareRequest 는 choice_a/b 를 더한다.)
     """
 
     age: int = Field(..., ge=18, le=70)
     sex: str = Field(..., description="'1'=남 / '2'=여 (GOMS 코드)")
     major: str = Field(..., description="전공 계열 코드")
     gpa: Optional[float] = Field(None, ge=0, le=4.5)
-    choice: str = Field(..., description="가정할 진로 선택 (예: 이직 / 창업 / 진학)")
 
     # --- 온보딩 상태·성향 (선택) ---
     monthly_wage: Optional[float] = Field(None, gt=0, description="현재 월소득(만원)")
@@ -27,6 +27,23 @@ class PredictRequest(BaseModel):
     firm_size: Optional[int] = Field(None, ge=1, le=9, description="기업규모 코드 1~9")
     edu_level: Optional[int] = Field(None, ge=2, le=9,
         description="교육수준(KLIPS 학력코드: 5=고졸 6=전문대 7=대졸 8=석사 9=박사) — 궤적 매칭 정교화용(선택)")
+
+
+class PredictRequest(Profile):
+    """현재의 나 + 비교할 진로 선택 1개 (`/predict` 용)."""
+
+    choice: str = Field(..., description="가정할 진로 선택 (예: 이직 / 창업 / 진학)")
+
+
+class CompareRequest(BaseModel):
+    """현재의 나 + 두 진로 선택(A/B) (`/compare` 용, 평행우주 비교).
+
+    profile 은 공통 '현재의 나', choice_a/choice_b 는 저울질하는 두 선택지.
+    """
+
+    profile: Profile
+    choice_a: str = Field(..., description="선택지 A (예: 이직)")
+    choice_b: str = Field(..., description="선택지 B (예: 대학원 진학)")
 
 
 class NeighborCase(BaseModel):
@@ -105,6 +122,105 @@ class PredictResponse(BaseModel):
         description="종단 궤적 — 비슷한 사람들의 향후 N년 소득·이직 실제 분포(데이터 기반 미래 예측)")
     wellbeing_trajectory: list[WellbeingPoint] = Field(default_factory=list,
         description="만족도 궤적 — 종합 만족도(1~5)의 시간 변화(청년·YP). 소득 궤적과 짝지어 해석")
+    satisfaction_facets: dict[str, list[dict]] = Field(default_factory=dict,
+        description="만족도 세부 facet별 궤적 {facet_key: [{year,age,sample_n,p50}]} — 직무·자기발전·소득·고용안정·장래성")
     scenario_trajectories: dict[str, list[TrajectoryPoint]] = Field(default_factory=dict,
         description="선택지 평행우주 — {'유지': 기준경로, '이직': 기준+L3인과효과}. 이직 choice에서만 제공")
     narrative: str = Field("", description="Claude 가 생성한 설명")
+
+
+# ============================================================ /compare (A/B 비교 뷰)
+# 발표 스펙(3지표 × 1·3·5·10년 × A/B)에 맞춘 정규화 출력 계층.
+# 엔진(L1~L5)은 그대로 두고, 두 예측 결과를 카드 모양으로 재구성한 것.
+
+class IndicatorPoint(BaseModel):
+    """3지표 카드의 한 스냅샷(특정 연차) 값.
+
+    데이터가 없는 연차는 available=false + note 로 정직하게 비운다(값을 지어내지 않음).
+    """
+
+    year: int
+    available: bool = True
+    value: Optional[float] = Field(None, description="대표값(중앙값 등)")
+    p25: Optional[float] = Field(None, description="하위25%(분포 밴드용)")
+    p75: Optional[float] = Field(None, description="상위25%(분포 밴드용)")
+    unit: Optional[str] = None
+    sample_n: Optional[int] = Field(None, description="추적 표본 수(작을수록 불확실)")
+    source: Optional[str] = None
+    note: Optional[str] = Field(None, description="available=false 이유 등")
+
+
+class FacetPoint(BaseModel):
+    """만족도 facet 궤적 한 시점(중앙값)."""
+
+    year: int
+    value: float = Field(..., description="해당 facet 만족도 중앙값(1~5)")
+    sample_n: int
+
+
+class FacetTrajectory(BaseModel):
+    """만족도 세부 facet 하나의 궤적 + 변화 요약."""
+
+    key: str = Field(..., description="원변수 키(satis_growth 등)")
+    label: str = Field(..., description="사람이 읽는 이름(자기발전(성장) 만족 등)")
+    dimension: str = Field(..., description="묶음 차원: 직무/성장/소득/안정/미래")
+    points: list[FacetPoint] = Field(default_factory=list)
+    start: Optional[float] = None
+    latest: Optional[float] = None
+    delta: Optional[float] = None
+    direction: Optional[str] = Field(None, description="상승/하락/유지")
+    scale: str = "1~5"
+    source: Optional[str] = None
+
+
+class ScenarioView(BaseModel):
+    """선택지 하나(A 또는 B)의 평행우주 뷰.
+
+    핵심 서사 = '너와 비슷한 사람들이 이 길을 갔을 때': **만족도·소득·후회**가 주인공.
+    시점(스냅샷)은 데이터가 지지하는 곳만 채우고, 없으면 available=false 로 정직하게 비운다.
+    """
+
+    choice: str
+    kind: str = Field(..., description="정규화된 선택 유형: 이직/창업/진학")
+    coverage: str
+
+    # ---- 주인공 3지표 (만족도 · 소득 · 후회) ----
+    satisfaction: list[IndicatorPoint] = Field(default_factory=list,
+        description="삶의 만족도 궤적(종합 1~5, 청년·YP). '이 길 간 사람의 만족도가 이렇게 변함'")
+    satisfaction_summary: Optional[dict] = Field(None,
+        description="종합 만족도 변화 한 줄 요약 {start, latest, delta, direction, span_years, sample_n, source}")
+    satisfaction_facets: list[FacetTrajectory] = Field(default_factory=list,
+        description="만족도 세부 facet(직무·자기발전·소득·고용안정·장래성)별 궤적+변화요약")
+    income: list[IndicatorPoint] = Field(default_factory=list,
+        description="소득 — 비슷한 사람들의 월소득 중앙값·분포(만원, L5, 이직은 L3 인과 반영)")
+    regret: list[IndicatorPoint] = Field(default_factory=list,
+        description="후회 리스크 — 이직=이탈확률(L4)/창업=폐업확률(생멸)/진학=이탈데이터없음")
+    regret_summary: Optional[dict] = Field(None,
+        description="후회 리스크 한 줄 요약 {label, worst_year, worst_value, unit, source}")
+
+    # ---- 보조 지표 ----
+    growth_potential: list[IndicatorPoint] = Field(default_factory=list,
+        description="(보조) 성장 가능성 — 현재 대비 소득 상승률(L5 궤적 기울기)")
+
+    # ---- 맥락 ----
+    health_context: list[LifeIndicator] = Field(default_factory=list,
+        description="건강 맥락 — 정신·신체건강·직업환경(집단 기준, 선택 무관 참고값)")
+    choice_context: list[LifeIndicator] = Field(default_factory=list,
+        description="선택 맥락 — 창업 생존율(창업) / 계열 취업률·진학률(진학)")
+
+    confidence: dict = Field(default_factory=dict,
+        description="신뢰지표 — L4 5-fold C-index, L3 인과 95% CI 등(이직에서 제공)")
+    raw: PredictResponse = Field(..., description="원본 /predict 결과 전체(만족도 원자료 등 포함, 프론트 자유 사용)")
+
+
+class CompareResponse(BaseModel):
+    """A vs B 평행우주 비교 — 발표 화면(두 행성·3지표·타임라인)에 1:1 대응."""
+
+    profile: Profile
+    snapshots: list[int] = Field(default_factory=lambda: [1, 3, 5, 10],
+        description="지표 카드 시점(년). 데이터 없는 시점은 각 IndicatorPoint.available=false")
+    choice_a: str
+    choice_b: str
+    scenarios: dict[str, ScenarioView] = Field(default_factory=dict,
+        description="{'A': ScenarioView, 'B': ScenarioView}")
+    note: str = Field("", description="비교 해석 주의사항(동일 유형 경고·인과 적용 범위 등)")
