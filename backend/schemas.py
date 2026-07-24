@@ -46,6 +46,18 @@ class CompareRequest(BaseModel):
     choice_b: str = Field(..., description="선택지 B (예: 대학원 진학)")
 
 
+class SimulateRequest(CompareRequest):
+    """전체 파이프라인(`/simulate`) 요청 = 비교 요청 + (선택) 일기 텍스트.
+
+    diary 를 주면 일기모듈(2번)이 감정신호를 뽑아 profile(satis_*)을 개인화하고
+    서사 컨텍스트로도 쓴다. 위기(L3) 감지 시 서사 대신 상담 안내를 반환한다.
+    """
+
+    diary: Optional[str] = Field(
+        None, description="사용자 일기 텍스트(선택). 있으면 감정신호로 개인화 + 서사 반영"
+    )
+
+
 class NeighborCase(BaseModel):
     """KNN 으로 찾은 유사 사례 1건."""
 
