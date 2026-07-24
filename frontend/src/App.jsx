@@ -1,32 +1,37 @@
-import { useState } from "react";
-import InputForm from "./components/InputForm.jsx";
-import ResultView from "./components/ResultView.jsx";
-import { predict } from "./api.js";
+import { Routes, Route, Navigate } from "react-router-dom";
+import { useResult } from "./data/ResultContext.jsx";
+import Layout from "./components/Layout.jsx";
+import Landing from "./screens/Landing.jsx";
+import Onboarding from "./screens/Onboarding.jsx";
+import InputScreen from "./screens/InputScreen.jsx";
+import Simulate from "./screens/Simulate.jsx";
+import Result from "./screens/Result.jsx";
+import Archive from "./screens/Archive.jsx";
+import HomeHub from "./screens/HomeHub.jsx";
+import MyUniverse from "./screens/MyUniverse.jsx";
+import Settings from "./screens/Settings.jsx";
+
+// "/" 진입점 — 첫 로그인이면 랜딩, 이미 온보딩했으면 홈으로.
+function Entry() {
+  const { onboarded } = useResult();
+  return onboarded ? <Navigate to="/home" replace /> : <Landing />;
+}
 
 export default function App() {
-  const [result, setResult] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-
-  async function handleSubmit(input) {
-    setLoading(true);
-    setError(null);
-    try {
-      setResult(await predict(input));
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
   return (
-    <main style={{ maxWidth: 640, margin: "2rem auto", fontFamily: "sans-serif" }}>
-      <h1>parallel-me</h1>
-      <p>다른 선택을 했다면, 평행우주의 나는?</p>
-      <InputForm onSubmit={handleSubmit} loading={loading} />
-      {error && <p style={{ color: "crimson" }}>{error}</p>}
-      {result && <ResultView result={result} />}
-    </main>
+    <Routes>
+      <Route element={<Layout />}>
+        <Route path="/" element={<Entry />} />
+        <Route path="/onboarding" element={<Onboarding />} />
+        <Route path="/home" element={<HomeHub />} />
+        <Route path="/input" element={<InputScreen />} />
+        <Route path="/simulate" element={<Simulate />} />
+        <Route path="/result" element={<Result />} />
+        <Route path="/my" element={<MyUniverse />} />
+        <Route path="/archive" element={<Archive />} />
+        <Route path="/settings" element={<Settings />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Route>
+    </Routes>
   );
 }
