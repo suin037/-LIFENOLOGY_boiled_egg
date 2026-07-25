@@ -24,6 +24,62 @@
 
 ---
 
+## ⚡ 빠른 시작 (Quickstart — 처음 세팅부터 실행까지)
+
+```bash
+# 1) 클론 & 브랜치
+git clone https://github.com/suin037/-LIFENOLOGY_boiled_egg.git
+cd -LIFENOLOGY_boiled_egg && git checkout jy-model
+
+# 2) 패키지 설치
+pip install torch transformers kiwipiepy chromadb sentence-transformers scikit-learn numpy anthropic
+
+# 3) 감정 모델 받기 (HuggingFace) — git엔 없음(*.pt gitignore)
+python -c "from huggingface_hub import hf_hub_download; \
+print(hf_hub_download('JY0/lifenology-diary-emotion','best.pt'))"
+#   → 출력 경로를 --ckpt 로 넘기거나, 파일을 루트에 model_v3_e6.pt 로 둔다.
+
+# 4) RAG 백엔드 확보 — lanollab-data 브랜치에서 복사(수정 없이)
+git checkout origin/lanollab-data -- backend/rag "data/lanollab/심리학_이론카드" \
+  preprocess/build_psych_cards_db.py
+
+# 5) 벡터DB 빌드 (임베딩 모델 ko-sroberta 최초 1회 자동 다운로드)
+python preprocess/build_psych_cards_db.py
+
+# 6) API 키 — .env 파일 생성(gitignore됨). API 서사 안 쓰면 생략 가능
+echo "ANTHROPIC_API_KEY=sk-ant-..." > .env
+
+# 7) 실행
+python diary_module/hybrid.py --text "이직을 괜히 했나 계속 후회된다."
+python diary_module/weekly_report.py --sample
+```
+
+**최소 동작(감정 모델만, RAG·API 없이)**: 3)까지만 하면 아래가 된다.
+```bash
+python diary_module/compare_api_vs_model.py --no-api   # 감정 분류 정확도만
+```
+
+### 코드에서 불러 쓰기 (앱에 붙일 때)
+
+```python
+import sys; sys.path.insert(0, "diary_module")
+from infer import DiaryAnalyzer
+from hybrid import analyze_hybrid          # 로컬 우선 + 조건부 API 재확인
+
+az = DiaryAnalyzer(ckpt="model_v3_e6.pt")  # HF에서 받은 best.pt 경로
+r = analyze_hybrid(az, "오늘 발표를 망쳤다. 계속 후회된다.")
+
+r["final_coarse"]            # 최종 감정 (예: '슬픔')
+r["valence_mean"]            # 긍·부정도 (-1~1)
+r["escalation"]              # API 재확인 여부·사유
+r["psych"]["cards"]          # 매칭된 심리 이론카드
+r["psych"]["prompt_block"]   # Claude 서사 생성용 근거 텍스트
+```
+`analyze_hybrid`는 `backend/rag`+벡터DB가 필요하다. 감정만 필요하면 `az.analyze(text)`만 써도 된다
+(RAG·API 불필요).
+
+---
+
 ## 1. 브랜치 파일 구조
 
 ```
