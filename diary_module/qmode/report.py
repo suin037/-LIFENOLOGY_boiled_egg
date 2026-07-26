@@ -30,7 +30,7 @@ for p in (str(DIARY), str(ROOT)):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from qmode import health_input                                  # noqa: E402
+from qmode import health_input, interests                      # noqa: E402
 from qmode.session import build_diary_metrics, to_prompt_block  # noqa: E402
 from qmode.scheduler import Scheduler                           # noqa: E402
 import report_one as R1                                         # noqa: E402  (조각 재사용)
@@ -76,7 +76,8 @@ def _session_crisis(sessions):
 
 
 # ── 서사(선택) ───────────────────────────────────────────────────────
-def build_narrative_prompt(sessions, agg, health_result, paired, disposition_block=None):
+def build_narrative_prompt(sessions, agg, health_result, paired, disposition_block=None,
+                           interests_block=None):
     lines = [
         "다음은 한 사람이 며칠간 '질문형 일기'에 답한 요약과, (있다면) 건강 자기보고·성향이다. "
         "이를 바탕으로 4~6문장의 따뜻하고 현실적인 리포트를 써라. 감정을 먼저 인정하고, "
@@ -86,6 +87,8 @@ def build_narrative_prompt(sessions, agg, health_result, paired, disposition_blo
     ]
     if disposition_block:
         lines += [disposition_block, ""]
+    if interests_block:
+        lines += [interests_block, ""]
     lines += [
         to_prompt_block(sessions, agg),
         "",
@@ -134,7 +137,7 @@ def generate_narrative(prompt, model=None):
 # ── 렌더(결정적) ─────────────────────────────────────────────────────
 def render_report(sessions, *, agg=None, health_result=None,
                   life_indicators=None, narrative=None, source_label="",
-                  disposition_block=None):
+                  disposition_block=None, interests_block=None):
     agg = agg or build_diary_metrics(sessions)
     L = []
     add = L.append
@@ -216,6 +219,14 @@ def render_report(sessions, *, agg=None, health_result=None,
                 add(f"    {h_safe['message']}")
         add("")
 
+    # ── 취향·관심사 메모(라포·개인화) ──
+    if interests_block:
+        add("■ 취향·관심사 메모  (라포·개인화 재료 · 예측 수치와 무관)")
+        add("-" * 62)
+        for line in interests_block.splitlines()[2:]:      # 가드 헤더 2줄 제외
+            add("  " + line)
+        add("")
+
     # ── 성향 프로파일(예측 서사 반영용) ──
     if disposition_block:
         add("■ 성향 프로파일  (시나리오 '내용 강조'·'전달 방식' 반영)")
@@ -255,18 +266,21 @@ def build_report(sessions, *, health_result=None, life_indicators=None,
     scz = _session_crisis(sessions)
     h_crisis = (health_result or {}).get("safety", {}).get("level") == "crisis"
 
+    interests_block = interests.build_block(interests.collect(sessions))
+
     narrative = None
     if with_narrative and scz < 3 and not h_crisis:
         R1._load_dotenv()
         paired = (health_input.pair_with_baseline(health_result, life_indicators)
                   if health_result else [])
         prompt = build_narrative_prompt(sessions, agg, health_result, paired,
-                                        disposition_block)
+                                        disposition_block, interests_block)
         narrative, _ = generate_narrative(prompt, model=model)
 
     return render_report(sessions, agg=agg, health_result=health_result,
                          life_indicators=life_indicators, narrative=narrative,
-                         source_label=source_label, disposition_block=disposition_block)
+                         source_label=source_label, disposition_block=disposition_block,
+                         interests_block=interests_block)
 
 
 if __name__ == "__main__":
@@ -286,18 +300,19 @@ if __name__ == "__main__":
     # 3일치 데모 세션
     days = [
         ("2026-07-25", [
-            {"question_id": "C1", "text": "버티는 중."},
+            {"question_id": "C1", "text": "아침 출근길에 하늘이 유난히 맑아서 잠깐 올려다봤다."},
             {"question_id": "C2", "text": "회의에서 할 말을 못 하고 삼켰다. "
                                           "옆에서 봤으면 눈치만 보는 사람 같았을 것이다."},
+            {"question_id": "T1", "text": "요즘 애니 '프리렌' 보는데, 잔잔한 여운이 오래 남는다."},
             {"question_id": "R3", "text": "그래도 저녁에 운동을 다녀왔다. "
                                           "몸을 움직이니 기분이 조금 나아졌다."}]),
         ("2026-07-26", [
-            {"question_id": "C1", "text": "무거움."},
+            {"question_id": "C1", "text": "혼자 카페에서 커피 마시며 잠깐 멍때린 시간."},
             {"question_id": "C2", "text": "또 미뤘다. 스스로 한심하게 느껴졌다."},
             {"question_id": "D4", "text": "동기가 승진해서 부러웠다. "
                                           "나도 저렇게 인정받고 싶어서 더 해보고 싶어졌다."}]),
         ("2026-07-27", [
-            {"question_id": "C1", "text": "그럭저럭."},
+            {"question_id": "C1", "text": "친구가 보낸 웃긴 영상 보고 한참 웃었다."},
             {"question_id": "C2", "text": "친구에게 먼저 연락했다. 오랜만에 웃었다."},
             {"question_id": "D6", "text": "실수한 나에게, 비슷한 친구였다면 "
                                           "괜찮다고 다독여줬을 것 같다."}]),

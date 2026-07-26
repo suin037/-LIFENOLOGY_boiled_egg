@@ -4,14 +4,14 @@
   "fixed": [
     {
       "id": "C1",
-      "text": "요즘 내 하루를 한 단어로 고르면 무엇인가요? 그 단어가 어디에 가장 짙게 스며 있었나요?",
+      "text": "오늘 가장 기억에 남는 순간 하나만 편하게 적어주세요.",
       "layer": "core",
-      "metrics": ["emotion_valence", "emotion_density", "insight_ratio"],
+      "metrics": ["emotion_valence", "emotion_density"],
       "axes": [],
       "risk": "low",
       "risk_type": null,
       "evidence": "partial",
-      "evidence_note": "후단부=통찰어 유도(Pennebaker & Chung 2011). '한 단어'는 UX 장치로 근거 없음.",
+      "evidence_note": "매일 여는 앵커 문항 — 장면 중심 회상으로 진입장벽 낮춤. 그 순간 서술에서 전반적 기분(정서극성·정서밀도) 포착. C2(마음 걸린 순간+거리두기)와 짝: C1은 열린/긍정 앵커, C2는 처리. v0.2: '한 단어로 고르면' 퀴즈 프레임 제거(응답 회피 피드백).",
       "distancing": false
     },
     {
