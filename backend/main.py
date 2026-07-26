@@ -33,7 +33,7 @@ app = FastAPI(title="parallel-me API")
 # 프론트(Vite 기본 5173) 에서의 호출 허용
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",  # 로컬 개발/프리뷰 포트 허용
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
