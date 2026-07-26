@@ -38,6 +38,50 @@ import report_one as R1                                         # noqa: E402  (�
 _SCH = Scheduler()
 
 
+# 주간 리포트 서사 지침 — 따뜻하고 초점 있게. 통계·논문명·진단 금지.
+NARR_SYSTEM = (
+    "너는 지난 일주일의 일기 기록을 읽고 마음을 헤아려주는 따뜻하고 현실적인 조력자다. "
+    "한 주 전체를 관통하는 흐름 한두 가지에만 초점을 맞춰 짧게 쓴다. "
+    "감정의 타당성을 먼저 인정하고, 제공된 심리학 관점을 자연스럽게 녹이되 "
+    "논문 이름이나 저자·연도는 절대 본문에 쓰지 않는다(관점만 자연스럽게). "
+    "또래 통계·퍼센트 수치도 본문에 넣지 않고, 건강은 '수면이 부족한 편' 같은 말로 표현한다. "
+    "진단 라벨('~장애입니다')은 쓰지 않는다. 마지막에 지금 할 수 있는 아주 작은 제안을 "
+    "최대 2개까지만 부드럽게 건넨다. 전체 3~4개의 짧은 문단으로."
+)
+
+# 건강 자기보고(우려 항목) → 서사·리포트용 '말' (퍼센트 없이)
+_HEALTH_WORDS = {
+    "sleep": "수면이 부족한 편",
+    "subjective_health": "몸 컨디션이 저조한 편",
+    "exercise_days": "활동량이 적은 편",
+    "stress": "스트레스가 높은 상태",
+    "low_mood": "기분이 자주 가라앉음",
+    "anxious": "불안·초조가 잦음",
+    "burnout": "번아웃(소진) 느낌이 큼",
+    "loneliness": "외로움을 느끼는 편",
+}
+
+
+def _health_words(health_result):
+    """건강 자기보고 → 우려 항목을 퍼센트 없이 '말'로. (없으면 [])"""
+    out = []
+    for it in (health_result or {}).get("items", []):
+        if it.get("concern") and it["id"] in _HEALTH_WORDS:
+            out.append(_HEALTH_WORDS[it["id"]])
+    return out
+
+
+def _free_entries(sessions):
+    """주간 자유 기록(선택칸) 모음 — 유저 본인 목소리. (최신순)"""
+    out = []
+    for s in sessions:
+        f = s.get("free")
+        if f and f.get("answer"):
+            out.append({"date": s.get("date"), "text": f["answer"]})
+    out.sort(key=lambda x: x.get("date") or "", reverse=True)
+    return out
+
+
 # ── 재료 수집 ────────────────────────────────────────────────────────
 def _collect_cards(sessions):
     """세션들의 질문 답변에 직결된 카드를 (질문라벨, 카드) 로 모은다(중복 제거).
@@ -50,10 +94,9 @@ def _collect_cards(sessions):
             if it.get("skipped") or it.get("crisis_message"):
                 continue
             for c in it.get("cards", []):
-                key = (it.get("question_id"), c["card_id"])
-                if key in seen:
+                if c["card_id"] in seen:          # card_id 기준 중복 제거(여러 질문이 같은 카드)
                     continue
-                seen.add(key)
+                seen.add(c["card_id"])
                 out.append((it.get("question_text") or it.get("question_id"), c))
     return out
 
@@ -76,39 +119,41 @@ def _session_crisis(sessions):
 
 
 # ── 서사(선택) ───────────────────────────────────────────────────────
-def build_narrative_prompt(sessions, agg, health_result, paired, disposition_block=None,
+def build_narrative_prompt(sessions, agg, health_result, disposition_block=None,
                            interests_block=None):
+    dates = sorted({s.get("date") for s in sessions if s.get("date")})
+    span = f"{dates[0]}~{dates[-1]} ({len(dates)}일)" if dates else ""
     lines = [
-        "다음은 한 사람이 며칠간 '질문형 일기'에 답한 요약과, (있다면) 건강 자기보고·성향이다. "
-        "이를 바탕으로 4~6문장의 따뜻하고 현실적인 리포트를 써라. 감정을 먼저 인정하고, "
-        "제공된 이론 카드 중 하나의 관점과 행동 제안을 자연스럽게 녹이되 반드시 그 출처를 "
-        "문장 안에 짧게 인용하라. 진단 라벨('~장애입니다')은 절대 쓰지 말 것.",
-        "성향 재료가 있으면, '내용 강조 순서'와 '전달 방식'에 반영하되 단정하지는 말 것.\n",
-    ]
-    if disposition_block:
-        lines += [disposition_block, ""]
-    if interests_block:
-        lines += [interests_block, ""]
-    lines += [
-        to_prompt_block(sessions, agg),
+        f"[지난 일주일({span}) 질문형 일기 기록이다. 한 주를 관통하는 흐름 1~2가지에만 "
+        "초점을 맞춰, 3~4개의 짧은 문단으로 따뜻하게 써라. 논문명·저자·연도·퍼센트 수치는 "
+        "본문에 쓰지 말고, 마지막에 아주 작은 제안을 최대 2개까지만.]",
         "",
-        "[이론 근거 카드]",
+        "· 이번 주 문항별 신호:",
+        to_prompt_block(sessions, agg),
     ]
-    for label, c in _collect_cards(sessions):
-        acts = c.get("interventions", [])
-        lines.append(f"- 「{(label or '')[:22]}…」→ {c['theory_ko']} · {c['concept_ko']}")
-        lines.append(f"    해석: {c.get('summary', '')}")
-        if acts:
-            lines.append(f"    행동제안: {acts[0]}")
-        lines.append(f"    출처: {c.get('source', '')}")
-    if health_result and health_result.get("items"):
-        lines.append("")
-        lines.append(health_result.get("prompt_block", ""))
-        # 병치 값이 있으면 또래 수치를 명시적으로 준다.
-        peers = [f"{it['id']}: 나={it['level']} / 또래 {it['peers']['value']}{it['peers']['unit']}"
-                 for it in (paired or []) if it.get("peers")]
-        if peers:
-            lines.append("[또래 병치 수치] " + " | ".join(peers))
+    # 건강은 퍼센트 없이 '말'로만.
+    hw = _health_words(health_result)
+    if hw:
+        lines += ["", "· 몸·마음 상태(말로만, 수치 언급 금지): " + ", ".join(hw)]
+    # 자유 기록 — 유저 본인 목소리(고정 질문이 못 잡은 주제). 있으면 반영.
+    free = _free_entries(sessions)
+    if free:
+        lines += ["", "· 자유롭게 남긴 말(본인 목소리 — 자연스럽게 반영):"]
+        for f in free[:3]:
+            lines.append(f"   - 「{f['text'][:60]}…」" if len(f['text']) > 60
+                         else f"   - 「{f['text']}」")
+    if disposition_block:
+        lines += ["", disposition_block]
+    if interests_block:
+        lines += ["", interests_block]
+    # 이론 카드는 '관점'만 준다(출처는 본문에 쓰지 말 것 — 리포트 근거 섹션에 이미 있음).
+    cards = _collect_cards(sessions)
+    if cards:
+        lines += ["", "· 참고 심리 관점(출처는 본문에 인용하지 말 것, 관점만 녹이기):"]
+        for label, c in cards[:3]:
+            acts = c.get("interventions", [])
+            tip = f" 예: {acts[0]}" if acts else ""
+            lines.append(f"   - {c['concept_ko']} — {c.get('summary','')[:70]}…{tip}")
     return "\n".join(lines)
 
 
@@ -125,7 +170,7 @@ def generate_narrative(prompt, model=None):
     try:
         client = Anthropic()
         resp = client.messages.create(
-            model=model, max_tokens=800, system=R1.NARR_SYSTEM,
+            model=model, max_tokens=1100, system=NARR_SYSTEM,
             thinking={"type": "disabled"},
             messages=[{"role": "user", "content": prompt}],
         )
@@ -142,13 +187,13 @@ def render_report(sessions, *, agg=None, health_result=None,
     L = []
     add = L.append
     add("=" * 62)
-    add("　　　　질 문 형 일 기 · 종 합 리 포 트")
+    add("　　　　질 문 형 일 기 · 주 간 리 포 트")
     add("=" * 62)
     if source_label:
         add(f"대상: {source_label}")
     dates = sorted({s.get("date") for s in sessions if s.get("date")})
     if dates:
-        add(f"기간: {dates[0]} ~ {dates[-1]}  ({len(dates)}일)")
+        add(f"기간: {dates[0]} ~ {dates[-1]}  ({len(dates)}일치 기록)")
     add("")
 
     # ── 안전 하드 분기 ──
@@ -200,23 +245,29 @@ def render_report(sessions, *, agg=None, health_result=None,
         add(f"     출처: {c.get('source', '')}")
         add("")
 
-    # ── 건강 패널(개인 ↔ 또래 병치) ──
-    if health_result and health_result.get("items"):
-        paired = health_input.pair_with_baseline(health_result, life_indicators)
-        add("■ 건강 자기보고  (나 ↔ 또래 병치)")
+    # ── 자유 기록(선택칸) — 유저 본인 목소리 ──
+    free = _free_entries(sessions)
+    if free:
+        add("■ 자유 기록  (선택칸 · 본인이 자유롭게 남긴 말)")
         add("-" * 62)
-        for it in paired:
+        for f in free:
+            add(f"  [{f['date']}] {f['text'][:70]}" + ("…" if len(f['text']) > 70 else ""))
+        add("")
+
+    # ── 건강 자기보고 (말로만 · 또래 통계 없이) ──
+    if health_result and health_result.get("items"):
+        add("■ 몸·마음 상태  (자기보고)")
+        add("-" * 62)
+        for it in health_result["items"]:
             flag = " ⚠" if it["concern"] else ""
-            me = f"{it['level']}"
-            peer = (f"  |  또래 {it['peers']['value']}{it['peers']['unit']} "
-                    f"({it['peers']['group']})" if it.get("peers") else "")
-            add(f"  · [{it['dim']}] {it['label']}")
-            add(f"      나: {me}{flag}{peer}")
-        if health_result.get("clinical_elevated"):
+            add(f"  · [{it['dim']}] {it['label'].split(',')[0]} → {it['level']}{flag}")
+        words = _health_words(health_result)
+        if words:
+            add("  요약: " + ", ".join(words))
+        if health_result.get("clinical_elevated") and h_safe.get("message"):
             add("")
-            add("  ※ 자주 힘든 날이 이어진 항목이 있어, 또래 비교보다 지지·연결을 우선합니다.")
-            if h_safe.get("message"):
-                add(f"    {h_safe['message']}")
+            add("  ※ 자주 힘든 날이 이어진 항목이 있어, 지지·연결을 먼저 권합니다.")
+            add(f"    {h_safe['message']}")
         add("")
 
     # ── 취향·관심사 메모(라포·개인화) ──
@@ -271,9 +322,7 @@ def build_report(sessions, *, health_result=None, life_indicators=None,
     narrative = None
     if with_narrative and scz < 3 and not h_crisis:
         R1._load_dotenv()
-        paired = (health_input.pair_with_baseline(health_result, life_indicators)
-                  if health_result else [])
-        prompt = build_narrative_prompt(sessions, agg, health_result, paired,
+        prompt = build_narrative_prompt(sessions, agg, health_result,
                                         disposition_block, interests_block)
         narrative, _ = generate_narrative(prompt, model=model)
 
@@ -297,27 +346,48 @@ if __name__ == "__main__":
     az = DiaryAnalyzer(ckpt=args.ckpt,
                        taxonomy=str(DIARY / "emotion_taxonomy.json"))
 
-    # 3일치 데모 세션
+    # 1주일치 데모 (평일 4문항 + 심층일 5문항, 자유칸 선택 입력)
     days = [
-        ("2026-07-25", [
-            {"question_id": "C1", "text": "아침 출근길에 하늘이 유난히 맑아서 잠깐 올려다봤다."},
-            {"question_id": "C2", "text": "회의에서 할 말을 못 하고 삼켰다. "
-                                          "옆에서 봤으면 눈치만 보는 사람 같았을 것이다."},
-            {"question_id": "T1", "text": "요즘 애니 '프리렌' 보는데, 잔잔한 여운이 오래 남는다."},
-            {"question_id": "R3", "text": "그래도 저녁에 운동을 다녀왔다. "
-                                          "몸을 움직이니 기분이 조금 나아졌다."}]),
-        ("2026-07-26", [
-            {"question_id": "C1", "text": "혼자 카페에서 커피 마시며 잠깐 멍때린 시간."},
-            {"question_id": "C2", "text": "또 미뤘다. 스스로 한심하게 느껴졌다."},
-            {"question_id": "D4", "text": "동기가 승진해서 부러웠다. "
-                                          "나도 저렇게 인정받고 싶어서 더 해보고 싶어졌다."}]),
-        ("2026-07-27", [
-            {"question_id": "C1", "text": "친구가 보낸 웃긴 영상 보고 한참 웃었다."},
-            {"question_id": "C2", "text": "친구에게 먼저 연락했다. 오랜만에 웃었다."},
-            {"question_id": "D6", "text": "실수한 나에게, 비슷한 친구였다면 "
-                                          "괜찮다고 다독여줬을 것 같다."}]),
+        ("2026-07-20", [  # 월
+            {"question_id": "C1", "text": "출근길 라디오에서 좋아하는 노래가 나왔다."},
+            {"question_id": "C2", "text": "회의에서 의견을 삼켰다. 옆에서 봤으면 눈치만 보는 사람 같았을 듯."},
+            {"question_id": "T1", "text": "애니 '프리렌' 보는 중. 잔잔한 여운이 오래 남는다."},
+            {"question_id": "R3", "text": "점심에 동료가 챙겨줘서 고마웠다. 덕분에 조금 풀렸다."}], None),
+        ("2026-07-21", [  # 화
+            {"question_id": "C1", "text": "저녁 하늘이 예뻐서 잠깐 멈춰 봤다."},
+            {"question_id": "C2", "text": "할 일을 또 미뤘다. 스스로 한심하게 느껴졌다."},
+            {"question_id": "T4", "text": "주말 클라이밍 생각하며 버텼다. 그거 할 때만 시간이 순삭이다."},
+            {"question_id": "R4", "text": "평소 안 하던 야근을 자처했다. 좀 나답지 않았다."}],
+         "요즘 뭘 위해 이렇게까지 하나 싶다."),
+        ("2026-07-22", [  # 수(심층)
+            {"question_id": "C1", "text": "혼자 카페에서 멍때린 시간."},
+            {"question_id": "C2", "text": "메일 하나 붙잡고 한참 못 보냈다. 떨어져 보면 완벽하려 애쓴 것 같다."},
+            {"question_id": "R3", "text": "오랜만에 친구랑 통화하고 웃었다."},
+            {"question_id": "D1", "text": "이직을 계속 망설인다. 안정과 새 도전 사이가 마음에 걸린다."}], None),
+        ("2026-07-23", [  # 목
+            {"question_id": "C1", "text": "아침에 커피 향이 유난히 좋았다."},
+            {"question_id": "C2", "text": "동기 승진 소식에 마음이 복잡했다. 옆에서 봤으면 씁쓸해 보였을 듯."},
+            {"question_id": "T4", "text": "클라이밍 갔다. 끝나고 개운했지만 이내 피곤이 몰려왔다."},
+            {"question_id": "R5", "text": "이번 주 나를 제일 지치게 한 건 끝없는 업무. 친구라면 좀 쉬라 했을 것."}], None),
+        ("2026-07-24", [  # 금
+            {"question_id": "C1", "text": "퇴근길 지하철에서 본 노을."},
+            {"question_id": "C2", "text": "결국 하고 싶던 말을 못 했다. 나중에 후회됐다."},
+            {"question_id": "T1", "text": "무라카미 소설을 다시 편다. 문장이 좋다."},
+            {"question_id": "R3", "text": "저녁에 산책했다. 바람이 시원해서 좋았다."}], None),
+        ("2026-07-25", [  # 토
+            {"question_id": "C1", "text": "늦잠 자고 일어난 주말 아침."},
+            {"question_id": "C2", "text": "밀린 집안일 앞에서 아무것도 못 하고 누워있었다."},
+            {"question_id": "T4", "text": "클라이밍장에서 오래 있었다. 몰입하니 잡생각이 사라졌다."},
+            {"question_id": "R4", "text": "혼자 있고 싶어 약속을 미뤘다. 나답진 않았다."}],
+         "번아웃인가 싶다. 다 놓고 싶은 마음과 잘하고 싶은 마음이 같이 있다."),
+        ("2026-07-26", [  # 일(심층)
+            {"question_id": "C1", "text": "친구가 보낸 강아지 영상 보고 한참 웃었다."},
+            {"question_id": "C2", "text": "친구에게 먼저 연락했다. 오랜만에 마음이 놓였다."},
+            {"question_id": "R3", "text": "친구랑 저녁 먹으며 많이 웃었다."},
+            {"question_id": "D6", "text": "실수한 나에게, 비슷한 친구였다면 괜찮다고 다독여줬을 것 같다."}], None),
     ]
-    sessions = [analyze_session(az, d, a, allow_api=False) for d, a in days]
+    sessions = [analyze_session(az, d, a, free_text=fr, allow_api=False)
+                for d, a, fr in days]
 
     # 건강 패널 + (backend 가 줄) 또래 통계 흉내
     health = health_input.process_health(
@@ -341,6 +411,6 @@ if __name__ == "__main__":
     report = build_report(sessions, health_result=health,
                           life_indicators=life_indicators, agg=agg,
                           disposition_block=disp["block"],
-                          source_label="(데모 3일치 · 관계·안정 우선 유저)",
+                          source_label="(데모 1주일치 · 관계·안정 우선 유저)",
                           with_narrative=not args.no_narrative)
     print("\n" + report)
