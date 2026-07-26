@@ -32,7 +32,7 @@ function shareBelow(median, p25, p75, baseline) {
   return Math.round(normCdf((baseline - median) / sigma) * 100);
 }
 
-function toOption(scen, label, baseline) {
+function toOption(scen, label, baseline, ind) {
   const inc = availPts(scen.income);
   const first = inc.length ? inc[0].value : null;
   const last = inc.length ? inc[inc.length - 1].value : null;
@@ -47,12 +47,18 @@ function toOption(scen, label, baseline) {
   const down = shareBelow(last, lastPt.p25, lastPt.p75, base) ?? Math.max(0, Math.round(30 - change));
   const n = inc.length ? Math.max(...inc.map((p) => p.sample_n || 0)) : scen.satisfaction_summary?.sample_n || 0;
 
-  // 0~100 지표(엔진 값에서 파생). 삶의질은 만족도(×20)에 리스크를 반영해 감점.
-  const scores = {
-    경제: clamp(Math.round(35 + change * 1.4 + (last ? (last - 300) / 8 : 0)), 8, 100),
-    성장: clamp(Math.round(45 + growth * 1.5), 8, 100),
-    삶의질: clamp(Math.round(satis * 20 - regret * 0.25), 8, 100),
-  };
+  // 레이더 3지표(0~100). 백엔드 indicators(0~1) 정본 사용, 없으면 파생 폴백.
+  const scores = ind
+    ? {
+        경제: clamp(Math.round((ind["경제적안정도"] ?? 0.5) * 100), 8, 100),
+        성장: clamp(Math.round((ind["성장가능성"] ?? 0.5) * 100), 8, 100),
+        삶의질: clamp(Math.round((ind["삶의질"] ?? 0.5) * 100), 8, 100),
+      }
+    : {
+        경제: clamp(Math.round(35 + change * 1.4 + (last ? (last - 300) / 8 : 0)), 8, 100),
+        성장: clamp(Math.round(45 + growth * 1.5), 8, 100),
+        삶의질: clamp(Math.round(satis * 20 - regret * 0.25), 8, 100),
+      };
   return { label, n: n || 30, income_change_med: change, income_down_pct: down, scores };
 }
 
@@ -87,8 +93,8 @@ export function mapSimulateToResult(sim) {
   const B = cmp.scenarios.B;
   const baseline = prof.monthly_wage || (availPts(A.income)[0]?.value) || 300;
 
-  const optA = toOption(A, cmp.choice_a, baseline);
-  const optB = toOption(B, cmp.choice_b, baseline);
+  const optA = toOption(A, cmp.choice_a, baseline, sim.indicators?.A);
+  const optB = toOption(B, cmp.choice_b, baseline, sim.indicators?.B);
 
   const incYears = availPts(A.income).map((p) => p.year);
   const nSample = Math.max(optA.n, optB.n);

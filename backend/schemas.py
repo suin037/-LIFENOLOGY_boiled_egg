@@ -56,6 +56,13 @@ class SimulateRequest(CompareRequest):
     diary: Optional[str] = Field(
         None, description="사용자 일기 텍스트(선택). 있으면 감정신호로 개인화 + 서사 반영"
     )
+    emotions: Optional[list[str]] = Field(
+        None, description="감정 키워드(선택). 심리카드 검색·안전분기에 사용"
+    )
+    indicator_scores: Optional[dict[str, float]] = Field(
+        None,
+        description="3지표(경제적안정도/성장가능성/삶의질) 0~1 override(선택). 미지정 시 엔진에서 산출",
+    )
 
 
 class NeighborCase(BaseModel):
