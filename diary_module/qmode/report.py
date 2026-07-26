@@ -76,12 +76,17 @@ def _session_crisis(sessions):
 
 
 # ── 서사(선택) ───────────────────────────────────────────────────────
-def build_narrative_prompt(sessions, agg, health_result, paired):
+def build_narrative_prompt(sessions, agg, health_result, paired, disposition_block=None):
     lines = [
-        "다음은 한 사람이 며칠간 '질문형 일기'에 답한 요약과, (있다면) 건강 자기보고다. "
+        "다음은 한 사람이 며칠간 '질문형 일기'에 답한 요약과, (있다면) 건강 자기보고·성향이다. "
         "이를 바탕으로 4~6문장의 따뜻하고 현실적인 리포트를 써라. 감정을 먼저 인정하고, "
         "제공된 이론 카드 중 하나의 관점과 행동 제안을 자연스럽게 녹이되 반드시 그 출처를 "
-        "문장 안에 짧게 인용하라. 진단 라벨('~장애입니다')은 절대 쓰지 말 것.\n",
+        "문장 안에 짧게 인용하라. 진단 라벨('~장애입니다')은 절대 쓰지 말 것.",
+        "성향 재료가 있으면, '내용 강조 순서'와 '전달 방식'에 반영하되 단정하지는 말 것.\n",
+    ]
+    if disposition_block:
+        lines += [disposition_block, ""]
+    lines += [
         to_prompt_block(sessions, agg),
         "",
         "[이론 근거 카드]",
@@ -117,7 +122,7 @@ def generate_narrative(prompt, model=None):
     try:
         client = Anthropic()
         resp = client.messages.create(
-            model=model, max_tokens=500, system=R1.NARR_SYSTEM,
+            model=model, max_tokens=800, system=R1.NARR_SYSTEM,
             thinking={"type": "disabled"},
             messages=[{"role": "user", "content": prompt}],
         )
@@ -128,7 +133,8 @@ def generate_narrative(prompt, model=None):
 
 # ── 렌더(결정적) ─────────────────────────────────────────────────────
 def render_report(sessions, *, agg=None, health_result=None,
-                  life_indicators=None, narrative=None, source_label=""):
+                  life_indicators=None, narrative=None, source_label="",
+                  disposition_block=None):
     agg = agg or build_diary_metrics(sessions)
     L = []
     add = L.append
@@ -210,6 +216,14 @@ def render_report(sessions, *, agg=None, health_result=None,
                 add(f"    {h_safe['message']}")
         add("")
 
+    # ── 성향 프로파일(예측 서사 반영용) ──
+    if disposition_block:
+        add("■ 성향 프로파일  (시나리오 '내용 강조'·'전달 방식' 반영)")
+        add("-" * 62)
+        for line in disposition_block.splitlines():
+            add("  " + line)
+        add("")
+
     # ── 통합 서사 ──
     add("■ 통합 리포트" + ("  (Claude 서사)" if narrative else ""))
     add("-" * 62)
@@ -234,8 +248,9 @@ def _is_provisional(label):
 
 
 def build_report(sessions, *, health_result=None, life_indicators=None,
-                 agg=None, source_label="", with_narrative=True, model=None):
-    """세션(+건강) → 리포트 텍스트. with_narrative=True 이고 키가 있으면 서사 통합."""
+                 agg=None, source_label="", with_narrative=True, model=None,
+                 disposition_block=None):
+    """세션(+건강+성향) → 리포트 텍스트. with_narrative=True 이고 키가 있으면 서사 통합."""
     agg = agg or build_diary_metrics(sessions)
     scz = _session_crisis(sessions)
     h_crisis = (health_result or {}).get("safety", {}).get("level") == "crisis"
@@ -245,12 +260,13 @@ def build_report(sessions, *, health_result=None, life_indicators=None,
         R1._load_dotenv()
         paired = (health_input.pair_with_baseline(health_result, life_indicators)
                   if health_result else [])
-        prompt = build_narrative_prompt(sessions, agg, health_result, paired)
+        prompt = build_narrative_prompt(sessions, agg, health_result, paired,
+                                        disposition_block)
         narrative, _ = generate_narrative(prompt, model=model)
 
     return render_report(sessions, agg=agg, health_result=health_result,
                          life_indicators=life_indicators, narrative=narrative,
-                         source_label=source_label)
+                         source_label=source_label, disposition_block=disposition_block)
 
 
 if __name__ == "__main__":
@@ -298,8 +314,18 @@ if __name__ == "__main__":
         {"indicator": "번아웃 경험률", "value": 41.0, "unit": "%", "group": "청년 25-29"},
     ]
 
+    # 온보딩 가치순위(초기값) + 일기 언어지표 → 성향 프로파일
+    from qmode import value_ranking, disposition          # noqa: E402
+    ranked = ["family", "stability", "friends", "money", "meaning",
+              "growth", "freedom", "status"]              # 관계·안정 우선 유저
+    vw = value_ranking.axis_weights(ranked)
+    agg = build_diary_metrics(sessions)
+    disp = disposition.analyze_disposition(sessions, (agg or {}).get("diary_metrics"),
+                                           value_weights=vw)
+
     report = build_report(sessions, health_result=health,
-                          life_indicators=life_indicators,
-                          source_label="(데모 3일치)",
+                          life_indicators=life_indicators, agg=agg,
+                          disposition_block=disp["block"],
+                          source_label="(데모 3일치 · 관계·안정 우선 유저)",
                           with_narrative=not args.no_narrative)
     print("\n" + report)
