@@ -82,6 +82,41 @@ def _free_entries(sessions):
     return out
 
 
+# 유저용 리포트 — 기분 흐름/하이라이트 (숫자·카드·축 숨김)
+_MOOD_EMOJI = ["😞", "🙁", "😐", "🙂", "😄"]
+
+
+def _weekly_mood(sessions):
+    """하루별 평균 정서극성 → 이모지 라인. (데일리 체크인 붙기 전 임시 — 답변서 추정)"""
+    out = []
+    for s in sessions:
+        vals = [(it.get("metrics") or {}).get("emotion_valence")
+                for it in s.get("items", []) if not it.get("skipped")]
+        vals = [v for v in vals if v is not None]
+        if not vals:
+            continue
+        avg = sum(vals) / len(vals)
+        idx = min(4, max(0, int(round((avg + 1) / 2 * 4))))     # -1~1 → 0~4
+        out.append((s.get("date"), _MOOD_EMOJI[idx]))
+    return out
+
+
+def _snippets(sessions, qids, n):
+    """특정 질문들의 답변에서 짧은 조각(중복 제거, 최대 n개) — 유저용 '한눈에'."""
+    out = []
+    for s in sessions:
+        for it in s.get("items", []):
+            if it.get("skipped") or it.get("question_id") not in qids:
+                continue
+            a = (it.get("answer") or "").strip()
+            if not a:
+                continue
+            short = a[:18] + ("…" if len(a) > 18 else "")
+            if short not in out:
+                out.append(short)
+    return out[:n]
+
+
 # ── 재료 수집 ────────────────────────────────────────────────────────
 def _collect_cards(sessions):
     """세션들의 질문 답변에 직결된 카드를 (질문라벨, 카드) 로 모은다(중복 제거).
@@ -299,6 +334,67 @@ def render_report(sessions, *, agg=None, health_result=None,
     return "\n".join(L)
 
 
+def render_user_report(sessions, *, agg=None, health_result=None, narrative=None,
+                       interests_profile=None, source_label=""):
+    """유저 공개용 슬림 리포트 — 서사 중심. 지표·카드·축 등 내부 재료는 전부 숨긴다.
+
+    보여줄 것: 기간 · 기분 흐름 · 이번 주 한눈에(좋음/걸림/몸마음) · 서사 · 취향 한 줄.
+    위기 시엔 지지 메시지만.
+    """
+    agg = agg or build_diary_metrics(sessions)
+    L = []
+    add = L.append
+    dates = sorted({s.get("date") for s in sessions if s.get("date")})
+    period = f"{dates[0]} ~ {dates[-1]}" if dates else ""
+    add(f"📅 이번 주 기록  ({period})")
+    if source_label:
+        add(f"   {source_label}")
+    add("")
+
+    # 안전 분기 — 위기면 지지 메시지만.
+    scz = _session_crisis(sessions)
+    h_safe = (health_result or {}).get("safety", {})
+    if scz >= 3 or h_safe.get("level") == "crisis":
+        msg = next((s.get("crisis_message") for s in sessions if s.get("crisis_message")),
+                   None) or h_safe.get("message") or ""
+        add(msg)
+        return "\n".join(L)
+
+    # 기분 흐름(명시적 체크인 붙기 전 임시 — 답변서 추정)
+    mood = _weekly_mood(sessions)
+    if mood:
+        add("🗓  이번 주 기분 흐름")
+        add("    " + "  ".join(e for _, e in mood))
+        add("")
+
+    # 이번 주 한눈에
+    hi = _snippets(sessions, ("R3", "T1", "T4"), 3)
+    lo = _snippets(sessions, ("C2", "R5", "D6"), 2)
+    words = _health_words(health_result)
+    add("✨ 이번 주 한눈에")
+    if hi:
+        add("    ☀ 좋았던 순간    " + "  ·  ".join(hi))
+    if lo:
+        add("    🌧 마음에 남은 것  " + "  ·  ".join(lo))
+    if words:
+        add("    💤 몸·마음        " + ", ".join(words))
+    add("")
+
+    # 서사(핵심)
+    if narrative:
+        add("─" * 46)
+        for para in narrative.split("\n"):
+            if para.strip():
+                add(para.strip())
+                add("")
+
+    # 취향 한 줄
+    kw = (interests_profile or {}).get("keywords", [])
+    if kw:
+        add("💛 요즘 관심: " + ", ".join(w for w, _ in kw[:5]))
+    return "\n".join(L).rstrip()
+
+
 def _is_provisional(label):
     """라벨(질문 텍스트)로 잠정매핑 여부 추정 — 표시용."""
     from qmode import card_map
@@ -407,10 +503,29 @@ if __name__ == "__main__":
     agg = build_diary_metrics(sessions)
     disp = disposition.analyze_disposition(sessions, (agg or {}).get("diary_metrics"),
                                            value_weights=vw)
+    interests_prof = interests.collect(sessions)
+    interests_block = interests.build_block(interests_prof)
 
-    report = build_report(sessions, health_result=health,
-                          life_indicators=life_indicators, agg=agg,
+    # 서사 1회 생성 → 디버그/유저 리포트 양쪽에 재사용
+    narrative = None
+    if not args.no_narrative and _session_crisis(sessions) < 3 \
+            and health["safety"]["level"] != "crisis":
+        R1._load_dotenv()
+        prompt = build_narrative_prompt(sessions, agg, health, disp["block"],
+                                        interests_block)
+        narrative, _ = generate_narrative(prompt)
+
+    src = "(데모 1주일치 · 관계·안정 우선 유저)"
+    debug = render_report(sessions, agg=agg, health_result=health, narrative=narrative,
                           disposition_block=disp["block"],
-                          source_label="(데모 1주일치 · 관계·안정 우선 유저)",
-                          with_narrative=not args.no_narrative)
-    print("\n" + report)
+                          interests_block=interests_block, source_label=src)
+    user = render_user_report(sessions, agg=agg, health_result=health,
+                              narrative=narrative, interests_profile=interests_prof,
+                              source_label=src)
+
+    outdir = HERE / "samples"
+    (outdir / "sample_report.txt").write_text(debug, encoding="utf-8")
+    (outdir / "sample_user_report.txt").write_text(user, encoding="utf-8")
+    print("=== [유저 공개용] ===\n")
+    print(user)
+    print(f"\n\n(디버그 풀뷰는 {outdir / 'sample_report.txt'} 에 저장됨)")
