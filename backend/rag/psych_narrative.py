@@ -29,10 +29,21 @@ def select_focus(indicator_scores):
     return focus, norm[focus]
 
 
-def get_psych_evidence(indicator_scores, emotions=None, decision_type=None, k=3):
-    """레이어2 신호 → 관련 이론카드 top-k(재료). 카드가 없으면 빈 리스트."""
-    focus, score = select_focus(indicator_scores)
-    if focus is None:
+def get_psych_evidence(indicator_scores, emotions=None, decision_type=None, k=3,
+                       focus_override=None):
+    """레이어2 신호 → 관련 이론카드 top-k(재료). 카드가 없으면 빈 리스트.
+
+    focus_override: 초점 지표를 강제 지정(성향 개인화 레이어가 '중요하며 위태로운' 축을
+        고른 경우). None 이면 기존 동작(가장 낮은 지표 = 개입 필요)으로 폴백.
+    """
+    if focus_override:
+        focus = focus_override
+        score = (indicator_scores or {}).get(focus)
+        if score is None:  # override 지표에 점수가 없으면 안전하게 폴백
+            focus, score = select_focus(indicator_scores)
+    else:
+        focus, score = select_focus(indicator_scores)
+    if focus is None or score is None:
         return {"focus_indicator": None, "level": None, "cards": []}
     level = bucket(score, focus)
     cards = retrieve(indicator=focus, score=score, emotions=emotions,

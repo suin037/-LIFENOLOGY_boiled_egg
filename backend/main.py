@@ -24,6 +24,7 @@ from compare import build_comparison
 import stat_evidence
 import indicators as indicators_mod
 import diary_bridge
+import personalize
 from utils.claude_api import generate_scenarios
 from rag.psych_narrative import get_psych_evidence, build_psych_prompt_block
 from rag import safety as rag_safety
@@ -101,9 +102,33 @@ def simulate(req: SimulateRequest) -> dict:
     ind_a = req.indicator_scores or indicators_mod.compute_indicators(scen_a, baseline)
     ind_b = req.indicator_scores or indicators_mod.compute_indicators(scen_b, baseline)
 
+    # 1-1) 성향 개인화(Option A): 가치가중치 → 서술순서·초점·질적강조·확신도.
+    #      모델 매칭엔 관여 안 함. value_weights 없으면 focus_* = None(기존 동작 유지).
+    #  · value_weights 직접 오면 그걸, 아니면 온보딩 순위(value_ranking)를
+    #    지윤 정본(qmode.value_ranking.axis_weights)으로 변환해 사용.
+    value_weights = getattr(req.profile, "value_weights", None)
+    if not value_weights and getattr(req, "value_ranking", None):
+        try:
+            from qmode.value_ranking import axis_weights
+            value_weights = axis_weights(req.value_ranking)
+        except Exception:
+            value_weights = None
+    pz = personalize.build_personalization(
+        value_weights=value_weights,
+        diary_weights=req.diary_axis_weights,
+        n_answers=req.diary_n_answers,
+        indicator_scores_a=ind_a, indicator_scores_b=ind_b,
+        disposition_block=req.disposition_block or "",
+    )
+    focus_a = pz["focus_a"][0] if pz["focus_a"] else None
+    focus_b = pz["focus_b"][0] if pz["focus_b"] else None
+
     # 2) 심리카드(민주 psych RAG): 3지표 + 감정 → 초점지표의 이론카드
-    psych_a = get_psych_evidence(ind_a, emotions=req.emotions, decision_type=req.choice_a)
-    psych_b = get_psych_evidence(ind_b, emotions=req.emotions, decision_type=req.choice_b)
+    #    성향이 있으면 '중요하며 위태로운' 축을 초점으로 넘김(없으면 최저지표 폴백).
+    psych_a = get_psych_evidence(ind_a, emotions=req.emotions,
+                                 decision_type=req.choice_a, focus_override=focus_a)
+    psych_b = get_psych_evidence(ind_b, emotions=req.emotions,
+                                 decision_type=req.choice_b, focus_override=focus_b)
 
     # 3) 통계 근거(숫자 근거) — 선택지별
     ev_a = stat_evidence.evidence_for_choice(req.choice_a)
@@ -120,6 +145,12 @@ def simulate(req: SimulateRequest) -> dict:
         note += f"\n\n[A={req.choice_a} 심리근거]\n" + blk_a
     if blk_b:
         note += f"\n\n[B={req.choice_b} 심리근거]\n" + blk_b
+    # 4-1) 성향 개인화 지시문(서술 우선순위·톤·질적강조) 주입 — 지윤 handoff §2.
+    #      성향(가중치)이 실제로 있을 때만 붙인다.
+    if value_weights:
+        note = (note + "\n\n" + personalize.narrative_directive(
+            pz, req.choice_a, req.choice_b)).strip()
+
     note = note.strip()
 
     try:
@@ -137,6 +168,7 @@ def simulate(req: SimulateRequest) -> dict:
         "snapshots": cmp.get("snapshots"),
         "compare": cmp,
         "indicators": {"A": ind_a, "B": ind_b},
+        "personalization": pz,
         "psych": {
             "A": {"focus": psych_a.get("focus_indicator"), "level": psych_a.get("level"),
                   "cards": [c["card_id"] for c in psych_a.get("cards", [])]},

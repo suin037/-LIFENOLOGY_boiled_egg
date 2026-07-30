@@ -52,3 +52,7 @@ frontend/dist/
 .DS_Store
 Thumbs.db
 ~$*.xlsx
+
+backend/req*.json
+backend/resp*.json
+backend/smoke_check.py

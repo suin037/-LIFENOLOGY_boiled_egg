@@ -28,6 +28,12 @@ class Profile(BaseModel):
     edu_level: Optional[int] = Field(None, ge=2, le=9,
         description="교육수준(KLIPS 학력코드: 5=고졸 6=전문대 7=대졸 8=석사 9=박사) — 궤적 매칭 정교화용(선택)")
 
+    # --- 가치 성향 (선택) — 개인화 레이어용. 모델 매칭 피처 아님(강조·초점·서사에만) ---
+    value_weights: Optional[dict[str, float]] = Field(
+        None,
+        description="온보딩 가치순위 → 5축 가중치(합≈1). qmode value_ranking.axis_weights 산출물 "
+        "{경제,관계,성장,자기실현,안정}. 성향 개인화(강조·초점)에만 사용.")
+
 
 class PredictRequest(Profile):
     """현재의 나 + 비교할 진로 선택 1개 (`/predict` 용)."""
@@ -63,6 +69,17 @@ class SimulateRequest(CompareRequest):
         None,
         description="3지표(경제적안정도/성장가능성/삶의질) 0~1 override(선택). 미지정 시 엔진에서 산출",
     )
+
+    # --- 성향 개인화 재료 (선택) — 지윤 qmode 산출물. 없으면 개인화는 건너뛴다 ---
+    diary_axis_weights: Optional[dict[str, float]] = Field(
+        None, description="일기 언어지표로 갱신된 5축 가중치(선택). 있으면 확신도로 온보딩값과 혼합")
+    diary_n_answers: Optional[int] = Field(
+        None, ge=0, description="누적 일기 답변 수(성향 확신도/recency 판단)")
+    disposition_block: Optional[str] = Field(
+        None, description="qmode disposition.build_disposition_block() 텍스트(서사 톤·강조 재료)")
+    value_ranking: Optional[list[str]] = Field(
+        None, description="온보딩 가치 카드 순위(중요한 순, card id 또는 label 리스트). "
+        "profile.value_weights 가 없을 때 이걸 qmode value_ranking.axis_weights 로 변환해 사용.")
 
 
 class NeighborCase(BaseModel):
