@@ -178,6 +178,77 @@ def analyze_disposition(sessions, diary_metrics, value_weights=None):
     }
 
 
+# ── 재료 블록 조립 (LLM 추출 소비) ──────────────────────────────────────
+# 성향 추출 '엔진'은 disposition_llm.py(LLM). 여기선 그 산출물을 예측 서사용
+# '재료'로 조립한다. 지표 순서는 value_ranking 재사용(중복 회피).
+def delivery_from_llm(llm_extract):
+    """LLM 구조화 추출 → 전달 스타일 가이드(문자열). metrics delivery_style 대체."""
+    if not llm_extract:
+        return "데이터 부족 — 기본 톤."
+    flags = llm_extract.get("delivery_flags", [])
+    cop = llm_extract.get("coping", {})
+    bits = []
+    if cop.get("direction") == "avoidant":
+        bits.append("회피경향: 압박·과제 대신 '아주 작은 한 걸음'으로 낮춰 제안")
+    elif cop.get("direction") == "approach":
+        bits.append("행동지향: 구체적 다음 스텝을 제안하면 잘 맞음")
+    for f in flags:
+        if f not in ("회피경향", "행동지향"):
+            bits.append(f)
+    return "; ".join(bits) if bits else "뚜렷한 스타일 신호 없음 — 중립 톤."
+
+
+def build_jobchange_material(weights, llm_extract=None, *, decided_by=""):
+    """이직 서사 생성기(suin 관할)가 끼워 넣을 '성향 재료 블록'.
+
+    우리는 서사를 만들지 않는다 — 성향을 예측 지표 강조순서·리스크 프레임·톤으로
+    번역한 '재료'만 준다(PREDICTION_HANDOFF 재료제공형). 수치는 안 건드림.
+    지표 강조 순서는 value_ranking.narrate_order/AXIS_TO_INDICATOR 재사용.
+
+    weights     : 갱신된 5축 가중치(disposition_llm.blend_weights 결과의 'weights').
+    llm_extract : 대처·job_change 렌즈(없어도 동작 — 가치축만으로 프레임).
+    """
+    order = value_ranking.narrate_order(weights)
+    seen, indicators = set(), []
+    for ax in order:
+        ind = value_ranking.AXIS_TO_INDICATOR.get(ax, "")
+        if ind and ind not in seen:
+            seen.add(ind)
+            indicators.append(ind)
+
+    jc = (llm_extract or {}).get("job_change", {})
+    cop = (llm_extract or {}).get("coping", {})
+    rt = jc.get("risk_tolerance")
+    # 리스크 프레임 — 안정지향/낮은 감수도/회피면 '관리·재구성', 도전지향이면 '실험'
+    stability_led = order[0] == "안정" or (weights.get("안정", 0) >= weights.get("성장", 0))
+    low_risk = (rt is not None and rt < 0.4) or cop.get("direction") == "avoidant" or stability_led
+    high_risk = (rt is not None and rt > 0.6) or (cop.get("direction") == "approach" and not stability_led)
+    if low_risk:
+        risk_line = ("리스크는 숨기지 말되 '위협'이 아니라 '관리·재구성'할 것으로 먼저 제시. "
+                     "결정을 작은 첫 스텝으로 쪼개 제안(전면 결단 강요 금지).")
+    elif high_risk:
+        risk_line = "리스크를 '도전·실험'의 프레임으로. 다만 불리한 축도 정직하게 함께 보여줄 것."
+    else:
+        risk_line = "리스크는 균형 있게 — 기회와 위험을 같은 무게로, 어느 쪽도 숨기지 말 것."
+
+    decision_style = jc.get("decision_style")
+    style_line = {"analytic": "근거·수치를 짚어주는 설명을 반김 — 비교표식 서술이 잘 맞음.",
+                  "intuitive": "느낌·가치 부합을 앞에. 과한 수치 나열보다 장면·의미로.",
+                  "mixed": "핵심 수치 한둘 + 그 의미를 함께."}.get(decision_style, "")
+
+    lines = [f"[이직 서사용 성향 재료 — 서술 방식에만 반영, 예측 수치는 불변."
+             + (f" 갱신근거: {decided_by}]" if decided_by else "]")]
+    lines.append("· 지표 강조 순서(이 순서로 먼저·비중 있게 서술): " + " → ".join(indicators))
+    lines.append(f"· 리스크 프레임: {risk_line}")
+    if style_line:
+        lines.append(f"· 결정 방식({decision_style}): {style_line}")
+    lines.append(f"· 전달 스타일: {delivery_from_llm(llm_extract)}")
+    if jc.get("protect_most"):
+        lines.append(f"· 이 사람이 가장 지키려는 것: {jc['protect_most']} — 이걸 건드리는 결과는 특히 신중히.")
+    lines.append("· 가드: 불리한 축도 숨기지 말 것(순서·톤만 조정). 성향은 초기값이며 갱신됨 — 단정 금지.")
+    return "\n".join(lines)
+
+
 if __name__ == "__main__":
     import json
 

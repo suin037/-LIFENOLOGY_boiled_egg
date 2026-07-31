@@ -107,3 +107,53 @@ interest_block = interests.build_block(interests.collect(sessions))   # 텍스�
 `diary_module/qmode/report.py`의 `build_narrative_prompt()`가 위 재료들을 실제로
 조립해 Claude 서사를 만드는 **동작하는 예시**다. 예측 서사도 같은 방식으로 조립하면 된다.
 샘플 출력: `diary_module/qmode/samples/sample_report.txt`.
+
+---
+
+## 7. suin 예측 서사 연결 — 실제 인터페이스 기준 (2026-07-31 갱신)
+
+성향 추출이 **사전지표 → 구조화 LLM**으로 바뀌었고, 이직 서사용 재료가 생겼다.
+suin `backend/utils/claude_api.py`의 현재 `generate_narrative`는 성향을 **아직 안 받는다**
+(수치 4개만). 아래 **최소 추가**로 우리 재료를 끼우면 된다. suin이 추가한
+`PredictRequest`의 상태필드(monthly_wage·satis_overall 등)는 **KNN 매칭용 상태 수치**라
+우리 성향(가치·대처)과 **다른 것 — 그대로 두면 된다**(성향은 모델 피처로 넣지 않는다, §5).
+
+### (a) qmode가 재료 만드는 법 (우리 쪽, 주간 배치)
+```python
+from qmode import disposition, disposition_llm, value_ranking
+from qmode.session import build_diary_metrics
+
+agg = build_diary_metrics(sessions)                         # 누적(길이게이트·부러움)
+vw  = value_ranking.axis_weights(ranked_card_ids)           # 온보딩 순위 → 5축(prior)
+extract, err = disposition_llm.extract(sessions)            # LLM 구조화 추출(대처·이직렌즈)
+blended = disposition_llm.blend_weights(vw, extract,        # 갱신(가치는 온보딩 주도, α≤0.3)
+                                        n_answers=agg["n_answers"])
+persona_block = disposition.build_jobchange_material(       # ← suin에 넘길 '재료' 문자열
+    blended["weights"], extract, decided_by=blended["note"])
+```
+`extract`/키 없으면 `build_jobchange_material(vw, None)` 로도 동작(온보딩만으로 프레임).
+
+### (b) suin이 자기 코드에 더할 최소 변경 (파라미터 1 + 프롬프트 합류 2줄)
+```python
+def generate_narrative(req, expected_wage, causal_effect, survival_months,
+                       persona_block=None):          # ← 추가
+    ...
+    if persona_block:                                # ← 추가
+        prompt += (f"\n\n{persona_block}\n"
+                   "지시: 위 '지표 강조 순서'가 높은 것부터 서술하고, '리스크 프레임'과 "
+                   "'전달 스타일'에 맞춰 톤을 잡아라. 수치는 절대 바꾸지 말고, 불리한 축도 "
+                   "숨기지 마라(순서·톤만 조정).")
+```
+
+### (c) persona_block 예시 (P1 안정·회피형)
+```
+[이직 서사용 성향 재료 — 서술 방식에만 반영, 예측 수치는 불변. 갱신근거: α=0.30 …]
+· 지표 강조 순서: 삶의질 → 성장가능성 → 경제적안정도
+· 리스크 프레임: '위협' 아닌 '관리·재구성'으로 먼저, 작은 첫 스텝으로 분해.
+· 결정 방식(mixed): 핵심 수치 한둘 + 그 의미를 함께.
+· 전달 스타일: 정서부하 높음; 자기초점 강함
+· 이 사람이 가장 지키려는 것: 예측 가능하고 안정적인 일상 …
+· 가드: 불리한 축도 숨기지 말 것. 성향은 초기값이며 갱신됨 — 단정 금지.
+```
+→ **같은 수치라도** P1(삶의질부터·관리톤) vs 경제형(경제부터) 서사가 갈린다.
+검증: `python diary_module/qmode/dataset/build.py P1_stability --llm`.
