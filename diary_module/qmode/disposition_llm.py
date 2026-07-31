@@ -138,22 +138,30 @@ def extract(sessions, *, model=None, span_label="", max_tokens=1200):
         return None, "anthropic 미설치"
     model = model or "claude-sonnet-5"
     prompt = build_extract_prompt(sessions, span_label=span_label)
-    try:
-        client = Anthropic()
-        resp = client.messages.create(
-            model=model, max_tokens=max_tokens, system=SYSTEM,
-            thinking={"type": "disabled"},
-            messages=[{"role": "user", "content": prompt}],
-        )
-        txt = "".join(b.text for b in resp.content if b.type == "text").strip()
-        # 코드펜스 방어
-        if txt.startswith("```"):
-            txt = txt.strip("`")
-            txt = txt[txt.find("{"):txt.rfind("}") + 1]
-        obj = _validate(json.loads(txt))
-        return obj, None
-    except Exception as e:      # noqa: BLE001
-        return None, f"추출 오류: {e}"
+    import time
+    client = Anthropic()
+    last = None
+    for attempt in range(3):          # 전이적 오류(529 과부하·5xx·rate)엔 재시도
+        try:
+            resp = client.messages.create(
+                model=model, max_tokens=max_tokens, system=SYSTEM,
+                thinking={"type": "disabled"},
+                messages=[{"role": "user", "content": prompt}],
+            )
+            txt = "".join(b.text for b in resp.content if b.type == "text").strip()
+            if txt.startswith("```"):          # 코드펜스 방어
+                txt = txt.strip("`")
+                txt = txt[txt.find("{"):txt.rfind("}") + 1]
+            return _validate(json.loads(txt)), None
+        except Exception as e:      # noqa: BLE001
+            last = e
+            msg = str(e).lower()
+            transient = any(s in msg for s in ("529", "overload", "rate", "500", "502", "503", "timeout"))
+            if transient and attempt < 2:
+                time.sleep(1.5 * (attempt + 1))     # 1.5s, 3s 백오프
+                continue
+            return None, f"추출 오류: {e}"
+    return None, f"추출 오류: {last}"
 
 
 # ── 온보딩(prior) + LLM(evidence) 블렌딩 = '갱신'의 실제 계산 ──────────
