@@ -236,9 +236,19 @@ def build_jobchange_material(weights, llm_extract=None, *, decided_by=""):
                   "intuitive": "느낌·가치 부합을 앞에. 과한 수치 나열보다 장면·의미로.",
                   "mixed": "핵심 수치 한둘 + 그 의미를 함께."}.get(decision_style, "")
 
+    # 삶의질 하위 힌트 — 관계·자기실현·안정이 backend에선 '삶의질' 하나로 뭉쳐서
+    # 지표 순서만으론 안 갈린다. 어느 '면'을 앞세울지 하위축을 넘겨 세 유형을 구분.
+    qol_facet = {"관계": "가까운 사람·소속·관계의 질",
+                 "자기실현": "자율·의미·나다움",
+                 "안정": "안정·예측가능성·건강"}
+    qol_axes = [a for a in order if value_ranking.AXIS_TO_INDICATOR.get(a) == "삶의질"]
+
     lines = [f"[이직 서사용 성향 재료 — 서술 방식에만 반영, 예측 수치는 불변."
              + (f" 갱신근거: {decided_by}]" if decided_by else "]")]
     lines.append("· 지표 강조 순서(이 순서로 먼저·비중 있게 서술): " + " → ".join(indicators))
+    if "삶의질" in indicators and qol_axes:
+        lines.append(f"· 삶의질 세부 초점: '{qol_facet[qol_axes[0]]}'면을 앞세울 것 "
+                     "(같은 삶의질도 이 사람에겐 이 면이 핵심).")
     lines.append(f"· 리스크 프레임: {risk_line}")
     if style_line:
         lines.append(f"· 결정 방식({decision_style}): {style_line}")
