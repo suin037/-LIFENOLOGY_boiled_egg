@@ -1,6 +1,7 @@
 import { createContext, useContext, useMemo, useState } from "react";
 import { MOCK_RESULT } from "./result.js";
 import { runSimulate } from "../api.js";
+import { DEFAULT_AVATAR } from "./avatarOptions.js";
 
 // 결과 데이터 + 온보딩 프로필을 한 곳에 모으는 컨텍스트.
 // runSimulation() 이 백엔드 /simulate 를 호출해 결과를 채운다(실패 시 목업 폴백).
@@ -13,7 +14,11 @@ const DEFAULT_PROFILE = {
   occupation: "사회계열",
   income: 280, // 만원/월 → 백엔드 monthly_wage
   edu_level: 7, // 대졸
-  values: ["성장 가능성"],
+  values: ["성장 가능성"], // (표시용 레거시) — 성향 입력은 value_ranking 로 이관
+  value_ranking: ["growth", "stability"], // 가치 카드 id 중요한 순 → 개인화 입력(백엔드가 가중치로 변환)
+  mbti: "모름", // 심리 성향 input
+  psych_answers: {}, // { D2:"…", D1:"…", D4:"…" } 서술형 답변 → disposition_block 로 전송
+  avatarConfig: DEFAULT_AVATAR, // 아바타 빌더 선택(피부·머리·안경·배경)
 };
 
 export function ResultProvider({ children }) {

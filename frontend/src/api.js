@@ -3,6 +3,8 @@
 // 엔진(L1~L5) 수치 + RAG 근거 + Claude 서사를 프론트 컴포넌트가 읽는 형태로 매핑한다.
 // ─────────────────────────────────────────────────────────────
 
+import { buildDisposition } from "./data/psychQuestions.js";
+
 const API_BASE = import.meta.env.VITE_API_BASE || "http://127.0.0.1:8000";
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -134,11 +136,22 @@ export async function runSimulate({ profile, choiceA, choiceB, diary }) {
       major: profile.major || profile.occupation || "공학",
       monthly_wage: profile.income ?? profile.monthly_wage ?? null,
       edu_level: profile.edu_level ?? 7,
+      // 성향 개인화 입력: 온보딩/설정 가치 순위(카드 id). 있을 때만 실어 보낸다.
+      // 백엔드가 qmode.value_ranking.axis_weights 로 가중치 변환 → 강조·초점·서사 개인화.
+      ...(profile.value_ranking?.length ? { value_ranking: profile.value_ranking } : {}),
     },
     choice_a: choiceA,
     choice_b: choiceB,
   };
   if (diary) body.diary = diary;
+
+  // 심리 성향 서술(MBTI + 서술형 답변) → disposition_block + 답변 수(확신도).
+  // 백엔드가 서사 프롬프트에 주입 → 개인화 심화.
+  const disp = buildDisposition(profile);
+  if (disp.block) {
+    body.disposition_block = disp.block;
+    body.diary_n_answers = disp.n;
+  }
 
   const res = await fetch(`${API_BASE}/simulate`, {
     method: "POST",
