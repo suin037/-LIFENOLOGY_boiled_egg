@@ -55,6 +55,31 @@
       "attachment": true
     },
     {
+      "id": "T2",
+      "text": "요즘 반복해서 듣는 노래나 플레이리스트 있나요? 주로 언제 손이 가나요?",
+      "layer": "taste",
+      "metrics": ["emotion_valence"],
+      "axes": [],
+      "risk": "low",
+      "risk_type": null,
+      "evidence": "none",
+      "evidence_note": "리텐션·라포용(노래). 성향 신호 약함 — interests 메모리로만, 성향축 미반영.",
+      "distancing": false,
+      "attachment": true
+    },
+    {
+      "id": "T6",
+      "text": "요즘 문득 떠오른 추억이나 장면이 있나요? 뭐가 그걸 떠올리게 했나요?",
+      "layer": "taste",
+      "metrics": ["emotion_valence"],
+      "axes": [],
+      "risk": "low",
+      "risk_type": null,
+      "evidence": "none",
+      "evidence_note": "리텐션·라포용(추억). 성향 신호 약함 — interests 메모리로만. D3(회고)와 달리 가벼운 장면 회상.",
+      "distancing": false
+    },
+    {
       "id": "R3",
       "text": "오늘 잘 됐던 일 하나만 꼽는다면? 그게 왜 잘 됐다고 생각하나요?",
       "layer": "relation",
@@ -168,7 +193,6 @@
     }
   ],
   "benched": [
-    {"id": "T2", "text": "요즘 반복해서 듣거나 보는 게 있나요? 주로 언제 손이 가나요?", "reason": "근거 없음 · 신호 희박"},
     {"id": "T3", "text": "최근에 누군가에게 추천한 것 하나. 왜 하필 그 사람에게 그걸 권했나요?", "reason": "근거 없음"},
     {"id": "T5", "text": "최근에 쓴 돈 중 제일 잘 썼다 싶은 것. 왜 그렇게 느꼈나요?", "reason": "근거 없음"},
     {"id": "R1", "text": "이번 주에 누구와 있을 때가 가장 편했나요? 무엇이 편했나요?", "reason": "근거 없음"}
