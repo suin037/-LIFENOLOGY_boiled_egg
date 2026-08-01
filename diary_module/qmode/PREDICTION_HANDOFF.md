@@ -133,7 +133,22 @@ persona_block = disposition.build_jobchange_material(       # ← suin에 넘길
 ```
 `extract`/키 없으면 `build_jobchange_material(vw, None)` 로도 동작(온보딩만으로 프레임).
 
-### (b) suin이 자기 코드에 더할 최소 변경 (파라미터 1 + 프롬프트 합류 2줄)
+### (b) suin backend 배선 — 3곳 소편집 (backend는 stateless라 persona_block이 요청에 실려 옴)
+
+backend `PredictRequest`엔 user_id·일기가 없다(순수 예측 API). 그래서 우리 모델을
+backend가 돌리지 않고, **우리가 만든 persona_block 문자열을 요청에 실어 보내** 통과시킨다.
+persona_block 없으면 기존과 100% 동일(하위호환). main.py의 try/except가 이미 방어.
+
+**① `backend/schemas.py` PredictRequest — 필드 1줄 (edu_level 아래):**
+```python
+    persona_block: Optional[str] = None   # qmode 성향 재료(이직 서사 개인화). 없으면 기존과 동일
+```
+**② `backend/main.py`(현재 91행) — 호출에 인자 1개:**
+```python
+    narrative = generate_narrative(req, expected_wage or 0, effect or 0, survival or 0,
+                                   persona_block=req.persona_block)
+```
+**③ `backend/utils/claude_api.py` generate_narrative — 파라미터 + 프롬프트 3줄:**
 ```python
 def generate_narrative(req, expected_wage, causal_effect, survival_months,
                        persona_block=None):          # ← 추가
@@ -143,7 +158,18 @@ def generate_narrative(req, expected_wage, causal_effect, survival_months,
                    "지시: 위 '지표 강조 순서'가 높은 것부터 서술하고, '리스크 프레임'과 "
                    "'전달 스타일'에 맞춰 톤을 잡아라. 수치는 절대 바꾸지 말고, 불리한 축도 "
                    "숨기지 마라(순서·톤만 조정).")
+    resp = _get_client().messages.create(...)
 ```
+
+### (b-2) persona_block은 누가 만드나 (우리쪽, 주 1회 배치)
+```python
+from qmode.disposition_model import DispositionModel
+prof = DispositionModel().analyze(ranked_cards, sessions)   # 온보딩 + 그 주 일기
+persona_block = prof["jobchange_material"]                  # → 유저 프로필 DB 저장
+# 예측 요청 시 프론트가 저장된 persona_block을 PredictRequest에 실어 POST
+```
+데이터 흐름: `[주1회] DispositionModel→persona_block 저장 → [예측요청] 프론트가 요청에 실음
+→ [backend] req.persona_block→generate_narrative`.  수치는 모델 그대로, 서사 순서·톤만.
 
 ### (c) persona_block 예시 (P1 안정·회피형)
 ```
