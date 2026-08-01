@@ -1,16 +1,14 @@
 import { useNavigate } from "react-router-dom";
 import { useResult } from "../data/ResultContext.jsx";
 import { Card, Button, Row } from "../components/ui.jsx";
-import { MY_UNIVERSE, MASCOTS } from "../data/result.js";
-import { labelOf } from "../data/prediction.js";
-import DiaryToday from "../components/DiaryToday.jsx";
-import MoodTrend from "../components/MoodTrend.jsx";
+import { MY_UNIVERSE, MASCOTS, totalNeighbors } from "../data/result.js";
 
 // 홈 = 진입 허브. 인사 + 마스코트 + 새 시뮬 CTA + 최근 결과 요약 + 미니 통계.
 export default function HomeHub() {
   const navigate = useNavigate();
   const { profile, result } = useResult();
-  const { a, b } = result;
+  const { option_a: a } = result;
+  const total = totalNeighbors(result);
   const guide = MASCOTS.cosmo;
 
   return (
@@ -21,12 +19,6 @@ export default function HomeHub() {
         <br />
         비춰볼까요?
       </h1>
-
-      {/* 오늘 기록 (일기) + 최근 감정 흐름 */}
-      <div className="mt-3">
-        <DiaryToday />
-        <MoodTrend />
-      </div>
 
       {/* 마스코트 한마디 */}
       <Card highlight className="flex items-center gap-3">
@@ -57,24 +49,18 @@ export default function HomeHub() {
         <button className="tap w-full text-left" onClick={() => navigate("/result")}>
           <div className="flex items-center justify-between">
             <div className="text-[15px] font-semibold">
-              <span className="text-cyan">{labelOf(a.choice)}</span>
-              <span className="text-mut"> vs </span>
-              <span className="text-gold">{labelOf(b.choice)}</span>
+              {profile.age}세 · {profile.occupation}
             </div>
             <span className="text-[11px] text-cyan">자세히 →</span>
           </div>
-          <Row label="대상">
-            {profile.age}세 · {profile.occupation}
+          <Row label="이직한 사람들">
+            소득 중앙값 <span className="font-bold text-cyan">+{a.income_change_med}%</span>
+            <span className="text-sub"> ({a.n}명)</span>
           </Row>
-          {a.causal_effect != null ? (
-            <Row label="이직 순수 효과">
-              <span className="font-bold text-cyan">+{a.causal_effect}만원</span>
-            </Row>
-          ) : (
-            <Row label="A 궤적(현재)">
-              <span className="font-bold text-cyan">{a.trajectory[0].income_p50}만원</span>
-            </Row>
-          )}
+          <Row label="다만 소득 감소">
+            <span className="font-bold text-danger">{a.income_down_pct}%</span>
+            <span className="text-sub"> · 비슷한 {total}명 기준</span>
+          </Row>
         </button>
       </Card>
 
