@@ -32,7 +32,28 @@ if str(DIARY) not in sys.path:
 import metrics                                                   # noqa: E402
 from qmode import value_ranking, disposition                    # noqa: E402
 from qmode import disposition_llm as _llm                        # noqa: E402
+from qmode import mbti as _mbti                                  # noqa: E402
 from qmode.aggregate import accumulate, classify_envy           # noqa: E402
+
+
+def _merge_mbti(extract, mprior):
+    """LLM 추출에 MBTI prior 병합. 결정방식·위험감수는 LLM 우선(일기>MBTI),
+    LLM에 없으면(콜드스타트) MBTI로 채운다. MBTI 전달 톤은 항상 얹는다."""
+    if not mprior:
+        return extract
+    eff = dict(extract or {})
+    eff["coping"] = (extract or {}).get("coping", {}) or {}
+    eff["value_axes"] = (extract or {}).get("value_axes", {}) or {}
+    jc = dict((extract or {}).get("job_change") or {})
+    if not jc.get("decision_style"):
+        jc["decision_style"] = mprior["decision_style"]
+    if jc.get("risk_tolerance") is None:
+        jc["risk_tolerance"] = mprior["risk_tolerance"]
+    if not jc.get("protect_most") and (extract or {}).get("job_change", {}).get("protect_most"):
+        jc["protect_most"] = extract["job_change"]["protect_most"]
+    eff["job_change"] = jc
+    eff["delivery_flags"] = list((extract or {}).get("delivery_flags") or []) + mprior["delivery_flavor"]
+    return eff
 
 
 def _rows_from_sessions(sessions):
@@ -72,11 +93,12 @@ class DispositionModel:
         self.model = model
 
     # ── 메인 ────────────────────────────────────────────────────────
-    def analyze(self, ranked_cards, sessions, *, use_llm: bool = True,
-                robust: bool = False, span_label: str = "") -> dict:
+    def analyze(self, ranked_cards, sessions, *, mbti: str | None = None,
+                use_llm: bool = True, robust: bool = False, span_label: str = "") -> dict:
         """
         ranked_cards : 온보딩 가치순위(카드 id 리스트). 없으면(None) 균등 prior.
         sessions     : session.analyze_session 결과 리스트(items[].answer/metrics 포함).
+        mbti         : 'INTJ' 등(선택). 스타일 차원(결정·위험·톤)의 초기 prior — 일기가 갱신.
         use_llm      : False면 온보딩·지표만(오프라인 폴백, 대처/이직렌즈 없음).
         robust       : True면 추출 2회 → 핵심차원 불일치 시 confidence 강등.
         """
@@ -102,15 +124,19 @@ class DispositionModel:
         blended = _llm.blend_weights(vw, extract, n_answers=n)
         weights = blended["weights"]
 
-        # 5) confidence — 데이터량 × 추출확신 (robust면 불일치 시 감점)
+        # 5) MBTI 스타일 prior 병합 (일기>MBTI: 있으면 LLM 우선, 없으면 MBTI로 채움)
+        mprior = _mbti.prior(mbti)
+        effective = _merge_mbti(extract, mprior)
+
+        # 6) confidence — 데이터량 × 추출확신 (robust면 불일치 시 감점)
         conf = self._confidence(n, extract, stable)
 
-        # 6) 이직 서사용 재료(suin에 넘길 블록)
+        # 7) 이직 서사용 재료(personalize/suin에 넘길 블록) — MBTI 병합본 사용
         material = disposition.build_jobchange_material(
-            weights, extract, decided_by=blended["note"])
+            weights, effective, decided_by=blended["note"])
 
-        jc = (extract or {}).get("job_change", {})
-        cop = (extract or {}).get("coping", {})
+        jc = (effective or {}).get("job_change", {})
+        cop = (effective or {}).get("coping", {})
         return {
             "value_weights": weights,
             "value_order": value_ranking.narrate_order(weights),
@@ -118,8 +144,10 @@ class DispositionModel:
             "risk_tolerance": jc.get("risk_tolerance"),
             "decision_style": jc.get("decision_style"),
             "protect_most": jc.get("protect_most"),
-            "delivery": disposition.delivery_from_llm(extract),
+            "delivery": disposition.delivery_from_llm(effective),
             "summary": (extract or {}).get("summary"),
+            "mbti": (mprior or {}).get("mbti"),
+            "mbti_note": (mprior or {}).get("note"),
             "n_answers": n,
             "confidence": conf,
             "consistency_ok": stable,
@@ -128,6 +156,21 @@ class DispositionModel:
             "blend_note": blended["note"],
             "raw_extract": extract,
             "extract_error": err,
+        }
+
+    @staticmethod
+    def to_personalize_inputs(prof: dict) -> dict:
+        """analyze() 결과 → 팀원 personalize.build_personalization 입력(정본 어댑터).
+
+        가치는 내 쪽에서 이미 온보딩⊕일기 블렌딩(α≤0.3)했으므로 value_weights로 넘기고
+        diary_weights=None (personalize 재블렌딩 방지 — 화제빈도 오독 재발 차단).
+        스타일·이직렌즈·MBTI는 disposition_block에 이미 녹아 있다.
+        """
+        return {
+            "value_weights": prof.get("value_weights"),
+            "diary_weights": None,
+            "n_answers": prof.get("n_answers", 0),
+            "disposition_block": prof.get("jobchange_material", ""),
         }
 
     # ── confidence ─────────────────────────────────────────────────
@@ -154,6 +197,7 @@ if __name__ == "__main__":
     import argparse, importlib.util, json
     ap = argparse.ArgumentParser()
     ap.add_argument("persona", nargs="?", default="P1_stability")
+    ap.add_argument("--mbti", default=None, help="예: INTJ (스타일 prior)")
     ap.add_argument("--no-llm", action="store_true")
     ap.add_argument("--robust", action="store_true")
     args = ap.parse_args()
@@ -167,9 +211,11 @@ if __name__ == "__main__":
     ranked = build.personas.PERSONAS[args.persona]["ranked"]
 
     m = DispositionModel()
-    prof = m.analyze(ranked, sessions, use_llm=not args.no_llm, robust=args.robust,
+    prof = m.analyze(ranked, sessions, mbti=args.mbti, use_llm=not args.no_llm,
+                     robust=args.robust,
                      span_label=f"({build.personas.PERSONAS[args.persona]['label']})")
-    print(f"=== 성향 프로파일 · {args.persona} ===")
+    print(f"=== 성향 프로파일 · {args.persona}"
+          + (f" · MBTI {prof['mbti']}" if prof.get("mbti") else "") + " ===")
     for k in ("coping", "risk_tolerance", "decision_style", "protect_most",
               "summary", "n_answers"):
         print(f"  {k}: {prof[k]}")

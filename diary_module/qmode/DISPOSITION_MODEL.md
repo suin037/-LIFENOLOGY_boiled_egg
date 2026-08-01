@@ -15,10 +15,23 @@ m = DispositionModel()                      # 엔진: claude-sonnet-5
 prof = m.analyze(
     ranked_cards,      # 온보딩 가치순위(카드 id 리스트). None이면 균등 prior
     sessions,          # session.analyze_session 결과들(items[].answer/metrics)
+    mbti="INTJ",       # (선택) 스타일 prior — 결정·위험·톤의 초기값. 일기가 갱신(일기>MBTI)
     use_llm=True,      # False = 오프라인 폴백(온보딩·지표만, 대처/이직렌즈 없음)
     robust=False,      # True = 추출 2회 교차확인 → 불일치 시 confidence 강등
 )
+
+# 팀원 personalize.py(A/B·심리초점·wiring)에 넘길 때:
+pz_in = DispositionModel.to_personalize_inputs(prof)   # {value_weights, diary_weights:None, n_answers, disposition_block}
+# → personalize.build_personalization(**pz_in) 로 소비. personalize.py 무변경.
 ```
+
+**MBTI(스타일 prior)**: 가치가 '온보딩 순위(prior)→일기(갱신)'인 것과 같은 패턴을 스타일엔 MBTI로.
+T/F→결정방식, J/P→위험감수, E/I·S/N→전달 톤. **일기 LLM이 있으면 결정·위험은 LLM이 이기고**
+(MBTI 신뢰도 보정), MBTI 톤만 얹힌다. 콜드스타트(일기 없음)엔 MBTI가 스타일을 채운다. `mbti.py`.
+
+**personalize.py 화해**: 팀원이 이미 만든 소비자(A/B 비교·심리카드 초점·main.py 연결)는
+그대로 두고, 그 `diary_weights`(옛 metrics, 신뢰성 실패) 대신 이 모델의 LLM 출력을
+`to_personalize_inputs()`로 주입한다(value 재블렌딩 방지 위해 diary_weights=None).
 
 ## 3. 출력 (prof)
 | 키 | 뜻 |
