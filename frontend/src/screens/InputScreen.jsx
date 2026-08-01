@@ -1,51 +1,72 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useResult } from "../data/ResultContext.jsx";
-import { SLOT_OPTIONS } from "../data/prediction.js";
+import { SLOT_OPTIONS, classifyChoice, detectEmotions, labelOf } from "../data/prediction.js";
 import { Eyebrow, Card, Button, Caption } from "../components/ui.jsx";
 
 const MAJOR_FIELDS = ["공학", "자연", "사회", "인문", "교육", "예체능", "의약"];
 
+// 선택지별 "이 우주에서 볼 수 있는 것" 힌트 (기대관리)
+const COVERAGE_HINT = {
+  이직: "유사인물·인과·평행우주 궤적까지",
+  창업: "창업 생존율·폐업 타임라인",
+  진학: "계열 취업률·진학률",
+  유지: "유지 시 또래 통계·궤적(기준선)",
+};
+
 export default function InputScreen() {
   const navigate = useNavigate();
-  const { profile, setProfile, choiceA, setChoiceA, choiceB, setChoiceB, detail, setDetail } =
+  const { profile, setProfile, choiceA, setChoiceA, choiceB, setChoiceB, textA, setTextA, textB, setTextB, detail, setDetail } =
     useResult();
+  const [autoA, setAutoA] = useState(true);
+  const [autoB, setAutoB] = useState(true);
 
-  const a = SLOT_OPTIONS.find((o) => o.key === choiceA);
-  const b = SLOT_OPTIONS.find((o) => o.key === choiceB);
-  const needMajor = choiceA === "진학" || choiceB === "진학";
-
-  // A/B가 겹치지 않게: 한쪽을 바꿀 때 반대쪽과 같으면 자동 회피
-  function pick(setter, other, key) {
-    setter(key);
+  function onText(side, val) {
+    if (side === "A") {
+      setTextA(val);
+      if (autoA) { const c = classifyChoice(val); if (c) setChoiceA(c); }
+    } else {
+      setTextB(val);
+      if (autoB) { const c = classifyChoice(val); if (c) setChoiceB(c); }
+    }
   }
+  function override(side, key) {
+    if (side === "A") { setChoiceA(key); setAutoA(false); }
+    else { setChoiceB(key); setAutoB(false); }
+  }
+
+  const emotions = detectEmotions(`${detail} ${textA} ${textB}`);
+  const needMajor = choiceA === "진학" || choiceB === "진학";
+  const same = choiceA === choiceB;
 
   return (
     <div>
       <Eyebrow>NEW SIMULATION · 갈림길 입력</Eyebrow>
       <h1 className="text-[22px] font-bold leading-[1.25]">
-        두 개의 우주를
+        고민하는 두 갈래를
         <br />
-        직접 골라보세요
+        그냥 적어보세요
       </h1>
-      <Caption>비교할 두 갈래를 자유롭게 구성합니다. (예: 이직 vs 유지, 창업 vs 진학)</Caption>
+      <Caption>문장으로 쓰면 알아서 분류해요. 틀리면 아래 칩으로 고치면 됩니다.</Caption>
 
-      <SlotPicker
-        tag="UNIVERSE A"
-        accent="cyan"
-        value={choiceA}
-        disabledKey={choiceB}
-        onPick={(k) => pick(setChoiceA, choiceB, k)}
+      <SlotInput
+        tag="UNIVERSE A" accent="cyan"
+        text={textA} choice={choiceA} auto={autoA}
+        onText={(v) => onText("A", v)} onPick={(k) => override("A", k)}
+        placeholder="예: 지금보다 큰 회사로 옮길까"
       />
       <div className="my-2 text-center text-xs font-bold tracking-widest text-mut">VS</div>
-      <SlotPicker
-        tag="UNIVERSE B"
-        accent="gold"
-        value={choiceB}
-        disabledKey={choiceA}
-        onPick={(k) => pick(setChoiceB, choiceA, k)}
+      <SlotInput
+        tag="UNIVERSE B" accent="gold"
+        text={textB} choice={choiceB} auto={autoB}
+        onText={(v) => onText("B", v)} onPick={(k) => override("B", k)}
+        placeholder="예: 그냥 지금 회사 계속 다니기"
       />
 
-      {/* 진학 있으면 전공계열 */}
+      {same && (
+        <Caption className="text-danger">두 우주가 같아요({labelOf(choiceA)}). 다른 갈래로 비교해보세요.</Caption>
+      )}
+
       {needMajor && (
         <>
           <label className="mb-2 mt-4 block text-xs text-sub">전공 계열 (진학·취업률 매칭)</label>
@@ -54,66 +75,78 @@ export default function InputScreen() {
             onChange={(e) => setProfile((p) => ({ ...p, major: e.target.value }))}
             className="tap w-full rounded-xl border border-line bg-[#0E1424] px-3.5 py-3 text-sm text-ink outline-none focus:border-cyan"
           >
-            {MAJOR_FIELDS.map((m) => (
-              <option key={m}>{m}</option>
-            ))}
+            {MAJOR_FIELDS.map((m) => <option key={m}>{m}</option>)}
           </select>
         </>
       )}
 
-      {/* 보조 자연어 */}
+      {/* 지금 심정 → 감정 감지 → 심리카드 */}
       <label className="mb-2 mt-4 block text-xs text-sub">
-        구체적으로 어떤 고민인가요? <span className="text-mut">(선택)</span>
+        지금 심정은 어떤가요? <span className="text-mut">(선택 · 서사 개인화)</span>
       </label>
-      <textarea
+      <input
         value={detail}
         onChange={(e) => setDetail(e.target.value)}
-        rows={2}
-        placeholder="예: 지금보다 규모 큰 회사로 옮길지 고민 중"
-        className="w-full resize-none rounded-xl border border-line bg-[#0E1424] px-3.5 py-3 text-sm text-ink outline-none focus:border-cyan"
+        placeholder="예: 잘한 선택인지 막막하고 불안해"
+        className="w-full rounded-xl border border-line bg-[#0E1424] px-3.5 py-2.5 text-sm text-ink outline-none focus:border-cyan"
       />
+      {emotions.length > 0 && (
+        <Caption>
+          감지된 감정{" "}
+          {emotions.map((e) => <b key={e.keyword} className="text-cyan">{e.keyword}</b>)
+            .reduce((a, b) => [a, " · ", b])}
+          {" "}→ <b className="text-sub">{emotions[0].card}</b> 카드가 서사에 반영돼요
+        </Caption>
+      )}
 
       <Card className="mt-4">
         <div className="mb-1.5 text-xs text-sub">이번 시뮬레이션</div>
         <div className="text-sm">
           {profile.age}세 · {profile.occupation} ·{" "}
-          <span className="text-cyan">{a?.label}</span> vs <span className="text-gold">{b?.label}</span>
+          <span className="text-cyan">{labelOf(choiceA)}</span> vs <span className="text-gold">{labelOf(choiceB)}</span>
         </div>
       </Card>
 
-      <Button className="mt-4" onClick={() => navigate("/simulate")}>
+      <Button className={`mt-4 ${same ? "opacity-40" : ""}`} onClick={() => !same && navigate("/simulate")}>
         평행우주 열기 ✦
       </Button>
     </div>
   );
 }
 
-function SlotPicker({ tag, accent, value, disabledKey, onPick }) {
+function SlotInput({ tag, accent, text, choice, auto, onText, onPick, placeholder }) {
   const accentText = accent === "cyan" ? "text-cyan" : "text-gold";
-  const onBorder = accent === "cyan" ? "border-cyan bg-[#12203a]" : "border-gold bg-[#241d10]";
+  const border = accent === "cyan" ? "border-cyan/60" : "border-gold/60";
   return (
-    <div className="mt-3">
+    <div className={`mt-3 rounded-2xl border ${border} bg-[#0E1424] p-3.5`}>
       <div className={`text-[11px] font-bold tracking-wide ${accentText}`}>{tag}</div>
-      <div className="mt-2 grid grid-cols-4 gap-1.5">
+      <textarea
+        value={text}
+        onChange={(e) => onText(e.target.value)}
+        rows={2}
+        placeholder={placeholder}
+        className="mt-2 w-full resize-none rounded-lg border border-line bg-bg px-3 py-2 text-sm text-ink outline-none focus:border-cyan"
+      />
+      {/* 감지 결과 + 수정 칩 */}
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <span className="text-[10px] text-mut">{auto ? "자동 감지:" : "직접 선택:"}</span>
         {SLOT_OPTIONS.map((o) => {
-          const on = o.key === value;
-          const disabled = o.key === disabledKey;
+          const on = o.key === choice;
           return (
             <button
               key={o.key}
-              disabled={disabled}
               onClick={() => onPick(o.key)}
-              className={`tap flex flex-col items-center gap-1 rounded-[12px] border px-1 py-2.5 transition-colors ${
-                on ? onBorder : "border-line bg-[#0E1424]"
-              } ${disabled ? "opacity-30" : ""}`}
+              className={`tap rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+                on ? `${accentText} ${accent === "cyan" ? "border-cyan bg-[#12203a]" : "border-gold bg-[#241d10]"}` : "border-line text-mut"
+              }`}
             >
-              <span className="text-lg">{o.emoji}</span>
-              <span className={`text-[11px] font-semibold ${on ? accentText : "text-sub"}`}>
-                {o.label}
-              </span>
+              {o.emoji} {o.label}
             </button>
           );
         })}
+      </div>
+      <div className="mt-1.5 text-[10px] text-mut">
+        {choice} → {COVERAGE_HINT[choice]}
       </div>
     </div>
   );
