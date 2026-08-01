@@ -17,23 +17,17 @@ export default function Simulate() {
   const [done, setDone] = useState(0);
 
   useEffect(() => {
-    let cancelled = false;
-    // 백엔드 /simulate 호출 — 결과가 준비된 뒤 결과 화면으로 이동(레이스 방지).
-    const sim = runSimulation();
+    runSimulation(); // 목업 결과 확정 (백엔드 연동 지점)
     let i = 0;
     const tick = setInterval(() => {
       i += 1;
-      setDone(Math.min(i, STEPS.length));
-      if (i >= STEPS.length) clearInterval(tick);
+      setDone(i);
+      if (i >= STEPS.length) {
+        clearInterval(tick);
+        setTimeout(() => navigate("/result", { replace: true }), 400);
+      }
     }, 440);
-    // 애니메이션(최소 표시시간)과 실제 호출이 모두 끝나면 이동.
-    Promise.all([sim, new Promise((r) => setTimeout(r, STEPS.length * 440))]).finally(() => {
-      if (!cancelled) setTimeout(() => navigate("/result", { replace: true }), 300);
-    });
-    return () => {
-      cancelled = true;
-      clearInterval(tick);
-    };
+    return () => clearInterval(tick);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
