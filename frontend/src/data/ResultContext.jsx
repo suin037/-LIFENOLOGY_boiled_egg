@@ -1,10 +1,11 @@
 import { createContext, useContext, useMemo, useState } from "react";
-import { MOCK_RESULT } from "./result.js";
-import { runSimulate } from "../api.js";
+import { getPredictionPair } from "./prediction.js";
 import { DEFAULT_AVATAR } from "./avatarOptions.js";
 
 // 결과 데이터 + 온보딩 프로필을 한 곳에 모으는 컨텍스트.
-// runSimulation() 이 백엔드 /simulate 를 호출해 결과를 채운다(실패 시 목업 폴백).
+// runSimulation() 이 선택(choices)+심정(diary)으로 결과 쌍{a,b}을 만든다.
+// ※ 지금은 목업(getPredictionPair). 백엔드 실연결은 api.js(runSimulate)를
+//   내 결과 형태로 확장해 여기서 호출하면 됨(파일은 보존해둠).
 const ResultContext = createContext(null);
 
 const DEFAULT_PROFILE = {
@@ -23,29 +24,20 @@ const DEFAULT_PROFILE = {
 
 export function ResultProvider({ children }) {
   const [profile, setProfile] = useState(DEFAULT_PROFILE);
-  const [choices, setChoices] = useState({ a: "이직", b: "창업" });
+  const [choices, setChoices] = useState({ a: "이직", b: "유지" });
   const [diary, setDiary] = useState("");
-  const [result, setResult] = useState(MOCK_RESULT);
+  const [result, setResult] = useState(() =>
+    getPredictionPair({ profile: DEFAULT_PROFILE, choiceA: "이직", choiceB: "유지" }),
+  );
   const [onboarded, setOnboarded] = useState(false);
 
-  // 백엔드 /simulate 호출 → 화면 형태로 매핑해 저장. 실패 시 목업 유지.
+  // 선택(choices)+심정(diary) → 결과 쌍 {a,b} 생성. (지금은 목업)
   async function runSimulation(opts = {}) {
     const choiceA = opts.choiceA || choices.a;
     const choiceB = opts.choiceB || choices.b;
-    try {
-      const mapped = await runSimulate({
-        profile,
-        choiceA,
-        choiceB,
-        diary: opts.diary ?? diary,
-      });
-      setResult(mapped);
-      return mapped;
-    } catch (e) {
-      console.warn("simulate 실패 — 목업으로 폴백:", e);
-      setResult(MOCK_RESULT);
-      return MOCK_RESULT;
-    }
+    const pair = getPredictionPair({ profile, choiceA, choiceB, detail: opts.diary ?? diary });
+    setResult(pair);
+    return pair;
   }
 
   const value = useMemo(

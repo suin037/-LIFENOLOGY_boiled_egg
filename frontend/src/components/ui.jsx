@@ -40,9 +40,10 @@ export function Caption({ children, className = "" }) {
 export function SourceFootnote({ meta }) {
   return (
     <div className="mt-3.5 text-center text-[10px] leading-relaxed text-mut">
-      {meta.source} / 25~30세 {meta.n_sample}명 / 관찰 {meta.observe_years}년
+      {meta.source}
       <br />
-      모든 수치는 중앙값이며, 표본 수를 함께 표시합니다.
+      소득 궤적 관찰 {meta.observe_years_income}년 · 만족도 {meta.observe_years_wellbeing}년 · 값은
+      중앙값이며 표본 수를 함께 표시합니다.
     </div>
   );
 }
