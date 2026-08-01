@@ -209,15 +209,21 @@ export function pairHasIndividual(pair) {
 export const labelOf = (c) => (c === "유지" ? "현상 유지" : c);
 
 // ── 자유서술 → 카테고리 자동분류 (백엔드 choice 분류 규칙 미러) ──
-const CLASSIFY_RULES = [
-  { key: "유지", kw: ["유지", "그대로", "현직", "잔류", "남을", "남기", "계속 다니", "안 옮"] },
-  { key: "창업", kw: ["창업", "사업", "자영", "개업", "스타트업", "장사", "내 회사", "법인"] },
-  { key: "진학", kw: ["진학", "대학원", "유학", "석사", "박사", "학위", "로스쿨", "편입", "공부하러"] },
-];
+// 우선순위 검사: '이직' 행동어가 있으면 목적지(스타트업 등)보다 이직을 우선한다.
+// 예) "스타트업으로 이직할지" → 창업(X) → 이직(O)
+const KW = {
+  이직: ["이직", "옮기", "옮길", "전직", "갈아타", "이직할", "회사 옮", "다른 회사로"],
+  진학: ["진학", "대학원", "유학", "석사", "박사", "학위", "로스쿨", "편입", "공부하러"],
+  창업: ["창업", "사업", "자영", "개업", "장사", "내 사업", "법인", "대표", "차릴", "차리", "스타트업 차"],
+  유지: ["유지", "그대로", "현직", "잔류", "남을", "남기", "계속 다니", "계속 있", "안 옮", "지금 회사"],
+};
 export function classifyChoice(text) {
   if (!text || !text.trim()) return null;
-  for (const r of CLASSIFY_RULES) if (r.kw.some((k) => text.includes(k))) return r.key;
-  return "이직"; // 키워드 없으면 '이동'으로 간주
+  if (KW.이직.some((k) => text.includes(k))) return "이직"; // 행동어 최우선
+  if (KW.진학.some((k) => text.includes(k))) return "진학";
+  if (KW.창업.some((k) => text.includes(k))) return "창업";
+  if (KW.유지.some((k) => text.includes(k))) return "유지";
+  return "이직"; // 목적지만 있고 동사 없으면 '이동'으로 간주
 }
 
 // ── 자유서술 → 감정 신호어 감지 → 심리 이론카드 매칭 (RAG 트리거 미리보기) ──
