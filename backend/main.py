@@ -88,7 +88,8 @@ def predict(req: PredictRequest) -> PredictResponse:
     # narrative 는 3번 팀원 RAG/Claude API 담당. 키 미설정·호출 실패 시에도
     # 예측(L1~L4)은 정상 반환되도록 방어. (테스트/개발 중 API 키 없이 구동 가능)
     try:
-        narrative = generate_narrative(req, expected_wage or 0, effect or 0, survival or 0)
+        narrative = generate_narrative(req, expected_wage or 0, effect or 0, survival or 0,
+                                       persona_block=req.persona_block)
     except Exception:
         narrative = ""
 
