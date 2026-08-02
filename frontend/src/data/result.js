@@ -83,6 +83,8 @@ export const MOCK_ARCHIVE = [
 // ※ 결과/데이터 화면의 정직성과 분리된, 사용자의 우주를 꾸미는 레이어.
 //   이 수치들은 실측 데이터가 아니라 앱 참여 지표(별=체크인 등)다.
 // ─────────────────────────────────────────────────────────────
+// @deprecated — 실제 값은 data/myUniverse.js 의 universeSummary() 에서 파생한다.
+// 다른 브랜치가 참조 중일 수 있어 상수만 남겨둠. 병합 정리 후 삭제 예정.
 export const MY_UNIVERSE = {
   level: 23,
   title: "우주 탐험가",

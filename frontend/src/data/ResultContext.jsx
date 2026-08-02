@@ -2,6 +2,11 @@ import { createContext, useContext, useMemo, useState } from "react";
 import { MOCK_RESULT } from "./result.js";
 import { runSimulate } from "../api.js";
 import { DEFAULT_AVATAR } from "./avatarOptions.js";
+import { noteSimulationRun, initDemoFromUrl } from "./myUniverse.js";
+
+// `?demo=1` 로 들어온 경우 첫 렌더 전에 예시 기록을 채운다.
+// (첫 화면이 홈이든 나의 우주든 같은 저장소를 읽으므로 여기서 한 번만 처리)
+initDemoFromUrl();
 
 // 결과 데이터 + 온보딩 프로필을 한 곳에 모으는 컨텍스트.
 // runSimulation() 이 백엔드 /simulate 를 호출해 결과를 채운다(실패 시 목업 폴백).
@@ -32,6 +37,7 @@ export function ResultProvider({ children }) {
   async function runSimulation(opts = {}) {
     const choiceA = opts.choiceA || choices.a;
     const choiceB = opts.choiceB || choices.b;
+    noteSimulationRun(); // '나의 우주' 시뮬레이션 횟수·XP 집계용 (성공/실패 무관하게 실행 1회)
     try {
       const mapped = await runSimulate({
         profile,
