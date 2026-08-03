@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useResult } from "../data/ResultContext.jsx";
 import { Card, Button, Row } from "../components/ui.jsx";
+import DiaryCheckIn from "../components/DiaryCheckIn.jsx";
 import { MASCOTS, totalNeighbors } from "../data/result.js";
 import { universeSummary } from "../data/myUniverse.js";
 
@@ -11,6 +13,7 @@ export default function HomeHub() {
   const { option_a: a } = result;
   const total = totalNeighbors(result);
   const guide = MASCOTS.cosmo;
+  const [tick, setTick] = useState(0); // 기록 저장 후 통계 갱신
   // 통계 단일 소스 — 나의 우주와 같은 저장소에서 파생(하드코딩 상수 제거).
   const stats = universeSummary().stats;
 
@@ -40,6 +43,10 @@ export default function HomeHub() {
           </p>
         </div>
       </Card>
+
+      {/* 오늘 기록 — 하루 한 별 (홈 체크인 카드) */}
+      <div className="mb-2 mt-6 text-xs font-semibold tracking-wide text-mut">오늘 기록</div>
+      <DiaryCheckIn onSaved={() => setTick((t) => t + 1)} />
 
       {/* 새 시뮬 CTA */}
       <Button className="mt-4" onClick={() => navigate("/input")}>

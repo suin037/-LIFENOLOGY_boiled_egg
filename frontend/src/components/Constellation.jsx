@@ -1,164 +1,76 @@
-// ─────────────────────────────────────────────────────────────
-// 별자리 SVG. 나의 우주 화면(민주) 소관. 외부 라이브러리 없이 순수 SVG.
-//
-// 인코딩 규칙
-//  · x = 그 주의 며칠째(0~6)     · y = 그날 valence (위=긍정)
-//  · 감정은 색이 아니라 **별의 밝기·크기**(등급)로 표현한다.
-//    시안/골드는 앱 전체에서 선택지 A/B 전용이라 감정에 쓰면 의미가 충돌한다.
-//  · 일기를 쓴 날은 별 둘레에 얇은 링. 기록이 없는 날은 점선 빈 자리.
-// ─────────────────────────────────────────────────────────────
+// 별자리 = 중심점 극좌표. 요일=각도(월→일), 기분=반지름(좋을수록 바깥) + 색.
+// minju constellationGroups().stars 를 그대로 받는다. 별 클릭 → onSelect(star).
 
-const W = 320;
-const H = 128;
-const PAD_X = 24;
-const MID = 66;
-const AMP = 36;
+const W = 200, H = 200, CX = 100, CY = 96;
+const R_MIN = 16, R_SPREAD = 60; // 힘든 날=중심, 좋은 날=바깥
+const COL = ["#E24B4A", "#D85A30", "#EDA100", "#5DCAA5", "#378ADD"]; // 기분 1~5 색
 
-// 날짜 문자열 → 고정 지터. Math.random 을 쓰면 리렌더마다 별이 움직인다.
-function jitter(seed, range) {
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0;
-  return ((Math.abs(h) % 1000) / 1000 - 0.5) * range;
+// valence(-1~1) 또는 mood(1~5) → 기분레벨 1~5
+function level(s) {
+  if (s.mood != null) return Math.max(1, Math.min(5, Math.round(s.mood)));
+  if (s.valence != null) return Math.max(1, Math.min(5, Math.round(s.valence * 2 + 3)));
+  return 3;
+}
+export const starColor = (s) => COL[level(s) - 1];
+
+function coord(i, s, filled) {
+  const norm = filled ? (level(s) - 1) / 4 : 0; // 빈 날은 중심 근처
+  const r = R_MIN + norm * R_SPREAD;
+  const a = (-90 + i * (360 / 7)) * Math.PI / 180; // 요일마다 360/7°
+  return [CX + r * Math.cos(a), CY + r * Math.sin(a)];
 }
 
-function layout(stars) {
-  const n = Math.max(stars.length - 1, 1);
-  const step = (W - PAD_X * 2) / n;
-  return stars.map((s, i) => {
-    const v = s.valence;
-    const has = v != null;
-    const norm = has ? (v + 1) / 2 : 0.5; // 0~1
-    return {
-      ...s,
-      has,
-      norm,
-      x: PAD_X + i * step + (stars.length > 1 ? jitter(s.date, 6) : 0),
-      y: MID - (has ? v * AMP : 0) + jitter(s.date + "y", 7),
-      r: has ? 2.2 + norm * 2.2 : 2,
-      // 아직 오지 않은 날은 거의 보이지 않게 — 자리만 잡아둔다.
-      opacity: has ? 0.34 + norm * 0.62 : s.future ? 0.07 : 0.18,
-    };
-  });
-}
-
-export default function Constellation({
-  stars = [],
-  onSelect,
-  selectedDate = null,
-  todayDate = null,
-  className = "",
-}) {
+export default function Constellation({ stars = [], onSelect, selectedDate = null, todayDate = null }) {
   if (!stars.length) return null;
-  const pts = layout(stars);
+  const pts = stars.map((s, i) => {
+    const filled = !s.empty && (s.mood != null || s.valence != null);
+    const [x, y] = coord(i, s, filled);
+    return { ...s, x, y, filled, lvl: level(s) };
+  });
 
   return (
-    <svg
-      viewBox={`0 0 ${W} ${H}`}
-      className={`w-full ${className}`}
-      role="img"
-      aria-label={`최근 ${stars.length}일의 기록으로 그린 별자리`}
-      style={{ display: "block" }}
-    >
-      {/* 연결선 — 양쪽 다 기록이 있으면 실선, 한쪽이라도 비면 점선 */}
-      {pts.slice(1).map((p, i) => {
-        const a = pts[i];
-        const solid = a.has && p.has;
-        const ahead = a.future || p.future;
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img"
+      aria-label={`이번 주 ${pts.filter((p) => p.filled).length}일의 기록으로 그린 별자리`}
+      style={{ maxHeight: 210, display: "block" }}>
+      {/* 중심점 */}
+      <circle cx={CX} cy={CY} r={2} fill="#5A6B8C" opacity={0.5} />
+      {/* 중심→별 살(spoke) */}
+      {pts.map((p, i) => (
+        <line key={`sp${i}`} x1={CX} y1={CY} x2={p.x} y2={p.y}
+          stroke="#5A6B8C" strokeWidth={0.5} strokeOpacity={0.16} />
+      ))}
+      {/* 별끼리 잇는 별자리 선(순서대로, 마지막→처음 닫기) */}
+      {pts.map((p, i) => {
+        const q = pts[(i + 1) % pts.length];
+        const solid = p.filled && q.filled;
         return (
-          <line
-            key={`l${p.date}`}
-            x1={a.x}
-            y1={a.y}
-            x2={p.x}
-            y2={p.y}
-            stroke="#9FB0CE"
-            strokeWidth={solid ? 1.1 : 0.8}
-            strokeOpacity={ahead ? 0.06 : solid ? 0.42 : 0.16}
-            strokeDasharray={solid ? undefined : "2 4"}
-          />
+          <line key={`ln${i}`} x1={p.x} y1={p.y} x2={q.x} y2={q.y}
+            stroke="#9FB0CE" strokeWidth={solid ? 1 : 0.8}
+            strokeOpacity={solid ? 0.42 : 0.14}
+            strokeDasharray={solid ? undefined : "2 4"} />
         );
       })}
-
-      {pts.map((p) => {
-        const isToday = todayDate && p.date === todayDate;
+      {/* 별 */}
+      {pts.map((p, i) => {
         const isSel = selectedDate && p.date === selectedDate;
+        const isToday = todayDate && p.date === todayDate;
+        if (!p.filled) {
+          return <circle key={i} cx={p.x} cy={p.y} r={2} fill="none"
+            stroke="#39435F" strokeWidth={0.8} strokeDasharray="1.5 2" opacity={0.5} />;
+        }
+        const r = 2.4 + (p.lvl / 5) * 3.2;
+        const col = COL[p.lvl - 1];
         return (
-          <g key={p.date}>
-            {/* 오늘 별에만 아주 옅은 후광 (글로우 남발 금지 원칙) */}
-            {isToday && p.has && (
-              <circle cx={p.x} cy={p.y} r={p.r + 5} fill="#EAF0FB" opacity={0.08} />
-            )}
-
-            {p.has ? (
-              <circle cx={p.x} cy={p.y} r={p.r} fill="#EAF0FB" opacity={p.opacity} />
-            ) : (
-              <circle
-                cx={p.x}
-                cy={p.y}
-                r={p.r}
-                fill="none"
-                stroke="#5A6B8C"
-                strokeWidth={0.8}
-                strokeDasharray="1.5 2"
-                opacity={0.5}
-              />
-            )}
-
-            {/* 일기를 쓴 날 = 링 하나 더 */}
-            {p.hasDiary && (
-              <circle
-                cx={p.x}
-                cy={p.y}
-                r={p.r + 3}
-                fill="none"
-                stroke="#9FB0CE"
-                strokeWidth={0.8}
-                opacity={0.45}
-              />
-            )}
-
-            {/* 선택된 날 표시 */}
-            {isSel && (
-              <circle
-                cx={p.x}
-                cy={p.y}
-                r={p.r + 6}
-                fill="none"
-                stroke="#EAF0FB"
-                strokeWidth={0.9}
-                opacity={0.6}
-              />
-            )}
-
-            {/* 탭 영역 — 별이 작아서 별도 히트박스 */}
-            {onSelect && (
-              <circle
-                cx={p.x}
-                cy={p.y}
-                r={13}
-                fill="transparent"
-                style={{ cursor: "pointer" }}
-                onClick={() => onSelect(p)}
-              />
-            )}
+          <g key={i} onClick={() => onSelect?.(p)} style={{ cursor: onSelect ? "pointer" : "default" }}>
+            <circle cx={p.x} cy={p.y} r={r + (isSel ? 8 : 3)} fill={col} opacity={isSel ? 0.4 : 0.14} />
+            <circle cx={p.x} cy={p.y} r={r} fill={col}
+              stroke="#FFFFFF" strokeOpacity={isToday ? 0.9 : 0.35} strokeWidth={isToday ? 1.4 : 0.6} />
+            {p.hasDiary && <circle cx={p.x} cy={p.y} r={r + 3} fill="none" stroke="#9FB0CE" strokeWidth={0.7} opacity={0.45} />}
+            {/* 별이 작아서 탭 영역 별도 */}
+            <circle cx={p.x} cy={p.y} r={13} fill="transparent" />
           </g>
         );
       })}
-
-      {/* 시작·끝 날짜만 아주 작게 */}
-      <text x={PAD_X} y={H - 6} fill="#5A6B8C" fontSize="8" textAnchor="middle">
-        {shortDate(pts[0].date)}
-      </text>
-      {pts.length > 1 && (
-        <text x={W - PAD_X} y={H - 6} fill="#5A6B8C" fontSize="8" textAnchor="middle">
-          {shortDate(pts[pts.length - 1].date)}
-        </text>
-      )}
     </svg>
   );
-}
-
-function shortDate(d) {
-  const [, m, day] = (d || "").split("-");
-  return m ? `${Number(m)}/${Number(day)}` : "";
 }
