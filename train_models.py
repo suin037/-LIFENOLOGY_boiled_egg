@@ -10,7 +10,7 @@ v2 대비 변경:
     encoders.pkl 에 저장해 서빙 시 입력 누락 기본값으로 재사용
 
 사용법:
-    python train_models.py                  # data/goms_clean.csv (실데이터)
+    python train_models.py                  # data/clean/goms_clean.csv (실데이터)
     python train_models.py --synthetic      # 파이프라인 검증용
 """
 
@@ -25,7 +25,7 @@ import pandas as pd
 from sklearn.neighbors import NearestNeighbors
 from sklearn.preprocessing import StandardScaler
 
-DATA_PATH = Path("data/goms_clean.csv")
+DATA_PATH = Path("data/clean/goms_clean.csv")
 ARTIFACTS = Path("backend/models/artifacts")
 
 RENAME = {

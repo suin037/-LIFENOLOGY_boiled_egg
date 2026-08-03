@@ -50,13 +50,33 @@ def run_prediction(req: PredictRequest, with_narrative: bool = True) -> PredictR
     timeline: dict = {}
 
     if kind == "이직":
-        neighbors = find_neighbors(features)
-        effect = estimate_effect(features, choice=req.choice)
-        survival = estimate_survival(features)
-        timeline = risk_timeline(features)
+        available_layers = ["생활지표(L1)"]
+        try:
+            neighbors = find_neighbors(features)
+            available_layers.append("개인단위 매칭(L2)")
+        except (FileNotFoundError, RuntimeError):
+            neighbors = []
+        try:
+            effect = estimate_effect(features, choice=req.choice)
+            available_layers.append("인과(L3)")
+        except (FileNotFoundError, RuntimeError):
+            effect = None
+        try:
+            survival = estimate_survival(features)
+            timeline = risk_timeline(features)
+            available_layers.append("생존(L4)")
+        except (FileNotFoundError, RuntimeError):
+            survival = None
+            timeline = {}
         expected_wage = sum(n.monthly_wage or 0 for n in neighbors) / max(len(neighbors), 1)
-        changed_ratio = sum(1 for n in neighbors if n.job_changed) / max(len(neighbors), 1)
-        coverage = "이직: 개인단위 매칭(L2)·인과(L3)·생존(L4) + 생활지표(L1)"
+        if not neighbors:
+            expected_wage = None
+            changed_ratio = None
+        else:
+            changed_ratio = sum(1 for n in neighbors if n.job_changed) / len(neighbors)
+        coverage = "이직: " + "·".join(available_layers)
+        if survival is None:
+            coverage += " (생존 L4는 KLIPS artifact 부재로 미제공)"
 
         # 평행우주: 기준 경로(유지) vs 이직(기준 + L3 인과효과, 지속 가정)
         if trajectory and effect is not None:
