@@ -56,3 +56,6 @@ Thumbs.db
 backend/req*.json
 backend/resp*.json
 backend/smoke_check.py
+
+# Claude 세션 임시 파일
+_to_delete/

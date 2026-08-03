@@ -1,11 +1,21 @@
 import { createContext, useContext, useMemo, useState } from "react";
+import { getPredictionPair } from "./prediction.js";
 import { MOCK_RESULT } from "./result.js";
-import { runSimulate } from "../api.js";
 import { DEFAULT_AVATAR } from "./avatarOptions.js";
+import { noteSimulationRun, initDemoFromUrl } from "./myUniverse.js";
+
+// `?demo=1` 로 들어온 경우 첫 렌더 전에 예시 기록을 채운다. (민주 '나의 우주' 훅)
+// (첫 화면이 홈이든 나의 우주든 같은 저장소를 읽으므로 여기서 한 번만 처리)
+initDemoFromUrl();
 
 // 결과 데이터 + 온보딩 프로필을 한 곳에 모으는 컨텍스트.
-// runSimulation() 이 백엔드 /simulate 를 호출해 결과를 채운다(실패 시 목업 폴백).
+// ※ [임시 병합 2026-08-03] 프론트에 result 형태 규약이 2가지로 섞여 있어(홈/HomeHub=option_a,
+//   결과 8탭 대시보드=a,b) 어느 하나만 쓰면 반대쪽이 크래시함. 임시로 두 형태를 모두 담은
+//   객체를 만들어 로컬 프리뷰가 안 깨지게 함. 백엔드 실연결·형태 통일은 소현 협의 후 정리 예정.
 const ResultContext = createContext(null);
+
+// 소현 신형(getPredictionPair→{a,b}) + 옛 형태(MOCK_RESULT→{meta,option_a,option_b}) 합본
+const makePair = (opts) => ({ ...MOCK_RESULT, ...getPredictionPair(opts) });
 
 const DEFAULT_PROFILE = {
   age: 29,
@@ -23,29 +33,21 @@ const DEFAULT_PROFILE = {
 
 export function ResultProvider({ children }) {
   const [profile, setProfile] = useState(DEFAULT_PROFILE);
-  const [choices, setChoices] = useState({ a: "이직", b: "창업" });
+  const [choices, setChoices] = useState({ a: "이직", b: "유지" });
   const [diary, setDiary] = useState("");
-  const [result, setResult] = useState(MOCK_RESULT);
+  const [result, setResult] = useState(() =>
+    makePair({ profile: DEFAULT_PROFILE, choiceA: "이직", choiceB: "유지" }),
+  );
   const [onboarded, setOnboarded] = useState(false);
 
-  // 백엔드 /simulate 호출 → 화면 형태로 매핑해 저장. 실패 시 목업 유지.
+  // 선택(choices)+심정(diary) → 결과(두 형태 합본) 생성. (지금은 목업)
   async function runSimulation(opts = {}) {
     const choiceA = opts.choiceA || choices.a;
     const choiceB = opts.choiceB || choices.b;
-    try {
-      const mapped = await runSimulate({
-        profile,
-        choiceA,
-        choiceB,
-        diary: opts.diary ?? diary,
-      });
-      setResult(mapped);
-      return mapped;
-    } catch (e) {
-      console.warn("simulate 실패 — 목업으로 폴백:", e);
-      setResult(MOCK_RESULT);
-      return MOCK_RESULT;
-    }
+    noteSimulationRun(); // '나의 우주' 시뮬레이션 횟수·XP 집계용 (민주, 실행 1회)
+    const pair = makePair({ profile, choiceA, choiceB, detail: opts.diary ?? diary });
+    setResult(pair);
+    return pair;
   }
 
   const value = useMemo(
