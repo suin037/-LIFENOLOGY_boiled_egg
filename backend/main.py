@@ -36,6 +36,7 @@ from utils.claude_api import generate_scenarios
 from rag.psych_narrative import get_psych_evidence, build_psych_prompt_block
 from rag import safety as rag_safety
 from utils.cloudflare_images import generate_pair
+from domain_router import route_domains
 
 # 삶의 영역(domain) key → 라벨. 프론트 LIFE_DOMAINS 와 1:1 (행동+영역 구조화 입력).
 DOMAIN_LABELS = {
@@ -59,15 +60,6 @@ EVIDENCE_LABEL = {
     "insufficient": "데이터부족",  # 뒷받침 데이터 없음 → 숫자 만들지 않음
 }
 
-# 삶의 영역별 '현재 실제 배선된' 정량 근거 수준(항목3 라우터 완성 전까지의 커버리지).
-DOMAIN_DATA = {
-    "career": "model", "education": "group_stat", "business": "group_stat",
-    "finance": "group_stat", "health": "group_stat",
-    "housing": "insufficient", "relationship": "rag",
-    "lifestyle": "rag", "long_term_values": "rag",
-}
-
-
 def _has_available(arr) -> bool:
     return any((p or {}).get("available") for p in (arr or []))
 
@@ -84,16 +76,15 @@ def _scenario_evidence(scen: dict, has_rag: bool) -> dict:
             "components": {"model": has_model, "group_stat": has_group, "rag": bool(has_rag)}}
 
 
-def _domain_coverage(domains) -> dict:
-    """요청 domain 들의 정량 근거 커버리지 + 수치 그래프 표시 정당성(그래프 가드)."""
-    doms = domains or []
-    per = {d: {"label": DOMAIN_LABELS.get(d, d), "evidence": DOMAIN_DATA.get(d, "insufficient")}
-           for d in doms}
-    quant = any(DOMAIN_DATA.get(d, "insufficient") in ("model", "group_stat") for d in doms)
+def _coverage_from_routes(routed: dict) -> dict:
+    """route_domains 결과 → 수치 그래프 표시 정당성(그래프 가드). 라우터가 근거의 단일 소스."""
+    # 정량 근거: career(모델) 또는 실제 지표가 잡힌 group_stat 영역이 하나라도 있어야 정당.
+    quant = any(v["evidence"] == "model" or (v["evidence"] == "group_stat" and v["indicators"])
+                for v in routed.values())
     return {
-        "per_domain": per,
-        "quantitative_ok": quant if doms else True,  # domain 미지정이면 기존대로 허용
-        "guard_note": (None if (quant or not doms) else
+        "per_domain": {k: {"label": v["label"], "evidence": v["evidence"]} for k, v in routed.items()},
+        "quantitative_ok": quant if routed else True,  # domain 미지정이면 기존대로 허용
+        "guard_note": (None if (quant or not routed) else
                        "이 질문의 삶의 영역은 정량 예측 데이터가 없어요 — "
                        "수치 그래프 대신 통계·설명 근거로만 답합니다."),
     }
@@ -346,6 +337,10 @@ def simulate(req: SimulateRequest) -> dict:
     except Exception as exc:  # 키/ API 오류에도 수치·지표·근거는 반환
         narrative = {"a": f"(서사 생성 실패: {type(exc).__name__})", "b": "", "comparison": "", "_error": str(exc)[:300]}
 
+    # 영역별 데이터 라우팅(항목3) — 각 선택의 삶의 영역 → 실측 집단통계 지표
+    routed_a = route_domains(req.choice_a_domains, cmp["profile"])
+    routed_b = route_domains(req.choice_b_domains, cmp["profile"])
+
     return {
         "profile": cmp["profile"],
         "choice_a": cmp["choice_a"],
@@ -366,9 +361,11 @@ def simulate(req: SimulateRequest) -> dict:
             "A": _scenario_evidence(cmp["scenarios"]["A"], bool(psych_a.get("cards"))),
             "B": _scenario_evidence(cmp["scenarios"]["B"], bool(psych_b.get("cards"))),
         },
+        # 영역별 데이터 라우팅(항목3): 각 선택의 삶의 영역 → 실측 집단통계 지표
+        "domain_stats": {"A": routed_a, "B": routed_b},
         "domain_coverage": {
-            "A": _domain_coverage(req.choice_a_domains),
-            "B": _domain_coverage(req.choice_b_domains),
+            "A": _coverage_from_routes(routed_a),
+            "B": _coverage_from_routes(routed_b),
         },
         "diary": diary,
         "safety_level": safety_level,
