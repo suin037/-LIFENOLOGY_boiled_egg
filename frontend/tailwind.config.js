@@ -4,24 +4,25 @@ export default {
   theme: {
     extend: {
       colors: {
-        bg: "#0B0F1C",
-        card: "#141B2E",
-        card2: "#1B2440",
-        line: "#28324D",
-        ink: "#EAF0FB",
-        sub: "#9FB0CE",
-        mut: "#5A6B8C",
-        cyan: { DEFAULT: "#7FD4FF", deep: "#4A90E2" }, // 이직(A)
-        gold: { DEFAULT: "#F5C86B", deep: "#E0954A" }, // 잔류(B)
-        danger: "#EE8888",
+        bg: "#09111F",
+        card: "#111B2A",
+        card2: "#172337",
+        line: "#26354A",
+        ink: "#F6F8FC",
+        sub: "#B8C2D2",
+        mut: "#748198",
+        cyan: { DEFAULT: "#4C91FF", deep: "#2F6FE8" }, // 선택 A / primary
+        gold: { DEFAULT: "#FF9F32", deep: "#E98418" }, // 선택 B
+        danger: "#FF7B7B",
       },
       fontFamily: {
         sans: [
+          "Pretendard",
+          "Pretendard Variable",
           "-apple-system",
           "BlinkMacSystemFont",
-          "Segoe UI",
+          "system-ui",
           "Roboto",
-          "Malgun Gothic",
           "sans-serif",
         ],
       },

@@ -9,6 +9,7 @@ import Result from "./screens/Result.jsx";
 import Archive from "./screens/Archive.jsx";
 import HomeHub from "./screens/HomeHub.jsx";
 import MyUniverse from "./screens/MyUniverse.jsx";
+import CheckIn from "./screens/CheckIn.jsx";
 import Settings from "./screens/Settings.jsx";
 
 // "/" 진입점 — 첫 로그인이면 랜딩, 이미 온보딩했으면 홈으로.
@@ -28,6 +29,7 @@ export default function App() {
         <Route path="/simulate" element={<Simulate />} />
         <Route path="/result" element={<Result />} />
         <Route path="/my" element={<MyUniverse />} />
+        <Route path="/checkin" element={<CheckIn />} />
         <Route path="/archive" element={<Archive />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/" replace />} />

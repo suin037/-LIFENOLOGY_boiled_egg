@@ -2,15 +2,15 @@
 
 export function Eyebrow({ children }) {
   return (
-    <div className="mb-2 mt-1.5 text-[11px] font-semibold tracking-[3px] text-mut">{children}</div>
+    <div className="mb-2 mt-1 text-[12px] font-semibold text-mut">{children}</div>
   );
 }
 
 export function Card({ children, highlight = false, className = "" }) {
   return (
     <div
-      className={`my-3 rounded-2xl border p-4 ${
-        highlight ? "border-[#33507d] bg-card2" : "border-line bg-card"
+      className={`my-2.5 rounded-[18px] p-4 ${
+        highlight ? "bg-card2" : "bg-card"
       } ${className}`}
     >
       {children}
@@ -25,7 +25,7 @@ export function Sample({ n }) {
 
 export function Row({ label, children }) {
   return (
-    <div className="mt-1.5 flex items-center justify-between text-xs text-sub">
+    <div className="mt-2 flex items-center justify-between gap-4 text-[13px] text-sub">
       <span>{label}</span>
       <span className="text-ink">{children}</span>
     </div>
@@ -33,7 +33,7 @@ export function Row({ label, children }) {
 }
 
 export function Caption({ children, className = "" }) {
-  return <p className={`mt-1.5 text-[11px] leading-relaxed text-mut ${className}`}>{children}</p>;
+  return <p className={`mt-1.5 text-[11px] leading-[1.5] text-mut ${className}`}>{children}</p>;
 }
 
 // 하단 출처·표본·관찰기간 고지 — 결과/유사 화면에 항상.
@@ -51,11 +51,11 @@ export function SourceFootnote({ meta }) {
 // 큰 CTA 버튼
 export function Button({ children, onClick, variant = "primary", type = "button", className = "" }) {
   const base =
-    "tap block w-full rounded-[26px] px-4 py-4 text-base font-bold transition-transform active:scale-[.98]";
+    "tap block w-full rounded-2xl px-4 py-3 text-[15px] font-semibold transition-all active:scale-[.98]";
   const styles =
     variant === "ghost"
-      ? "border border-line bg-transparent font-semibold text-sub"
-      : "border-none bg-gradient-to-r from-cyan to-cyan-deep text-[#04203a]";
+      ? "bg-card font-semibold text-sub hover:bg-card2"
+      : "border border-[#67A3FF]/40 bg-gradient-to-r from-[#2F6FE8] via-[#397EF4] to-[#4C91FF] text-white shadow-[0_10px_28px_rgba(47,111,232,.28)] hover:brightness-110";
   return (
     <button type={type} onClick={onClick} className={`${base} ${styles} ${className}`}>
       {children}

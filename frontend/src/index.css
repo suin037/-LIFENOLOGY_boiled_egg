@@ -10,13 +10,19 @@
   }
   body {
     @apply bg-bg text-ink font-sans antialiased;
-    /* 성도(star chart) 배경 그라디언트 */
-    background: radial-gradient(120% 90% at 50% -10%, #1a2138 0%, #0b0f1c 55%, #05070f 100%);
+    background: #050A12;
     margin: 0;
+    letter-spacing: -0.018em;
   }
   /* 터치 하이라이트 제거 */
   * {
     -webkit-tap-highlight-color: transparent;
+  }
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
   }
 }
 

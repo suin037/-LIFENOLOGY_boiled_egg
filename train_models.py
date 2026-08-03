@@ -17,6 +17,8 @@ v2 대비 변경:
 from __future__ import annotations
 
 import argparse
+import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 import joblib
@@ -113,11 +115,48 @@ def encode_and_impute(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
 
 
 # ---------------------------------------------------------------- layer 2
-def train_knn(df: pd.DataFrame) -> dict:
+def evaluate_knn(df: pd.DataFrame, X: np.ndarray, knn: NearestNeighbors,
+                 k: int = 5, sample_n: int = 500, seed: int = 42) -> dict:
+    """학습 행 자체를 제외한 이웃들이 실제로 얼마나 비슷한지 진단한다."""
+    rng = np.random.default_rng(seed)
+    picked = rng.choice(len(df), size=min(sample_n, len(df)), replace=False)
+    _, indices = knn.kneighbors(X[picked], n_neighbors=min(k + 1, len(df)))
+
+    age_gap, wage_gap, same_major, same_sex = [], [], [], []
+    for row_idx, candidates in zip(picked, indices):
+        neighbors = [i for i in candidates if i != row_idx][:k]
+        if not neighbors:
+            continue
+        target = df.iloc[row_idx]
+        near = df.iloc[neighbors]
+        age_gap.append(float((near["age"] - target["age"]).abs().mean()))
+        wage_gap.append(float((near["monthly_wage"] - target["monthly_wage"]).abs().mean()))
+        same_major.append(float((near["major"].astype(str) == str(target["major"])).mean()))
+        same_sex.append(float((near["sex"].astype(str) == str(target["sex"])).mean()))
+
+    report = {
+        "evaluated_queries": len(age_gap),
+        "neighbors_per_query": k,
+        "mean_age_gap_years": round(float(np.mean(age_gap)), 3),
+        "mean_wage_gap_manwon": round(float(np.mean(wage_gap)), 3),
+        "same_major_rate": round(float(np.mean(same_major)), 4),
+        "same_sex_rate": round(float(np.mean(same_sex)), 4),
+    }
+    print(
+        "[L2 KNN 평가] "
+        f"나이차 {report['mean_age_gap_years']:.2f}세 | "
+        f"임금차 {report['mean_wage_gap_manwon']:.1f}만원 | "
+        f"동일전공 {report['same_major_rate']:.1%} | 동일성별 {report['same_sex_rate']:.1%}"
+    )
+    return report
+
+
+def train_knn(df: pd.DataFrame, eval_samples: int = 500) -> dict:
     scaler = StandardScaler()
     X = scaler.fit_transform(df[FEATURE_COLS])
     knn = NearestNeighbors(n_neighbors=10, metric="euclidean").fit(X)
     print(f"[L2 KNN] fit 완료 (n={len(df)}, 피처 {len(FEATURE_COLS)}개: 스펙4 + 상태·성향5)")
+    evaluation = evaluate_knn(df, X, knn, sample_n=eval_samples)
     return {
         "model": knn,
         "scaler": scaler,
@@ -126,6 +165,9 @@ def train_knn(df: pd.DataFrame) -> dict:
                    "satis_overall", "life_satis"]]
         .rename(columns={"job_name": "major"})
         .reset_index(drop=True),
+        "evaluation": evaluation,
+        "source": "GOMS",
+        "trained_rows": len(df),
     }
 
 
@@ -139,8 +181,8 @@ def train_econml(df: pd.DataFrame) -> dict:
     X = df[ECONML_X].to_numpy()
 
     est = CausalForestDML(
-        model_y=RandomForestRegressor(n_estimators=100, min_samples_leaf=10),
-        model_t=RandomForestClassifier(n_estimators=100, min_samples_leaf=10),
+        model_y=RandomForestRegressor(n_estimators=100, min_samples_leaf=10, random_state=42),
+        model_t=RandomForestClassifier(n_estimators=100, min_samples_leaf=10, random_state=42),
         discrete_treatment=True,
         n_estimators=200,
         random_state=42,
@@ -154,7 +196,15 @@ def train_econml(df: pd.DataFrame) -> dict:
     for s in (1, 3, 5):
         Xs = X.copy(); Xs[:, ECONML_X.index("satis_overall")] = s
         print(f"           만족도={s} 가정 시 CATE 평균 = {float(est.ate(Xs)):+.2f} 만원")
-    return {"model": est, "x_cols": ECONML_X, "ate": ate}
+    return {
+        "model": est,
+        "x_cols": ECONML_X,
+        "ate": ate,
+        "ate_ci": (float(lb), float(ub)),
+        "source": "GOMS 단면",
+        "n": len(df),
+        "treatment_rate": float(T.mean()),
+    }
 
 
 # ---------------------------------------------------------------- layer 4
@@ -180,6 +230,7 @@ def train_lifelines(df: pd.DataFrame) -> dict | None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--synthetic", action="store_true")
+    parser.add_argument("--eval-samples", type=int, default=500)
     args = parser.parse_args()
 
     df = load_data(args.synthetic)
@@ -187,11 +238,29 @@ def main() -> None:
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
 
     joblib.dump(encoders, ARTIFACTS / "encoders.pkl")
-    joblib.dump(train_knn(df), ARTIFACTS / "knn.pkl")
-    joblib.dump(train_econml(df), ARTIFACTS / "econml.pkl")
+    knn_artifact = train_knn(df, eval_samples=max(1, args.eval_samples))
+    econml_artifact = train_econml(df)
+    joblib.dump(knn_artifact, ARTIFACTS / "knn.pkl")
+    joblib.dump(econml_artifact, ARTIFACTS / "econml.pkl")
     lf = train_lifelines(df)
     if lf is not None:
         joblib.dump(lf, ARTIFACTS / "lifelines.pkl")
+    report = {
+        "trained_at": datetime.now(timezone.utc).isoformat(),
+        "synthetic": args.synthetic,
+        "rows": len(df),
+        "knn": knn_artifact["evaluation"],
+        "econml": {
+            "ate_manwon": econml_artifact["ate"],
+            "ci95_manwon": list(econml_artifact["ate_ci"]),
+            "treatment_rate": econml_artifact["treatment_rate"],
+            "source": econml_artifact["source"],
+        },
+        "lifelines_available": lf is not None,
+    }
+    (ARTIFACTS / "training_report.json").write_text(
+        json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     print(f"[done] artifacts -> {ARTIFACTS}/")
 
 

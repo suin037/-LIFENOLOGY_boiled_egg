@@ -1,0 +1,23 @@
+{
+  "trained_at": "2026-08-03T11:24:42.034318+00:00",
+  "synthetic": false,
+  "rows": 11318,
+  "knn": {
+    "evaluated_queries": 500,
+    "neighbors_per_query": 5,
+    "mean_age_gap_years": 0.771,
+    "mean_wage_gap_manwon": 24.222,
+    "same_major_rate": 0.6636,
+    "same_sex_rate": 0.9968
+  },
+  "econml": {
+    "ate_manwon": -16.22901042506109,
+    "ci95_manwon": [
+      -53.6431836766298,
+      21.185162826507597
+    ],
+    "treatment_rate": 0.2245979855098074,
+    "source": "GOMS 단면"
+  },
+  "lifelines_available": false
+}

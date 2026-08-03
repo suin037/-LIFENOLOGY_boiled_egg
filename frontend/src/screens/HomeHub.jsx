@@ -17,7 +17,9 @@ export default function HomeHub() {
 
   return (
     <div>
-      <div className="mb-1 mt-2 text-[13px] text-sub">안녕하세요, 탐험가님 👋</div>
+      <div className="mb-1 mt-2 text-[13px] text-sub">
+        안녕하세요, {profile.name?.trim() ? `${profile.name.trim()}님` : "탐험가님"} 👋
+      </div>
       <h1 className="text-[24px] font-bold leading-[1.2]">
         오늘도 어떤 갈림길을
         <br />
@@ -30,55 +32,10 @@ export default function HomeHub() {
         <MoodTrend />
       </div>
 
-      {/* 마스코트 한마디 */}
-      <Card highlight className="flex items-center gap-3">
-        <div
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xl"
-          style={{ background: "#12203a", border: `1.5px solid ${guide.color}` }}
-        >
-          {guide.emoji}
-        </div>
-        <div>
-          <div className="text-[11px] font-bold" style={{ color: guide.color }}>
-            {guide.name} · {guide.role}
-          </div>
-          <p className="mt-0.5 text-[13px] leading-relaxed text-sub">
-            미래를 지어내지 않아요. 데이터에서 비슷한 사람들을 찾아 그대로 비춰드릴게요.
-          </p>
-        </div>
-      </Card>
-
       {/* 새 시뮬 CTA */}
       <Button className="mt-4" onClick={() => navigate("/input")}>
         새 시뮬레이션 시작 ✦
       </Button>
-
-      {/* 최근 결과 요약 */}
-      <div className="mb-2 mt-6 text-xs font-semibold tracking-wide text-mut">최근 결과</div>
-      <Card className="cursor-pointer" >
-        <button className="tap w-full text-left" onClick={() => navigate("/result")}>
-          <div className="flex items-center justify-between">
-            <div className="text-[15px] font-semibold">
-              <span className="text-cyan">{labelOf(a.choice)}</span>
-              <span className="text-mut"> vs </span>
-              <span className="text-gold">{labelOf(b.choice)}</span>
-            </div>
-            <span className="text-[11px] text-cyan">자세히 →</span>
-          </div>
-          <Row label="대상">
-            {profile.age}세 · {profile.occupation}
-          </Row>
-          {a.causal_effect != null ? (
-            <Row label="이직 순수 효과">
-              <span className="font-bold text-cyan">+{a.causal_effect}만원</span>
-            </Row>
-          ) : (
-            <Row label="A 궤적(현재)">
-              <span className="font-bold text-cyan">{a.trajectory[0].income_p50}만원</span>
-            </Row>
-          )}
-        </button>
-      </Card>
 
       {/* 미니 통계 */}
       <div className="mt-4 grid grid-cols-3 gap-2.5">

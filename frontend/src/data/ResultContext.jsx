@@ -2,6 +2,7 @@ import { createContext, useContext, useMemo, useRef, useState } from "react";
 import { getPredictionPair } from "./prediction.js";
 import { DEFAULT_AVATAR } from "./avatarOptions.js";
 import { generateSceneImages, runSimulateRaw } from "../api.js";
+import { mapSimulateToPair } from "./simulateAdapter.js";
 import { avatarToPngBlob } from "./avatarImage.js";
 import { initDemoFromUrl, noteSimulationRun } from "./myUniverse.js";
 
@@ -15,6 +16,7 @@ const ResultContext = createContext(null);
 initDemoFromUrl();
 
 const DEFAULT_PROFILE = {
+  name: "",
   age: 29,
   sex: "2",
   major: "사회", // 전공 계열
@@ -51,6 +53,8 @@ export function ResultProvider({ children }) {
     setResult(pair);
     let simulation;
     let narrative;
+    // 백엔드 엔진(L1~L5) 실수치. 못 받으면 null 로 남고 목업 + '데모 데이터' 배지를 유지한다.
+    let real = null;
     try {
       simulation = await runSimulateRaw({
         profile,
@@ -62,21 +66,38 @@ export function ResultProvider({ children }) {
         choiceBDomains: opts.choiceBDomains ?? scenarioDomains.b,
         diary: currentDiary,
       });
+      // 서사 생성이 실패하더라도 수치는 살린다 → catch 보다 먼저 계산한다.
+      real = mapSimulateToPair(simulation, {
+        choiceA,
+        choiceB,
+        detailA: opts.choiceADetail ?? scenarioTexts.a,
+        detailB: opts.choiceBDetail ?? scenarioTexts.b,
+      });
       narrative = simulation.narrative || {};
       const hasStory = (story) => typeof story === "string" ? Boolean(story.trim()) : Boolean(story?.summary?.trim());
       if (!hasStory(narrative.a) || !hasStory(narrative.b) || narrative._skipped) {
         throw new Error("Claude 응답을 A/B 서사 형식으로 읽지 못했습니다. 백엔드를 재시작한 뒤 다시 시도해주세요.");
       }
     } catch (error) {
-      const fallback = { ...pair, narrativeError: error.message };
+      const fallback = {
+        ...pair,
+        ...(real || {}),
+        dataMode: real ? "model" : "demo",
+        narrativeError: error.message,
+      };
       setResult(fallback);
       return fallback;
     }
 
     const storyResult = {
         ...pair,
-        dataMode: simulation.fallback ? "demo" : "model",
-        domains: { a: scenarioDomains.a, b: scenarioDomains.b },
+        ...(real || {}),
+        // 엔진 실수치가 실제로 들어왔을 때만 '데모 데이터' 배지를 내린다.
+        dataMode: real ? "model" : "demo",
+        domains: {
+          a: opts.choiceADomains ?? scenarioDomains.a,
+          b: opts.choiceBDomains ?? scenarioDomains.b,
+        },
         narrative,
         evidence: simulation.evidence,
         imageLoading: true,

@@ -88,6 +88,17 @@ export default function Onboarding() {
         이 정보로 데이터에서 ‘나와 비슷한 200명’을 찾습니다. 처음 한 번만 입력해요.
       </Caption>
 
+      <label className="mb-2 mt-4 block text-xs text-sub">이름</label>
+      <input
+        type="text"
+        value={profile.name || ""}
+        maxLength={20}
+        aria-label="이름"
+        placeholder="이름 또는 닉네임"
+        onChange={(e) => setProfile((p) => ({ ...p, name: e.target.value }))}
+        className="tap w-full rounded-xl border border-line bg-[#0E1424] px-3.5 py-3 text-sm text-ink outline-none placeholder:text-mut focus:border-cyan"
+      />
+
       {/* 나이 슬라이더 */}
       <label className="mb-2 mt-4 block text-xs text-sub">
         나이
@@ -166,7 +177,6 @@ export default function Onboarding() {
                 <span className={`text-[13px] font-semibold ${on ? "text-cyan" : "text-ink"}`}>
                   {c.label}
                 </span>
-                <span className="block text-[10px] text-mut">{c.desc}</span>
               </span>
             </button>
           );

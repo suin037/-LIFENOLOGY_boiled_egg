@@ -24,26 +24,36 @@ SATIS = ["satis_work", "satis_growth", "satis_income", "satis_stability", "satis
 YP_FEATS = ["age", "sex", "income_now", "edu_level"]
 # 매칭 피처: 나이·성별·소득 + 학력·고용형태(정규여부)
 #  ※ 전공/만족도는 KLIPS(노동패널)에 없어 궤적 매칭엔 사용 불가.
-FEATS = ["나이", "성별", "월임금_실질", "학력", "정규여부"]
+#  ※ 정규여부는 '종사상지위' 가 있는 패널에서만 쓴다. klips_train.py 가 문서화한
+#    klips_base.pkl 계약에는 종사상지위가 없어, 없는 빌드도 정상 동작해야 한다.
+BASE_FEATS = ["나이", "성별", "월임금_실질", "학력"]
+REQUIRED_COLS = ["pid", "wave", "나이", "성별", "학력", "월임금_실질", "이직"]
 
 
 @lru_cache(maxsize=1)
 def _panel():
     if not KLIPS_PATH.exists():
         return None
-    b = pd.read_pickle(KLIPS_PATH)[
-        ["pid", "wave", "나이", "성별", "학력", "종사상지위", "월임금_실질", "이직"]
-    ].copy()
+    raw = pd.read_pickle(KLIPS_PATH)
+    if [c for c in REQUIRED_COLS if c not in raw.columns]:
+        return None  # 필수 컬럼이 없는 빌드 → 궤적 생략(엔진은 계속 동작)
+
+    has_status = "종사상지위" in raw.columns
+    cols = REQUIRED_COLS + (["종사상지위"] if has_status else [])
+    b = raw[cols].copy()
     b = b[b["월임금_실질"] > 0].dropna(subset=["나이", "성별", "월임금_실질"])
     b["학력"] = b["학력"].fillna(b["학력"].median())
-    # 고용형태 → 정규여부 (상용1=정규, 임시2·일용3=비정규; 자영/무급은 결측→중앙값)
-    st = pd.to_numeric(b["종사상지위"], errors="coerce")
-    b["정규여부"] = np.where(st == 1, 1.0, np.where(st.isin([2, 3]), 2.0, np.nan))
-    b["정규여부"] = b["정규여부"].fillna(b["정규여부"].median())
+    feats = list(BASE_FEATS)
+    if has_status:
+        # 고용형태 → 정규여부 (상용1=정규, 임시2·일용3=비정규; 자영/무급은 결측→중앙값)
+        st = pd.to_numeric(b["종사상지위"], errors="coerce")
+        b["정규여부"] = np.where(st == 1, 1.0, np.where(st.isin([2, 3]), 2.0, np.nan))
+        b["정규여부"] = b["정규여부"].fillna(b["정규여부"].median())
+        feats.append("정규여부")
     b["이직"] = pd.to_numeric(b["이직"], errors="coerce").fillna(0)
-    mu, sd = b[FEATS].mean(), b[FEATS].std().replace(0, 1)
+    mu, sd = b[feats].mean(), b[feats].std().replace(0, 1)
     by_pid = {pid: g.set_index("wave") for pid, g in b.groupby("pid")}
-    return {"b": b, "mu": mu, "sd": sd, "by_pid": by_pid}
+    return {"b": b, "mu": mu, "sd": sd, "by_pid": by_pid, "feats": feats}
 
 
 def project_trajectory(features: dict, horizon: int = 10, k: int = 300,
@@ -52,7 +62,7 @@ def project_trajectory(features: dict, horizon: int = 10, k: int = 300,
     P = _panel()
     if P is None:
         return []
-    b, mu, sd, by_pid = P["b"], P["mu"], P["sd"], P["by_pid"]
+    b, mu, sd, by_pid, feats = P["b"], P["mu"], P["sd"], P["by_pid"], P["feats"]
 
     A = features.get("age")
     if A is None:
@@ -68,16 +78,18 @@ def project_trajectory(features: dict, horizon: int = 10, k: int = 300,
     # 학력·고용형태: 입력에 있으면 매칭에 사용, 없으면 중앙값(=중립)
     edu = features.get("edu_level")
     edu = float(edu) if edu is not None else float(b["학력"].median())
-    reg = features.get("is_regular")
-    reg = float(reg) if reg is not None else float(b["정규여부"].median())
 
     # 시작 후보: 시작 나이 ±1
     cand = b[b["나이"].between(A - 1, A + 1)]
     if len(cand) < min_n:
         return []
-    q = {"나이": A, "성별": sex, "월임금_실질": float(W), "학력": edu, "정규여부": reg}
-    zq = np.array([(q[c] - mu[c]) / sd[c] for c in FEATS])
-    Z = ((cand[FEATS] - mu) / sd).to_numpy()
+    q = {"나이": A, "성별": sex, "월임금_실질": float(W), "학력": edu}
+    if "정규여부" in feats:
+        reg = features.get("is_regular")
+        reg = float(reg) if reg is not None else float(b["정규여부"].median())
+        q["정규여부"] = reg
+    zq = np.array([(q[c] - mu[c]) / sd[c] for c in feats])
+    Z = ((cand[feats] - mu) / sd).to_numpy()
     dist = np.sqrt(((Z - zq) ** 2).sum(axis=1))
     starts = cand.assign(_d=dist).nsmallest(k, "_d")[["pid", "wave"]].to_numpy()
 

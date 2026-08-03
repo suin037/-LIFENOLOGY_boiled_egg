@@ -54,7 +54,7 @@ function headline(result) {
     return (
       <>
         비슷한 약 {nSim}명 중 이직한 이들은 소득 순수효과{" "}
-        <b className="text-cyan">+{result.causal_effect}만원</b>, 다만{" "}
+        <b className="text-cyan">{result.causal_effect > 0 ? "+" : ""}{result.causal_effect}만원</b>, 다만{" "}
         <b className="text-danger">{down}%</b>는 오히려 줄었습니다.
       </>
     );

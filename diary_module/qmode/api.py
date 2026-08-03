@@ -61,6 +61,8 @@ class AnalyzeReq(BaseModel):
     ranked_cards: Optional[list] = None      # 온보딩 가치순위(id 또는 label)
     mbti: Optional[str] = None
     entries: list[Entry] = []
+    uid: Optional[str] = None                # 있으면 결과를 주별로 DB 저장
+    week_key: Optional[str] = None           # 주 식별자(예: 그 주 월요일 날짜)
 
 
 def _entries_to_sessions(entries):
@@ -146,22 +148,49 @@ def analyze(req: AnalyzeReq):
     except Exception as e:      # noqa: BLE001
         nerr = str(e)
 
-    return {
-        "disposition": {
-            "value_order": prof.get("value_order"),
-            "coping": prof.get("coping"),
-            "risk_tolerance": prof.get("risk_tolerance"),
-            "decision_style": prof.get("decision_style"),
-            "protect_most": prof.get("protect_most"),
-            "summary": prof.get("summary"),
-            "mbti": prof.get("mbti"),
-            "confidence": prof.get("confidence"),
-            "n_answers": prof.get("n_answers"),
-        },
-        "persona_block": prof.get("jobchange_material"),
-        "report": narrative or f"(서사 생략: {nerr})",
-        "report_error": nerr,
+    disposition = {
+        "value_order": prof.get("value_order"),
+        "coping": prof.get("coping"),
+        "risk_tolerance": prof.get("risk_tolerance"),
+        "decision_style": prof.get("decision_style"),
+        "protect_most": prof.get("protect_most"),
+        "summary": prof.get("summary"),
+        "mbti": prof.get("mbti"),
+        "confidence": prof.get("confidence"),
+        "n_answers": prof.get("n_answers"),
     }
+    report = narrative or f"(서사 생략: {nerr})"
+
+    # 내일 할 거리 — 이번 주 답변에 매칭된 심리 이론카드의 행동 제안(intervention).
+    # 성향 수치가 아니라 '해볼 것' 이라 사용자 화면에 바로 보여줄 수 있다.
+    actions = []
+    try:
+        seen = set()
+        for _, c in RPT._collect_cards(sessions):
+            for iv in (c.get("interventions") or []):
+                iv = (iv or "").strip()
+                if iv and iv not in seen:
+                    seen.add(iv)
+                    actions.append(iv)
+    except Exception:      # noqa: BLE001
+        actions = []
+    actions = actions[:3]
+
+    # 주별 저장 — 지난 주는 이 저장본을 조회(GET /report). 이번 주만 실시간 재분석.
+    if req.uid and req.week_key:
+        con = _db()
+        con.execute(
+            "INSERT OR REPLACE INTO week_reports"
+            "(uid, week_key, report, disposition, actions, updated_at)"
+            " VALUES(?,?,?,?,?,?)",
+            (req.uid, req.week_key, report, json.dumps(disposition, ensure_ascii=False),
+             json.dumps(actions, ensure_ascii=False), _now()),
+        )
+        con.commit(); con.close()
+
+    return {"disposition": disposition, "persona_block": prof.get("jobchange_material"),
+            "report": report, "actions": actions, "report_error": nerr,
+            "saved": bool(req.uid and req.week_key)}
 
 
 # ── SQLite 영속화 (내장, 파일 하나 — 비용·설치 0) ────────────────────
@@ -175,6 +204,16 @@ def _db():
         "uid TEXT PRIMARY KEY, profile TEXT, entries TEXT, "
         "persona_block TEXT, disposition TEXT, updated_at TEXT)"
     )
+    con.execute(
+        "CREATE TABLE IF NOT EXISTS week_reports("
+        "uid TEXT, week_key TEXT, report TEXT, disposition TEXT, updated_at TEXT, "
+        "PRIMARY KEY(uid, week_key))"
+    )
+    # 내일 할 거리(actions)는 나중에 추가된 컬럼 — 기존 DB 호환 위해 마이그레이션.
+    try:
+        con.execute("ALTER TABLE week_reports ADD COLUMN actions TEXT")
+    except sqlite3.OperationalError:
+        pass  # 이미 있음
     return con
 
 
@@ -243,6 +282,34 @@ def get_user(uid: str):
             "entries": json.loads(row[1]) if row[1] else [],
             "persona_block": row[2], "disposition": json.loads(row[3]) if row[3] else None,
             "updated_at": row[4]}
+
+
+@app.get("/report/{uid}/{week_key}")
+def get_week_report(uid: str, week_key: str):
+    """저장된 주간 리포트 조회 — 지난 주는 실시간 재분석 대신 이 저장본을 본다."""
+    con = _db()
+    row = con.execute(
+        "SELECT report, disposition, updated_at, actions FROM week_reports"
+        " WHERE uid=? AND week_key=?",
+        (uid, week_key),
+    ).fetchone()
+    con.close()
+    if not row:
+        return {"found": False}
+    return {"found": True, "report": row[0],
+            "disposition": json.loads(row[1]) if row[1] else None,
+            "updated_at": row[2],
+            "actions": json.loads(row[3]) if row[3] else []}
+
+
+@app.delete("/reports/{uid}")
+def clear_week_reports(uid: str):
+    """저장된 주간 리포트 전체 삭제(uid 기준). 데모 재시드 시 옛 리포트가 남지 않게."""
+    con = _db()
+    n = con.execute("DELETE FROM week_reports WHERE uid=?", (uid,)).rowcount
+    con.commit()
+    con.close()
+    return {"deleted": n}
 
 
 # ── 예측 시나리오 서사 (persona_block 반영) ──────────────────────────

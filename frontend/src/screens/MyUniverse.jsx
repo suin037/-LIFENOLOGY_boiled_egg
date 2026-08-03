@@ -1,79 +1,160 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { LineChart, Line, ResponsiveContainer, YAxis } from "recharts";
-import { Card } from "../components/ui.jsx";
-import { MY_UNIVERSE, PLANETS, SAVED_UNIVERSES } from "../data/result.js";
-import { useDiary, moodEmoji } from "../data/DiaryContext.jsx";
-import { weeklyConstellations } from "../data/constellation.js";
-import Constellation, { shapeFor, starColor } from "../components/Constellation.jsx";
-import { WEEKLY_REPORTS } from "../data/weeklyReports.js";
-import { questionText } from "../data/questions.js";
+import { Card, Caption } from "../components/ui.jsx";
+import Constellation from "../components/Constellation.jsx";
 import { useResult } from "../data/ResultContext.jsx";
-import { analyzeDisposition } from "../data/api.js";
-import { setPlanet as persistPlanet, universeSummary } from "../data/myUniverse.js";
+import { PLANETS, SAVED_UNIVERSES } from "../data/result.js";
+import {
+  universeSummary,
+  constellationGroups,
+  setPlanet as persistPlanet,
+  seedDemoCheckins,
+  resetUniverse,
+  isDemo,
+  todayKey,
+  STARS_PER_CONSTELLATION,
+} from "../data/myUniverse.js";
+import {
+  classifyConstellation,
+  badgeLabel,
+  HONESTY_NOTE,
+} from "../data/constellationRules.js";
+import { qidByText } from "../data/questions.js";
+import { DEMO_REPORTS } from "../data/demoReports.js";
+import {
+  analyzeDisposition,
+  getSavedReport,
+  clearSavedReports,
+  REPORT_UID,
+} from "../data/dispositionApi.js";
 
 // 나의 우주 = 개인화 대시보드. 레벨/XP · 별자리 · 행성 · 평행우주 저장 · 통계.
+// 수치는 전부 localStorage 의 실제 활동 기록(pm.myuniverse.v1)에서 파생된다.
 export default function MyUniverse() {
   const navigate = useNavigate();
-  const u = MY_UNIVERSE;
-  const activity = universeSummary();
-  const [planet, setPlanet] = useState(activity.state.planet || "career");
-  const [slot, setSlot] = useState("A");
-
-  // 별자리 = 일기로 생성(주별). 각 일기 = 별, 주마다 모양 변화.
-  const { entries } = useDiary();
-  const weeks = useMemo(() => weeklyConstellations(entries), [entries]);
-  const [wIdx, setWIdx] = useState(Math.max(0, weeks.length - 1));
-  const [showReport, setShowReport] = useState(false);
-  const [selIdx, setSelIdx] = useState(null); // 선택한 별(일기) 인덱스
   const { profile } = useResult();
-  const [live, setLive] = useState(null);   // 실시간 분석 결과
-  const [busy, setBusy] = useState(false);
-  const [apiErr, setApiErr] = useState(null);
-  const week = weeks[wIdx] || null;
 
-  async function runAnalyze() {
-    if (!week) return;
-    setBusy(true); setApiErr(null); setLive(null);
-    try {
-      // 누적: 가장 오래된 주 ~ 선택한 주 까지 전체(성향 빌드업이 보이게)
-      const cum = weeks.slice(0, wIdx + 1).flatMap((w) => w.stars);
-      const entries = cum.map((s) => ({
-        date: s.date, mood: s.v, text: s.text, answers: s.answers || {},
-      }));
-      const r = await analyzeDisposition({
-        ranked_cards: profile.values, mbti: profile.mbti, entries,
-      });
-      setLive(r);
-    } catch (e) {
-      setApiErr(e.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  const sel = week && selIdx != null && week.slots[selIdx]?.filled ? week.slots[selIdx] : null;
-  const realReport = week ? WEEKLY_REPORTS[week.weeksAgo] : null;
-  function goWeek(delta) {
-    setWIdx((i) => Math.min(weeks.length - 1, Math.max(0, i + delta)));
-    setShowReport(false);
-    setSelIdx(null);
-    setLive(null);
-    setApiErr(null);
-  }
+  const [tick, setTick] = useState(0); // 저장 후 다시 읽기용
+  const refresh = () => setTick((t) => t + 1);
 
-  const selectedPlanet = PLANETS.find((p) => p.key === planet);
+  const u = useMemo(() => universeSummary(), [tick]);
+  const [slot, setSlot] = useState("A");
+  const [picked, setPicked] = useState(null); // 탭한 별
+  const [weekBack, setWeekBack] = useState(0); // 0 = 이번 주, 1 = 지난주 …
+  const [showReport, setShowReport] = useState(false); // 주간 리포트 펼침
+  const [reportCache, setReportCache] = useState({}); // weekKey → { report, actions }
+  const [reportBusy, setReportBusy] = useState(false);
+  const [reportErr, setReportErr] = useState(null);
+
+  const planet = u.state.planet;
+  const selectedPlanet = PLANETS.find((p) => p.key === planet) || PLANETS[0];
+
+  const groups = useMemo(() => constellationGroups(u.state), [u.state]);
+  const idx = Math.max(0, groups.length - 1 - weekBack);
+  const group = groups[idx] || null;
+
+  const constellation = useMemo(
+    () => (group ? classifyConstellation(group, profile?.value_ranking) : null),
+    [group, profile?.value_ranking],
+  );
 
   function choosePlanet(key) {
-    setPlanet(key);
     persistPlanet(key);
+    refresh();
+  }
+
+  // 완성된 주의 리포트를 가져온다.
+  //  1) DB 저장본 먼저 조회(즉시) → 있으면 그대로 사용
+  //  2) 없으면 그 주 기록으로 1회 생성·저장(느림, LLM) → 이후엔 저장본이 남음
+  async function loadWeekReport() {
+    if (!group || !group.complete) return;
+    const wk = group.weekStart;
+    if (reportCache[wk]) return; // 이미 불러옴
+
+    // 데모(예시 6주) → 미리 생성해 둔 고정 리포트 사용. API 호출 안 함.
+    if (isDemo(u.state)) {
+      const demo = DEMO_REPORTS[group.index];
+      if (demo) {
+        setReportCache((c) => ({ ...c, [wk]: { report: demo.report, actions: demo.actions || [] } }));
+        return;
+      }
+    }
+
+    setReportBusy(true);
+    setReportErr(null);
+    try {
+      let data = await getSavedReport(REPORT_UID, wk);
+      if (!data.found) {
+        const stars = group.stars.filter((s) => !s.empty && s.valence != null);
+        const entries = stars.map((s) => ({
+          date: s.date,
+          mood: s.mood,
+          text: s.text || s.note || "",
+          answers: answersToMap(s.answers),
+        }));
+        data = await analyzeDisposition({
+          ranked_cards: profile?.value_ranking || [],
+          mbti: profile?.mbti || null,
+          entries,
+          uid: REPORT_UID,
+          week_key: wk,
+        });
+      }
+      setReportCache((c) => ({
+        ...c,
+        [wk]: { report: data.report, actions: data.actions || [] },
+      }));
+    } catch (e) {
+      setReportErr(String(e?.message || e));
+    } finally {
+      setReportBusy(false);
+    }
   }
 
   return (
     <div>
       <h1 className="mb-1 mt-2 text-[24px] font-bold leading-[1.2]">나의 우주</h1>
       <p className="mb-3 text-[13px] text-sub">
-        별자리, 행성, 유성 이벤트로 나만의 평행우주를 만들어보세요
+        하루에 별 하나. {STARS_PER_CONSTELLATION}개가 모이면 별자리가 됩니다.
       </p>
+
+      {/* 데모 확인용 — 예시 6주 데이터로 즉시 채우기(옛 리포트도 함께 정리). */}
+      <button
+        onClick={() => {
+          clearSavedReports(REPORT_UID);
+          resetUniverse();
+          seedDemoCheckins();
+          setReportCache({});
+          setPicked(null);
+          setWeekBack(0);
+          refresh();
+        }}
+        className="tap mb-3 w-full rounded-2xl border border-dashed border-gold/50 bg-[#241d10] py-2.5 text-[12px] font-bold text-gold"
+      >
+        🧪 예시 6주 데이터로 채우기
+      </button>
+
+      {/* 예시 기록이 들어있는 동안은 항상 밝힌다 — 남의 기록을 내 기록처럼 보여주지 않는다. */}
+      {isDemo(u.state) && (
+        <div className="flex items-center justify-between rounded-xl border border-gold/40 bg-[#241d10] px-3 py-2">
+          <span className="text-[11px] text-gold">
+            예시 데이터로 둘러보는 중 — 내 기록이 아닙니다
+          </span>
+          <button
+            onClick={() => {
+              resetUniverse();
+              clearSavedReports(REPORT_UID); // 저장된 주간 리포트도 함께 비움
+              setReportCache({});
+              setWeekBack(0);
+              setPicked(null);
+              refresh();
+            }}
+            className="tap shrink-0 rounded-lg border border-line px-2 py-1 text-[10px] text-sub"
+          >
+            비우기
+          </button>
+        </div>
+      )}
 
       {/* 레벨 / XP */}
       <Card className="flex items-center gap-3">
@@ -81,138 +162,136 @@ export default function MyUniverse() {
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between">
             <span className="text-sm font-bold">
-              {activity.title} · Lv. {activity.level}
+              {u.title} · Lv. {u.level}
             </span>
             <span className="text-[11px] text-mut">
-              {activity.xpInLevel.toLocaleString()} / {activity.xpMax.toLocaleString()} XP
+              {u.xpInLevel.toLocaleString()} / {u.xpMax.toLocaleString()} XP
             </span>
           </div>
           <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[#1E2740]">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-cyan to-[#8B5CF6]"
-              style={{ width: `${activity.xpPct}%` }}
+              className="h-full rounded-full bg-gradient-to-r from-cyan to-[#8B5CF6] transition-all"
+              style={{ width: `${u.xpPct}%` }}
             />
           </div>
         </div>
       </Card>
 
-      {/* 별자리 = 이번 주 일기 (각 일기 = 별, 주마다 모양 변화) */}
+      {/* 별자리 만들기 */}
       <Card>
-        <div className="mb-2 flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-base font-semibold">✦ 이번 주 별자리</div>
-          {weeks.length > 1 && (
-            <div className="flex items-center gap-2 text-[11px] text-sub">
-              <button disabled={wIdx === 0} onClick={() => goWeek(-1)}
-                className="tap px-1 text-mut disabled:opacity-30">◀</button>
-              <span className="min-w-[44px] text-center font-bold text-cyan">{week?.label}</span>
-              <button disabled={wIdx >= weeks.length - 1} onClick={() => goWeek(1)}
-                className="tap px-1 text-mut disabled:opacity-30">▶</button>
-            </div>
-          )}
-        </div>
+        <div className="mb-1 flex items-center gap-1.5 text-base font-semibold">✦ 별자리 만들기</div>
 
-        {!week ? (
-          <p className="py-6 text-center text-[12px] text-mut">
-            일기를 쓰면 그날의 별이 하나씩 떠요. 첫 별을 남겨보세요 ✦
-          </p>
+        {u.stars === 0 ? (
+          <EmptyConstellation
+            onSeed={() => {
+              clearSavedReports(REPORT_UID); // 재시드 전 옛 리포트 제거(stale 방지)
+              seedDemoCheckins();
+              setReportCache({});
+              setWeekBack(0);
+              refresh();
+            }}
+          />
         ) : (
           <>
-            <span className="inline-block rounded-lg border border-line px-2.5 py-1 text-[11px] text-sub">
-              ✦ {shapeFor(week.weeksAgo).name} · 별 {week.n}개
-            </span>
-
-            <div className="mt-2">
-              <Constellation
-                slots={week.slots}
-                weeksAgo={week.weeksAgo}
-                selectedIdx={selIdx}
-                onSelect={setSelIdx}
-              />
-              <div className="mt-1 flex items-center justify-center gap-1 text-[9px] text-mut">
-                <span>힘듦</span>
-                {[1, 2, 3, 4, 5].map((v) => (
-                  <span key={v} className="inline-block h-2 w-2 rounded-full"
-                    style={{ background: starColor(v) }} />
-                ))}
-                <span>좋음 · 별 색·크기 = 그날 기분</span>
-              </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="inline-block rounded-lg border border-line px-2.5 py-1 text-[11px] text-sub">
+                {badgeLabel(constellation)}
+              </span>
+              {groups.length > 1 && (
+                <div className="flex items-center gap-1 text-[11px] text-mut">
+                  <PagerBtn
+                    disabled={idx <= 0}
+                    onClick={() => {
+                      setWeekBack((w) => w + 1);
+                      setPicked(null);
+                    }}
+                  >
+                    ‹
+                  </PagerBtn>
+                  <span className="min-w-[52px] text-center">
+                    {weekBack === 0 ? "이번 주" : `${weekBack}주 전`}
+                  </span>
+                  <PagerBtn
+                    disabled={weekBack <= 0}
+                    onClick={() => {
+                      setWeekBack((w) => Math.max(0, w - 1));
+                      setPicked(null);
+                    }}
+                  >
+                    ›
+                  </PagerBtn>
+                </div>
+              )}
             </div>
 
-            {/* 별 클릭 → 그날 일기 밑에 */}
-            {sel ? (
-              <div className="rounded-xl border border-cyan bg-[#12203a] px-3.5 py-2.5">
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">{moodEmoji(sel.v)}</span>
-                  <span className="shrink-0 text-[11px] text-mut">{sel.date.slice(5)}</span>
-                  <span className="flex-1 text-[12px] text-sub">{sel.text || "(한 줄 없음)"}</span>
-                </div>
-                {sel.answers &&
-                  Object.entries(sel.answers).filter(([, v]) => (v || "").trim()).length > 0 && (
-                    <div className="mt-2 flex flex-col gap-1 border-t border-line pt-2">
-                      {Object.entries(sel.answers)
-                        .filter(([, v]) => (v || "").trim())
-                        .map(([qid, v]) => (
-                          <div key={qid}>
-                            <p className="text-[10px] leading-snug text-mut">{questionText(qid)}</p>
-                            <p className="text-[11px] leading-snug text-sub">{v}</p>
-                          </div>
-                        ))}
-                    </div>
-                  )}
-              </div>
+            <div className="mt-3">
+              <Constellation
+                stars={group.stars}
+                todayDate={todayKey()}
+                selectedDate={picked?.date}
+                onSelect={(s) =>
+                  s.future ? null : setPicked((p) => (p?.date === s.date ? null : s))
+                }
+              />
+            </div>
+
+            <p className="mt-1 text-[12px] leading-relaxed text-sub">{constellation.caption}</p>
+
+            {picked && <StarDetail star={picked} />}
+
+            {group.complete ? (
+              <>
+                <button
+                  onClick={() => {
+                    const next = !showReport;
+                    setShowReport(next);
+                    if (next) loadWeekReport();
+                  }}
+                  className="tap mt-3 w-full rounded-2xl border border-cyan bg-[#12203a] py-2.5 text-[12px] font-bold text-cyan"
+                >
+                  {showReport
+                    ? "리포트 접기 ▴"
+                    : `📖 ${weekBack === 1 ? "지난 주" : `${weekBack}주 전`} 리포트 보기 ▾`}
+                </button>
+
+                {showReport && (
+                  <div className="mt-2 space-y-2">
+                    <WeeklyReport group={group} constellation={constellation} />
+                    <NarrativeBlock
+                      data={reportCache[group.weekStart]}
+                      busy={reportBusy}
+                      err={reportErr}
+                      onRetry={loadWeekReport}
+                    />
+                  </div>
+                )}
+              </>
             ) : (
-              <p className="rounded-xl border border-dashed border-line py-2.5 text-center text-[11px] text-mut">
-                ✦ 별을 눌러 그날 일기를 봐요
-              </p>
+              <div className="mt-3 rounded-2xl border border-dashed border-line bg-[#0E1424] px-3.5 py-3 text-center text-[12px] leading-relaxed text-mut">
+                📖 이번 주 별자리가 자라는 중 — 주가 끝나면 리포트와 조언이 만들어져요
+                {group.remaining ? ` (${group.remaining}일 남음)` : ""}.
+              </div>
             )}
 
             <div className="mt-3 grid grid-cols-2 gap-2.5">
-              <MiniStat label={`${week.label} 별`} value={`${week.n}개`} />
-              <MiniStat label="기분 평균" value={`${moodEmoji(Math.round(week.avg))} ${week.avg}`} />
+              <MiniStat
+                label={weekBack === 0 ? "이번 주 별" : "그 주의 별"}
+                value={`${group.filled} / ${STARS_PER_CONSTELLATION}개`}
+              />
+              <MiniStat label="연속 기록" value={`${u.streak}일`} />
             </div>
 
-            {/* 모든 주 = 그 주까지 '누적' 라이브 분석 → 확신도·성향이 쌓이며 변하는 걸 봄 */}
-            <button
-              onClick={() => {
-                const next = !showReport;
-                setShowReport(next);
-                if (next && !live && !busy) runAnalyze();
-              }}
-              className="tap mt-3 w-full rounded-2xl border border-cyan bg-[#12203a] py-2.5 text-[12px] font-bold text-cyan"
-            >
-              {showReport ? "리포트 접기 ▴" : `🔮 ${week.label}까지 누적 분석 (내 모델) ▾`}
-            </button>
+            {weekBack === 0 && !u.checkedInToday && (
+              <button
+                onClick={() => navigate("/home")}
+                className="tap mt-2.5 w-full rounded-2xl border border-cyan bg-[#12203a] py-2.5 text-[13px] font-semibold text-cyan"
+              >
+                오늘 별이 아직 비어 있어요 — 기록하러 가기
+              </button>
+            )}
 
-            {showReport && (
-              <div className="mt-2 rounded-xl border border-line bg-[#0E1424] px-3.5 py-3">
-                {busy ? (
-                  <p className="text-[12px] text-mut">분석 중… 내 모델이 {week.label}까지 읽고 있어요</p>
-                ) : apiErr ? (
-                  <p className="text-[11px] leading-relaxed text-[#F0736F]">
-                    API 연결 실패 — 로컬 서버(python diary_module/qmode/api.py) 켜졌나요?{" "}
-                    <button onClick={runAnalyze} className="tap underline">다시 시도</button>
-                  </p>
-                ) : live ? (
-                  <>
-                    <div className="flex items-baseline justify-between">
-                      <div className="text-[12px] font-bold text-cyan">🔮 {week.label}까지 누적</div>
-                      <div className="text-[10px] text-mut">
-                        {live.disposition.n_answers}일 · 확신 {live.disposition.confidence?.level}
-                      </div>
-                    </div>
-                    <p className="mt-1 text-[11px] text-sub">
-                      대처 <b className="text-ink">{live.disposition.coping || "—"}</b> · 위험감수{" "}
-                      <b className="text-ink">{live.disposition.risk_tolerance ?? "—"}</b>
-                      {live.disposition.decision_style ? ` · 결정 ${live.disposition.decision_style}` : ""}
-                    </p>
-                    <div className="mt-2 whitespace-pre-line border-t border-line pt-2 text-[12px] leading-relaxed text-sub">
-                      {live.report}
-                    </div>
-                  </>
-                ) : (
-                  <button onClick={runAnalyze} className="tap text-[12px] text-cyan">분석 시작하기 →</button>
-                )}
-              </div>
+            {u.completed > 0 && (
+              <Caption>완성한 별자리 {u.completed}개는 은하수 아카이브에 모여 있어요.</Caption>
             )}
           </>
         )}
@@ -256,7 +335,9 @@ export default function MyUniverse() {
         </p>
       </Card>
 
-      {/* 내 평행우주 저장 */}
+      {/* 내 평행우주 저장 — TODO(T8): 보관함(savedUniverses)의 id 를 슬롯에 핀 고정.
+          myUniverse.js 의 pinSlot/unpinSlot 이 이미 준비되어 있고, 역할 분리(D5)를
+          수인님과 합의한 뒤 연결한다. 지금은 시안 그대로의 정적 UI. */}
       <Card>
         <div className="mb-1 text-base font-semibold">💾 내 평행우주 저장</div>
         <p className="mb-3 text-[11px] text-mut">완성한 우주를 저장하고, 언제든 다시 탐험하세요</p>
@@ -285,7 +366,7 @@ export default function MyUniverse() {
           })}
         </div>
         <button
-          onClick={() => navigate("/input")}
+          onClick={() => navigate("/archive")}
           className="tap mt-3 w-full rounded-[26px] bg-gradient-to-r from-[#5B6CE0] to-cyan py-3.5 text-sm font-bold text-[#04203a]"
         >
           🪐 내 평행우주 저장하기
@@ -296,9 +377,9 @@ export default function MyUniverse() {
       <Card>
         <div className="mb-3 flex items-center gap-1.5 text-base font-semibold">🌌 은하수 아카이브</div>
         <div className="grid grid-cols-3 gap-2.5">
-          <MiniStat label="시뮬레이션" value={activity.stats.simulations} center />
-          <MiniStat label="수집한 별" value={activity.stats.stars} center />
-          <MiniStat label="탐험한 우주" value={activity.stats.universes} center />
+          <MiniStat label="시뮬레이션" value={u.stats.simulations} center />
+          <MiniStat label="수집한 별" value={u.stats.stars} center />
+          <MiniStat label="탐험한 우주" value={u.stats.universes} center />
         </div>
         <button
           onClick={() => navigate("/archive")}
@@ -310,7 +391,217 @@ export default function MyUniverse() {
 
       <p className="mb-2 mt-1 text-center text-[10px] leading-relaxed text-mut">
         레벨·별·XP는 앱 참여 지표이며, 실측 데이터 결과가 아닙니다.
+        <br />
+        {HONESTY_NOTE}
       </p>
+    </div>
+  );
+}
+
+function PagerBtn({ children, disabled, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`tap h-6 w-6 rounded-lg border border-line ${
+        disabled ? "opacity-25" : "text-sub"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function EmptyConstellation({ onSeed }) {
+  return (
+    <div className="mt-2 rounded-xl border border-dashed border-line bg-[#0E1424] px-3 py-6 text-center">
+      <div className="text-[22px] leading-none opacity-40">✦</div>
+      <p className="mt-2 text-[13px] text-sub">아직 별이 하나도 없어요</p>
+      <Caption className="mx-auto max-w-[260px] text-center">
+        홈에서 오늘 하루를 기록하면 첫 별이 떠요. {STARS_PER_CONSTELLATION}일이 모이면 첫 별자리에
+        이름이 붙습니다.
+      </Caption>
+      {onSeed && (
+        <>
+          <button
+            onClick={onSeed}
+            className="tap mt-3 rounded-xl border border-line px-3 py-1.5 text-[11px] text-sub"
+          >
+            ✦ 예시 기록으로 둘러보기
+          </button>
+          <Caption className="text-center">
+            3주치 예시가 채워집니다. 내 기록과 섞이지 않고, 언제든 비울 수 있어요.
+          </Caption>
+        </>
+      )}
+    </div>
+  );
+}
+
+function StarDetail({ star }) {
+  const label =
+    star.valence == null
+      ? "기록이 없는 날이에요"
+      : `기분 ${star.mood ?? "—"} · valence ${star.valence}`;
+  const answers = Array.isArray(star.answers) ? star.answers : [];
+  const hasDiary = star.text || star.note || answers.length > 0;
+  return (
+    <div className="mt-2 rounded-xl border border-line bg-[#0E1424] px-3 py-2.5">
+      <div className="text-[11px] text-mut">{star.date}</div>
+      <div className="mt-0.5 text-[12px] text-sub">{label}</div>
+      {star.text ? (
+        <p className="mt-1.5 text-[12px] leading-relaxed text-ink">{star.text}</p>
+      ) : star.note ? (
+        <p className="mt-1 text-[12px] text-ink">“{star.note}”</p>
+      ) : null}
+      {answers.length > 0 && (
+        <div className="mt-2 space-y-1.5 border-t border-line pt-2">
+          {answers.map((qa, i) => (
+            <div key={i}>
+              <div className="text-[10px] text-mut">{qa.q}</div>
+              <div className="text-[12px] leading-relaxed text-sub">{qa.a}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {!hasDiary && star.valence != null ? (
+        <p className="mt-1 text-[11px] text-mut">이 날은 기분만 남기고 일기는 쓰지 않았어요.</p>
+      ) : null}
+    </div>
+  );
+}
+
+// 체크인 answers([{q,a}]) → 성향 API 형식 {qid: a}. qid 못 찾으면 순번 키.
+function answersToMap(answers) {
+  if (!Array.isArray(answers)) return {};
+  const map = {};
+  answers.forEach((qa, i) => {
+    if (!qa?.a) return;
+    map[qidByText(qa.q) || `Q${i + 1}`] = qa.a;
+  });
+  return map;
+}
+
+// 서사(돌아보기) + 내일 할 거리. 성향 수치는 내부 재료라 노출하지 않는다.
+function NarrativeBlock({ data, busy, err, onRetry }) {
+  if (busy)
+    return (
+      <div className="rounded-xl border border-line bg-[#0E1424] px-3.5 py-3 text-[12px] text-mut">
+        리포트를 만들고 있어요… 이번 주 기록을 읽는 중
+      </div>
+    );
+  if (err)
+    return (
+      <div className="rounded-xl border border-line bg-[#0E1424] px-3.5 py-3 text-[11px] leading-relaxed text-[#F0736F]">
+        리포트 서버에 연결하지 못했어요 — 로컬 API(<code>uvicorn qmode.api:app --port 8000</code>)가
+        켜져 있나요?{" "}
+        <button onClick={onRetry} className="tap underline">
+          다시 시도
+        </button>
+      </div>
+    );
+  if (!data)
+    return (
+      <div className="rounded-xl border border-line bg-[#0E1424] px-3.5 py-3">
+        <button onClick={onRetry} className="tap text-[12px] text-[#C4B5FD]">
+          돌아보기 & 조언 불러오기 →
+        </button>
+      </div>
+    );
+
+  const actions = Array.isArray(data.actions) ? data.actions : [];
+  return (
+    <div className="rounded-xl border border-[#8B5CF6]/40 bg-[#0E1424] px-3.5 py-3">
+      <div className="text-[12px] font-bold text-[#C4B5FD]">🌙 돌아보기 & 조언</div>
+
+      {data.report && (
+        <div className="mt-1.5 whitespace-pre-line text-[12px] leading-relaxed text-sub">
+          {data.report}
+        </div>
+      )}
+
+      {actions.length > 0 && (
+        <div className="mt-3 border-t border-line pt-2.5">
+          <div className="mb-1.5 text-[11px] font-bold text-cyan">🌱 내일 해보면 좋은 것</div>
+          <ul className="space-y-1.5">
+            {actions.slice(0, 3).map((act, i) => (
+              <li key={i} className="flex gap-1.5 text-[12px] leading-relaxed text-ink">
+                <span className="text-cyan">·</span>
+                <span>{act}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <p className="mt-3 border-t border-line pt-2 text-[10px] leading-relaxed text-mut">
+        기록을 바탕으로 한 조언이며, 정답이 아니라 이번 주에 해볼 만한 하나의 방향입니다.
+      </p>
+    </div>
+  );
+}
+
+function WeeklyReport({ group, constellation }) {
+  const stars = (group?.stars || []).filter((s) => !s.empty && s.valence != null);
+  if (!stars.length)
+    return (
+      <div className="mt-2 rounded-xl border border-line bg-[#0E1424] px-3.5 py-3 text-[12px] text-mut">
+        이 주는 아직 기록이 없어 리포트를 만들 수 없어요.
+      </div>
+    );
+
+  const mv = (s) => s.mood ?? Math.round(s.valence * 2 + 3);
+  const avg = stars.reduce((a, s) => a + mv(s), 0) / stars.length;
+  const best = stars.reduce((a, b) => (mv(b) >= mv(a) ? b : a));
+  const worst = stars.reduce((a, b) => (mv(b) <= mv(a) ? b : a));
+  const diaries = stars.filter((s) => s.text || (Array.isArray(s.answers) && s.answers.length));
+
+  return (
+    <div className="mt-2 rounded-xl border border-line bg-[#0E1424] px-3.5 py-3">
+      <div className="flex items-baseline justify-between">
+        <div className="text-[12px] font-bold text-cyan">🔮 {constellation?.name || "이번 주"}</div>
+        <div className="text-[10px] text-mut">
+          {group.filled} / {group.stars.length}일 기록
+        </div>
+      </div>
+      {constellation?.caption && (
+        <p className="mt-1 text-[12px] leading-relaxed text-sub">{constellation.caption}</p>
+      )}
+
+      <div className="mt-2.5 grid grid-cols-3 gap-2 border-t border-line pt-2.5">
+        <ReportStat label="기분 평균" value={avg.toFixed(1)} />
+        <ReportStat label="가장 좋았던 날" value={`${best.date.slice(5)} · ${mv(best)}`} />
+        <ReportStat label="가장 힘든 날" value={`${worst.date.slice(5)} · ${mv(worst)}`} />
+      </div>
+
+      {diaries.length > 0 && (
+        <div className="mt-3 border-t border-line pt-2.5">
+          <div className="mb-1.5 text-[10px] text-mut">이 주의 일기</div>
+          <div className="space-y-2">
+            {diaries.slice(0, 3).map((s) => (
+              <div key={s.date}>
+                <div className="text-[10px] text-mut">{s.date.slice(5)}</div>
+                <div className="text-[12px] leading-relaxed text-sub">
+                  {s.text || (s.answers?.[0]?.a ?? "")}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <p className="mt-3 border-t border-line pt-2 text-[10px] leading-relaxed text-mut">
+        {HONESTY_NOTE}
+      </p>
+    </div>
+  );
+}
+
+function ReportStat({ label, value }) {
+  return (
+    <div className="rounded-lg bg-[#131B2E] px-2 py-2 text-center">
+      <div className="text-[9px] text-mut">{label}</div>
+      <div className="mt-0.5 text-[12px] font-bold text-ink">{value}</div>
     </div>
   );
 }
@@ -324,38 +615,6 @@ function MiniStat({ label, value, center = false }) {
     >
       <div className="text-[10px] text-mut">{label}</div>
       <div className="mt-0.5 text-lg font-bold text-ink">{value}</div>
-    </div>
-  );
-}
-
-// 별 하나 = 그날 일기. 질문에 답한 날은 눌러서 답변까지 펼침.
-function StarRow({ star }) {
-  const [open, setOpen] = useState(false);
-  const answers = star.answers
-    ? Object.entries(star.answers).filter(([, v]) => (v || "").trim())
-    : [];
-  const hasAnswers = answers.length > 0;
-  return (
-    <div className="rounded-xl border border-line bg-[#0E1424] px-3 py-2">
-      <button
-        onClick={() => hasAnswers && setOpen((o) => !o)}
-        className={`flex w-full items-center gap-2 text-left ${hasAnswers ? "tap" : "cursor-default"}`}
-      >
-        <span className="text-base">{moodEmoji(star.v)}</span>
-        <span className="w-[36px] shrink-0 text-[10px] text-mut">{star.date.slice(5)}</span>
-        <span className="flex-1 truncate text-[12px] text-sub">{star.text || "(한 줄 없음)"}</span>
-        {hasAnswers && <span className="shrink-0 text-[10px] text-cyan">✍️{open ? "▴" : "▾"}</span>}
-      </button>
-      {open && hasAnswers && (
-        <div className="mt-1.5 flex flex-col gap-1 border-t border-line pt-1.5">
-          {answers.map(([qid, v]) => (
-            <p key={qid} className="text-[11px] leading-snug text-sub">
-              <b className="mr-1 text-cyan">{qid}</b>
-              {v}
-            </p>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

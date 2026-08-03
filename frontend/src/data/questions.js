@@ -35,6 +35,11 @@ export function questionText(qid) {
   return ALL.find((q) => q.id === qid)?.text || qid;
 }
 
+// 질문 텍스트 → qid (체크인 answers[{q,a}] → 성향 API 형식 {qid:a} 변환용).
+export function qidByText(text) {
+  return ALL.find((q) => q.text === text)?.id || null;
+}
+
 // 30초 데일리 체크인 — 칩 3개. 감정 키워드가 그날 별의 밝기(mood 1~5)를 정한다.
 export const CHECKIN = {
   energy: {
@@ -60,3 +65,12 @@ export const CHECKIN = {
     ],
   },
 };
+
+// 기분 5단계 — 그날 별의 밝기(mood 1~5).
+export const MOODS = [
+  { v: 1, emoji: "😞", label: "힘듦" },
+  { v: 2, emoji: "😕", label: "지침" },
+  { v: 3, emoji: "😐", label: "그저" },
+  { v: 4, emoji: "🙂", label: "괜찮음" },
+  { v: 5, emoji: "😄", label: "좋음" },
+];
