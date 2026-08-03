@@ -41,7 +41,8 @@ export async function avatarToPngBlob(config) {
       useCORS: false,
     });
 
-    // 얼굴 중심으로 잘라 모델이 원형 프레임·의상·배경을 복제하지 않게 한다.
+    // 얼굴과 머리 전체가 함께 들어오도록 자른다. 너무 좁게 자르면 긴 머리·모자·안경이
+    // 사라져 생성 모델이 사용자를 다른 인물로 해석하기 쉽다.
     // Cloudflare reference input 제한에 맞춰 결과는 512px보다 작게 유지한다.
     const canvas = document.createElement("canvas");
     canvas.width = 480;
@@ -49,7 +50,7 @@ export async function avatarToPngBlob(config) {
     const ctx = canvas.getContext("2d");
     ctx.fillStyle = "#f3f0ea";
     ctx.fillRect(0, 0, 480, 480);
-    ctx.drawImage(rendered, 112, 64, 288, 288, 30, 30, 420, 420);
+    ctx.drawImage(rendered, 64, 24, 384, 384, 20, 20, 440, 440);
 
     return await canvasToBlob(canvas);
   } finally {

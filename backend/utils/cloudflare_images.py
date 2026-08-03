@@ -14,9 +14,12 @@ def configured() -> bool:
 def build_visual_prompt(choice: str, narrative: str, visual_scene: dict | None = None) -> str:
     scene = json.dumps(visual_scene or {}, ensure_ascii=False, indent=2)
     return f"""
-Create a rich, polished 2D editorial story illustration. Input image 0 is ONLY a
-facial identity reference. Preserve the character's recognizable facial structure,
-eyes, eyebrows, nose, mouth, skin tone, hairstyle, hair color, and glasses if present.
+Create a rich, polished 2D editorial story illustration. Use the exact same single
+main character shown in input image 0. Input image 0 is the character identity
+reference, not merely a loose inspiration. Preserve the character's recognizable
+face shape, eyes, eyebrows, nose, mouth, skin tone, hairstyle, hair color, glasses,
+and head accessories if present. The person in the output must be immediately
+recognizable as the character in input image 0.
 Do NOT copy the reference image's pose, clothes, shoulders, circular frame, background,
 camera angle, composition, or art style. Do not recreate a centered avatar portrait.
 
@@ -77,12 +80,15 @@ async def generate_pair(
         raise ValueError("Avatar image is empty")
     # The two scenes are independent. Generate them concurrently so their
     # latencies do not add up.
+    # 같은 참조 이미지와 seed를 사용해 A/B의 인물 정체성과 기본 화풍을 최대한 맞춘다.
+    # 장면 차이는 choice·narrative·scene prompt가 만든다.
+    identity_seed = 427
     image_a, image_b = await asyncio.gather(
         asyncio.to_thread(
-            _generate_one, avatar_png, choice_a, narrative_a, visual_a, 427
+            _generate_one, avatar_png, choice_a, narrative_a, visual_a, identity_seed
         ),
         asyncio.to_thread(
-            _generate_one, avatar_png, choice_b, narrative_b, visual_b, 9281
+            _generate_one, avatar_png, choice_b, narrative_b, visual_b, identity_seed
         ),
     )
     return {"a": image_a, "b": image_b}

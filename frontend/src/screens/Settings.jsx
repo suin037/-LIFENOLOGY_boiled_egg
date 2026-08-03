@@ -6,7 +6,7 @@ import { MASCOTS } from "../data/result.js";
 import ValueRankingInput from "../components/ValueRankingInput.jsx";
 import { topAxes } from "../data/valueCards.js";
 import { loadPrefs, savePrefs } from "../data/prefs.js";
-import { MBTI_TYPES, PSYCH_QUESTIONS } from "../data/psychQuestions.js";
+import { PSYCH_QUESTIONS } from "../data/psychQuestions.js";
 import Avatar from "../components/Avatar.jsx";
 import AvatarBuilder from "../components/AvatarBuilder.jsx";
 import Mascot from "../components/Mascot.jsx";
@@ -27,6 +27,58 @@ function Toggle({ on, onClick }) {
         }`}
       />
     </button>
+  );
+}
+
+// MBTI 16개 목록 대신 네 가지 축을 각각 이지선다로 선택한다.
+const MBTI_AXES = [["E", "I"], ["N", "S"], ["T", "F"], ["J", "P"]];
+
+function MbtiPicker({ value, onChange }) {
+  const valid = /^[EI][NS][TF][JP]$/.test(value || "");
+  const letters = valid ? value.split("") : [null, null, null, null];
+
+  function pick(axisIndex, letter) {
+    const next = valid ? value.split("") : ["I", "N", "T", "J"];
+    next[axisIndex] = letter;
+    onChange(next.join(""));
+  }
+
+  return (
+    <div>
+      <div className="grid grid-cols-4 gap-2">
+        {MBTI_AXES.map((pair, axisIndex) => (
+          <div key={pair.join("")} className="flex overflow-hidden rounded-xl border border-line">
+            {pair.map((letter) => {
+              const selected = letters[axisIndex] === letter;
+              return (
+                <button
+                  key={letter}
+                  type="button"
+                  onClick={() => pick(axisIndex, letter)}
+                  className={`tap flex-1 py-2.5 text-[14px] font-bold ${
+                    selected ? "bg-cyan text-[#08131f]" : "bg-[#0E1424] text-sub"
+                  }`}
+                >
+                  {letter}
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 flex items-center justify-between">
+        <span className="text-[13px] font-semibold text-ink">{valid ? value : "미설정"}</span>
+        <button
+          type="button"
+          onClick={() => onChange("모름")}
+          className={`tap rounded-full border px-3 py-1 text-[11px] ${
+            valid ? "border-line text-mut" : "border-cyan text-cyan"
+          }`}
+        >
+          모름
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -110,18 +162,13 @@ export default function Settings() {
         <div className="mb-2 text-xs font-semibold text-mut">심리 성향</div>
 
         <label className="mb-1.5 block text-[11px] text-sub">MBTI</label>
-        <select
-          value={profile.mbti || "모름"}
-          onChange={(e) => setProfile((p) => ({ ...p, mbti: e.target.value }))}
-          className="tap w-full rounded-xl border border-line bg-[#0E1424] px-3.5 py-2.5 text-sm text-ink outline-none focus:border-cyan"
-        >
-          {MBTI_TYPES.map((t) => (
-            <option key={t}>{t}</option>
-          ))}
-        </select>
+        <MbtiPicker
+          value={profile.mbti}
+          onChange={(value) => setProfile((p) => ({ ...p, mbti: value }))}
+        />
 
         <p className="mb-1 mt-4 text-[11px] text-sub">
-          성향 질문 <span className="text-mut">(편하게 적을수록 서사가 너에게 맞춰져요)</span>
+          성향 질문 <span className="text-mut"></span>
         </p>
         <div className="space-y-3">
           {PSYCH_QUESTIONS.map((q) => (
@@ -137,9 +184,6 @@ export default function Settings() {
             </div>
           ))}
         </div>
-        <p className="mt-2 text-[10px] leading-relaxed text-mut">
-          답변은 서사·톤 개인화에만 쓰여요(선택 우열 판단 아님). 매일 쓰는 일기는 일기 탭에서.
-        </p>
       </Card>
 
       {/* 알림 설정 */}
@@ -151,9 +195,6 @@ export default function Settings() {
             <Toggle on={!!prefs.notifications[key]} onClick={() => toggleNotif(key)} />
           </div>
         ))}
-        <p className="mt-2.5 text-[10px] leading-relaxed text-mut">
-          알림 표시는 일기·홈 화면에서, 켜고 끄는 건 여기서 관리해요.
-        </p>
       </Card>
 
       {/* 가이드 마스코트 */}
@@ -171,18 +212,6 @@ export default function Settings() {
             </div>
           ))}
         </div>
-      </Card>
-
-      {/* 데이터 출처·한계 고지 */}
-      <Card>
-        <div className="mb-2 text-xs font-semibold text-mut">데이터 출처 · 한계</div>
-        <p className="text-[12px] leading-relaxed text-sub">
-          GOMS2019 · YP2021 / 25~30세 대졸자 306명 기준 / 관찰 3년.
-          <br />
-          모든 수치는 <span className="text-ink">중앙값</span>이며 표본 수를 함께 표시합니다. 이
-          서비스는 미래를 예측하거나 특정 선택을 권유하지 않습니다 — 비슷한 사람들의 실측 기록을
-          비추고, 놓친 부분을 함께 살피는 거울입니다.
-        </p>
       </Card>
 
       <button
