@@ -193,7 +193,9 @@ def generate_narrative(
     expected_wage: float,
     causal_effect: float,
     survival_months: float,
+    persona_block: str | None = None,
 ) -> str:
+    """단일 선택 서사. persona_block은 수치가 아닌 서술 순서와 톤에만 반영한다."""
     if not settings.anthropic_api_key:
         return "(ANTHROPIC_API_KEY 미설정 — 내러티브 생략)"
     prompt = (
@@ -204,6 +206,12 @@ def generate_narrative(
         f"- 예상 재직기간: {survival_months:.1f}개월\n\n"
         "이 데이터를 따뜻하면서도 현실적인 2~3문장으로, 숫자를 지어내지 말고 풀어 설명해줘."
     )
+    if persona_block:
+        prompt += (
+            f"\n\n{persona_block}\n"
+            "위 성향 재료의 지표 강조 순서, 리스크 프레임, 전달 스타일을 서사에 반영하되 "
+            "예측 수치는 바꾸거나 불리한 내용은 숨기지 마라."
+        )
     resp = _get_client().messages.create(
         model=settings.claude_model,
         max_tokens=512,

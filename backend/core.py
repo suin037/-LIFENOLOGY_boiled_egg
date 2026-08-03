@@ -81,7 +81,13 @@ def run_prediction(req: PredictRequest, with_narrative: bool = True) -> PredictR
     narrative = ""
     if with_narrative:
         try:
-            narrative = generate_narrative(req, expected_wage or 0, effect or 0, survival or 0)
+            narrative = generate_narrative(
+                req,
+                expected_wage or 0,
+                effect or 0,
+                survival or 0,
+                persona_block=req.persona_block,
+            )
         except Exception:
             narrative = ""
 
