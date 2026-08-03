@@ -7,8 +7,10 @@
   · POST /simulate — /compare 수치 + RAG 근거 + Claude 서사(전체 파이프라인)
 """
 
-from fastapi import FastAPI
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+import httpx
+import json
 
 from config import settings
 from schemas import (
@@ -28,6 +30,7 @@ import personalize
 from utils.claude_api import generate_scenarios
 from rag.psych_narrative import get_psych_evidence, build_psych_prompt_block
 from rag import safety as rag_safety
+from utils.cloudflare_images import generate_pair
 
 app = FastAPI(title="parallel-me API")
 
@@ -41,9 +44,96 @@ app.add_middleware(
 )
 
 
+def _simulate_without_artifacts(req, diary, safety_level) -> dict:
+    """로컬 모델 파일이 없을 때 RAG+Claude 서사만 제공하는 개발용 폴백."""
+    default_indicators = {
+        "경제적안정도": 0.5,
+        "성장가능성": 0.5,
+        "삶의질": 0.5,
+    }
+    psych_a = get_psych_evidence(
+        default_indicators, emotions=req.emotions, decision_type=req.choice_a
+    )
+    psych_b = get_psych_evidence(
+        default_indicators, emotions=req.emotions, decision_type=req.choice_b
+    )
+    ev_a = stat_evidence.evidence_for_choice(req.choice_a)
+    ev_b = stat_evidence.evidence_for_choice(req.choice_b)
+    note_parts = [
+        "개발용 폴백: 로컬 예측 모델 아티팩트가 없어 수치 예측은 제외하고, "
+        "검색된 통계·심리 근거와 사용자 입력만으로 서사를 작성한다. 숫자를 만들지 말 것."
+    ]
+    if req.choice_a_detail:
+        note_parts.append(f"[사용자가 적은 A의 구체적 상황] {req.choice_a_detail}")
+    if req.choice_b_detail:
+        note_parts.append(f"[사용자가 적은 B의 구체적 상황] {req.choice_b_detail}")
+    diary_line = diary_bridge.diary_context_line(diary)
+    if diary_line:
+        note_parts.append("[일기 신호] " + diary_line)
+    for label, psych in (("A", psych_a), ("B", psych_b)):
+        block = build_psych_prompt_block(psych)
+        if block:
+            note_parts.append(f"[{label} 심리근거]\n{block}")
+    scen_a = {"choice": req.choice_a, "coverage": "RAG 서사 미리보기(수치 모델 제외)"}
+    scen_b = {"choice": req.choice_b, "coverage": "RAG 서사 미리보기(수치 모델 제외)"}
+    narrative = generate_scenarios(
+        req.profile.model_dump(), scen_a, scen_b, ev_a, ev_b,
+        note="\n\n".join(note_parts), model=settings.claude_model,
+    )
+    return {
+        "profile": req.profile.model_dump(),
+        "choice_a": req.choice_a,
+        "choice_b": req.choice_b,
+        "compare": None,
+        "indicators": {"A": default_indicators, "B": default_indicators},
+        "evidence": {"A": ev_a, "B": ev_b},
+        "diary": diary,
+        "safety_level": safety_level,
+        "narrative": narrative,
+        "api_used": not narrative.get("_skipped", False),
+        "model": settings.claude_model,
+        "fallback": "missing_prediction_artifacts",
+    }
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok", "model": settings.claude_model}
+
+
+@app.post("/visualize")
+async def visualize(
+    avatar: UploadFile = File(...),
+    choice_a: str = Form(...),
+    choice_b: str = Form(...),
+    narrative_a: str = Form(...),
+    narrative_b: str = Form(...),
+    visual_a: str = Form("{}"),
+    visual_b: str = Form("{}"),
+) -> dict:
+    """동일 아바타를 참고해 RAG A/B 서사를 2D 장면 두 장으로 만든다."""
+    if not narrative_a.strip() or not narrative_b.strip():
+        raise HTTPException(400, "A/B narrative is required")
+    avatar_png = await avatar.read()
+    if len(avatar_png) > 4 * 1024 * 1024:
+        raise HTTPException(413, "Avatar image is too large")
+    try:
+        try:
+            scene_a = json.loads(visual_a) if visual_a else {}
+            scene_b = json.loads(visual_b) if visual_b else {}
+        except json.JSONDecodeError as exc:
+            raise HTTPException(400, "Visual scene direction must be valid JSON") from exc
+        images = await generate_pair(
+            avatar_png, choice_a, choice_b, narrative_a, narrative_b,
+            scene_a, scene_b,
+        )
+    except (httpx.HTTPStatusError, httpx.RequestError) as exc:
+        raise HTTPException(
+            502, f"Cloudflare returned HTTP {exc.response.status_code}"
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(502, str(exc)[:300]) from exc
+    return {"images": images, "model": settings.cloudflare_reference_model}
 
 
 @app.post("/predict", response_model=PredictResponse)
@@ -93,7 +183,10 @@ def simulate(req: SimulateRequest) -> dict:
             "model": settings.claude_model,
         }
 
-    cmp = build_comparison(req).model_dump()
+    try:
+        cmp = build_comparison(req).model_dump()
+    except FileNotFoundError:
+        return _simulate_without_artifacts(req, diary, safety_level)
     scen_a = cmp["scenarios"]["A"]
     scen_b = cmp["scenarios"]["B"]
     baseline = getattr(req.profile, "monthly_wage", None)
@@ -136,6 +229,10 @@ def simulate(req: SimulateRequest) -> dict:
 
     # 4) 서사 컨텍스트(note): 일기신호 + 심리카드 근거블록(A/B)
     note = cmp.get("note", "")
+    if req.choice_a_detail:
+        note += f"\n[사용자가 적은 A의 구체적 상황] {req.choice_a_detail}"
+    if req.choice_b_detail:
+        note += f"\n[사용자가 적은 B의 구체적 상황] {req.choice_b_detail}"
     dctx = diary_bridge.diary_context_line(diary)
     if dctx:
         note += "  /  [일기 신호] " + dctx

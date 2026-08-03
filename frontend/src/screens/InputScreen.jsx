@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useResult } from "../data/ResultContext.jsx";
-import { SLOT_OPTIONS, classifyChoice, labelOf } from "../data/choices.js";
+import { LIFE_DOMAINS, SLOT_OPTIONS, classifyChoice, detectLifeDomains, domainLabel, labelOf } from "../data/choices.js";
 import { detectEmotions } from "../data/DiaryContext.jsx";
 import { Eyebrow, Card, Button, Caption } from "../components/ui.jsx";
 
@@ -16,29 +16,52 @@ const COVERAGE_HINT = {
 // 하이브리드 입력: 자유서술 → 자동분류(수정 가능) → 07-30 백엔드 choice_a/choice_b + diary 로 제출
 export default function InputScreen() {
   const navigate = useNavigate();
-  const { profile, setProfile, choices, setChoices, diary, setDiary } = useResult();
-  const [textA, setTextA] = useState("");
-  const [textB, setTextB] = useState("");
+  const { profile, setProfile, choices, setChoices, scenarioTexts, setScenarioTexts, scenarioDomains, setScenarioDomains, diary, setDiary } = useResult();
+  const textA = scenarioTexts.a;
+  const textB = scenarioTexts.b;
   const [autoA, setAutoA] = useState(true);
   const [autoB, setAutoB] = useState(true);
+  const [domainAuto, setDomainAuto] = useState({ a: true, b: true });
 
   function onText(side, val) {
     if (side === "A") {
-      setTextA(val);
+      setScenarioTexts((p) => ({ ...p, a: val }));
       if (autoA) { const c = classifyChoice(val); if (c) setChoices((p) => ({ ...p, a: c })); }
+      if (domainAuto.a) setScenarioDomains((p) => ({ ...p, a: detectLifeDomains(val) }));
     } else {
-      setTextB(val);
+      setScenarioTexts((p) => ({ ...p, b: val }));
       if (autoB) { const c = classifyChoice(val); if (c) setChoices((p) => ({ ...p, b: c })); }
+      if (domainAuto.b) setScenarioDomains((p) => ({ ...p, b: detectLifeDomains(val) }));
     }
   }
   function override(side, key) {
     if (side === "A") { setChoices((p) => ({ ...p, a: key })); setAutoA(false); }
     else { setChoices((p) => ({ ...p, b: key })); setAutoB(false); }
   }
+  function toggleDomain(side, key) {
+    const field = side === "A" ? "a" : "b";
+    setDomainAuto((p) => ({ ...p, [field]: false }));
+    setScenarioDomains((p) => {
+      const current = p[field] || [];
+      const next = current.includes(key) ? current.filter((item) => item !== key) : [...current, key];
+      return { ...p, [field]: next };
+    });
+  }
+  function resetDomainDetection(side) {
+    const field = side === "A" ? "a" : "b";
+    const text = field === "a" ? textA : textB;
+    setDomainAuto((p) => ({ ...p, [field]: true }));
+    setScenarioDomains((p) => ({ ...p, [field]: detectLifeDomains(text) }));
+  }
 
   const emotions = detectEmotions(`${diary} ${textA} ${textB}`);
   const needMajor = choices.a === "진학" || choices.b === "진학";
-  const same = choices.a === choices.b;
+  const sameCategory = choices.a === choices.b;
+  const normalizedA = textA.trim().replace(/\s+/g, " ");
+  const normalizedB = textB.trim().replace(/\s+/g, " ");
+  const duplicate = sameCategory && (!normalizedA || !normalizedB || normalizedA === normalizedB);
+  const missingDomains = normalizedA && normalizedB && (!scenarioDomains.a.length || !scenarioDomains.b.length);
+  const blocked = duplicate || missingDomains;
 
   return (
     <div>
@@ -54,6 +77,8 @@ export default function InputScreen() {
         tag="UNIVERSE A" accent="cyan"
         text={textA} choice={choices.a} auto={autoA}
         onText={(v) => onText("A", v)} onPick={(k) => override("A", k)}
+        domains={scenarioDomains.a} domainAuto={domainAuto.a}
+        onDomain={(k) => toggleDomain("A", k)} onRedetect={() => resetDomainDetection("A")}
         placeholder="예: 지금보다 큰 회사로 옮길까"
       />
       <div className="my-2 text-center text-xs font-bold tracking-widest text-mut">VS</div>
@@ -61,11 +86,23 @@ export default function InputScreen() {
         tag="UNIVERSE B" accent="gold"
         text={textB} choice={choices.b} auto={autoB}
         onText={(v) => onText("B", v)} onPick={(k) => override("B", k)}
+        domains={scenarioDomains.b} domainAuto={domainAuto.b}
+        onDomain={(k) => toggleDomain("B", k)} onRedetect={() => resetDomainDetection("B")}
         placeholder="예: 그냥 지금 회사 계속 다니기"
       />
 
-      {same && (
-        <Caption className="text-danger">두 우주가 같아요({labelOf(choices.a)}). 다른 갈래로 비교해보세요.</Caption>
+      {duplicate && (
+        <Caption className="text-danger">
+          같은 {labelOf(choices.a)}끼리 비교하려면 A/B에 서로 다른 회사·조건·상황을 적어주세요.
+        </Caption>
+      )}
+      {sameCategory && !duplicate && (
+        <Caption className="text-cyan">
+          같은 유형이어도 구체적인 상황이 달라 비교할 수 있어요. 두 설명이 서사와 이미지에 반영됩니다.
+        </Caption>
+      )}
+      {missingDomains && (
+        <Caption className="text-danger">A/B 각각에 해당하는 삶의 영역을 하나 이상 선택해주세요.</Caption>
       )}
 
       {needMajor && (
@@ -106,16 +143,20 @@ export default function InputScreen() {
           {profile.age}세 · {profile.occupation} ·{" "}
           <span className="text-cyan">{labelOf(choices.a)}</span> vs <span className="text-gold">{labelOf(choices.b)}</span>
         </div>
+        <div className="mt-2 text-[11px] leading-relaxed text-mut">
+          A · {scenarioDomains.a.map(domainLabel).join(" · ") || "영역 미선택"}<br />
+          B · {scenarioDomains.b.map(domainLabel).join(" · ") || "영역 미선택"}
+        </div>
       </Card>
 
-      <Button className={`mt-4 ${same ? "opacity-40" : ""}`} onClick={() => !same && navigate("/simulate")}>
+      <Button className={`mt-4 ${blocked ? "opacity-40" : ""}`} onClick={() => !blocked && navigate("/simulate")}>
         평행우주 열기 ✦
       </Button>
     </div>
   );
 }
 
-function SlotInput({ tag, accent, text, choice, auto, onText, onPick, placeholder }) {
+function SlotInput({ tag, accent, text, choice, auto, onText, onPick, placeholder, domains, domainAuto, onDomain, onRedetect }) {
   const accentText = accent === "cyan" ? "text-cyan" : "text-gold";
   const border = accent === "cyan" ? "border-cyan/60" : "border-gold/60";
   return (
@@ -128,6 +169,33 @@ function SlotInput({ tag, accent, text, choice, auto, onText, onPick, placeholde
         placeholder={placeholder}
         className="mt-2 w-full resize-none rounded-lg border border-line bg-bg px-3 py-2 text-sm text-ink outline-none focus:border-cyan"
       />
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <span className="text-[10px] font-semibold text-sub">삶의 영역 · 복수 선택</span>
+        {!domainAuto && (
+          <button type="button" onClick={onRedetect} className="text-[10px] text-cyan">자동 감지 다시 적용</button>
+        )}
+      </div>
+      <div className="mt-1.5 flex flex-wrap gap-1.5">
+        {LIFE_DOMAINS.map((domain) => {
+          const on = domains.includes(domain.key);
+          return (
+            <button
+              type="button"
+              key={domain.key}
+              aria-pressed={on}
+              onClick={() => onDomain(domain.key)}
+              className={`tap rounded-full border px-2.5 py-1 text-[10px] transition-colors ${on ? `${accentText} ${accent === "cyan" ? "border-cyan bg-[#12203a]" : "border-gold bg-[#241d10]"}` : "border-line text-mut"}`}
+            >
+              {domain.emoji} {domain.label}
+            </button>
+          );
+        })}
+      </div>
+      <div className="mt-1 text-[9px] text-mut">{domainAuto ? "문장에서 자동 감지했어요. 필요하면 직접 고칠 수 있어요." : "직접 수정한 영역을 사용해요."}</div>
+
+      <div className="mt-3 border-t border-line pt-2">
+        <span className="text-[10px] text-mut">현재 예측 엔진 유형</span>
+      </div>
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         <span className="text-[10px] text-mut">{auto ? "자동 감지:" : "직접 선택:"}</span>
         {SLOT_OPTIONS.map((o) => {

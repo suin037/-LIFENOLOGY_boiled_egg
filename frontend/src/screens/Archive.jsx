@@ -164,7 +164,8 @@ function UniverseCard({ u, onReopen, onResim, onDecide, onToggleAction, onSaveNo
             🌱 "{chosen}"을(를) 향한 오늘 할 일
           </div>
           <div className="space-y-1">
-            {actions.map((t) => {
+            {actions.map((action) => {
+              const t = action.text;
               const ok = done.includes(t);
               return (
                 <button

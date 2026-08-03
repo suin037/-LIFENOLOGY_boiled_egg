@@ -1,6 +1,8 @@
 import { createContext, useContext, useMemo, useState } from "react";
 import { getPredictionPair } from "./prediction.js";
 import { DEFAULT_AVATAR } from "./avatarOptions.js";
+import { generateSceneImages, runSimulateRaw } from "../api.js";
+import { avatarToPngBlob } from "./avatarImage.js";
 
 // 결과 데이터 + 온보딩 프로필을 한 곳에 모으는 컨텍스트.
 // runSimulation() 이 선택(choices)+심정(diary)으로 결과 쌍{a,b}을 만든다.
@@ -25,9 +27,11 @@ const DEFAULT_PROFILE = {
 export function ResultProvider({ children }) {
   const [profile, setProfile] = useState(DEFAULT_PROFILE);
   const [choices, setChoices] = useState({ a: "이직", b: "유지" });
+  const [scenarioTexts, setScenarioTexts] = useState({ a: "", b: "" });
+  const [scenarioDomains, setScenarioDomains] = useState({ a: [], b: [] });
   const [diary, setDiary] = useState("");
   const [result, setResult] = useState(() =>
-    getPredictionPair({ profile: DEFAULT_PROFILE, choiceA: "이직", choiceB: "유지" }),
+    ({ ...getPredictionPair({ profile: DEFAULT_PROFILE, choiceA: "이직", choiceB: "유지" }), dataMode: "demo" }),
   );
   const [onboarded, setOnboarded] = useState(false);
 
@@ -35,20 +39,66 @@ export function ResultProvider({ children }) {
   async function runSimulation(opts = {}) {
     const choiceA = opts.choiceA || choices.a;
     const choiceB = opts.choiceB || choices.b;
-    const pair = getPredictionPair({ profile, choiceA, choiceB, detail: opts.diary ?? diary });
+    const currentDiary = opts.diary ?? diary;
+    const pair = { ...getPredictionPair({ profile, choiceA, choiceB, detail: currentDiary }), dataMode: "demo" };
     setResult(pair);
-    return pair;
+    let simulation;
+    let narrative;
+    try {
+      simulation = await runSimulateRaw({
+        profile,
+        choiceA,
+        choiceB,
+        choiceADetail: opts.choiceADetail ?? scenarioTexts.a,
+        choiceBDetail: opts.choiceBDetail ?? scenarioTexts.b,
+        choiceADomains: opts.choiceADomains ?? scenarioDomains.a,
+        choiceBDomains: opts.choiceBDomains ?? scenarioDomains.b,
+        diary: currentDiary,
+      });
+      narrative = simulation.narrative || {};
+      const hasStory = (story) => typeof story === "string" ? Boolean(story.trim()) : Boolean(story?.summary?.trim());
+      if (!hasStory(narrative.a) || !hasStory(narrative.b) || narrative._skipped) {
+        throw new Error("Claude 응답을 A/B 서사 형식으로 읽지 못했습니다. 백엔드를 재시작한 뒤 다시 시도해주세요.");
+      }
+    } catch (error) {
+      const fallback = { ...pair, narrativeError: error.message };
+      setResult(fallback);
+      return fallback;
+    }
+
+    const storyResult = {
+        ...pair,
+        dataMode: simulation.fallback ? "demo" : "model",
+        domains: { a: scenarioDomains.a, b: scenarioDomains.b },
+        narrative,
+        evidence: simulation.evidence,
+    };
+    // Claude 글은 이미지 생성과 무관하게 먼저 보존한다.
+    setResult(storyResult);
+    try {
+      const avatarBlob = await avatarToPngBlob(profile.avatarConfig);
+      const visual = await generateSceneImages({ avatarBlob, choiceA, choiceB, narrative });
+      const enriched = { ...storyResult, visuals: visual.images, visualModel: visual.model };
+      setResult(enriched);
+      return enriched;
+    } catch (error) {
+      const fallback = { ...storyResult, visualError: error.message };
+      setResult(fallback);
+      return fallback;
+    }
   }
 
   const value = useMemo(
     () => ({
       profile, setProfile,
       choices, setChoices,
+      scenarioTexts, setScenarioTexts,
+      scenarioDomains, setScenarioDomains,
       diary, setDiary,
       result, setResult,
       runSimulation, onboarded, setOnboarded,
     }),
-    [profile, choices, diary, result, onboarded],
+    [profile, choices, scenarioTexts, scenarioDomains, diary, result, onboarded],
   );
 
   return <ResultContext.Provider value={value}>{children}</ResultContext.Provider>;

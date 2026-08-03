@@ -1,0 +1,127 @@
+import { useState } from "react";
+import Avatar from "../Avatar.jsx";
+import { labelOf } from "../../data/prediction.js";
+
+export default function AvatarComparison({ avatar, a, b, visuals, narrative, error }) {
+  const [expanded, setExpanded] = useState(null);
+  return (
+    <section className="mt-4" aria-labelledby="visual-story-title">
+      <div className="mb-2 flex items-end justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-bold tracking-[.16em] text-mut">RAG VISUAL STORY</p>
+          <h2 id="visual-story-title" className="mt-0.5 text-base font-semibold">두 갈림길 속의 나</h2>
+        </div>
+        <span className="text-[10px] text-mut">AI 상상도</span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2.5">
+        <StoryCard side="A" result={a} image={visuals?.a} story={narrative?.a} avatar={avatar} open={expanded === "A"} onToggle={() => setExpanded((v) => v === "A" ? null : "A")} />
+        <StoryCard side="B" result={b} image={visuals?.b} story={narrative?.b} avatar={avatar} open={expanded === "B"} onToggle={() => setExpanded((v) => v === "B" ? null : "B")} />
+      </div>
+
+      {expanded && (
+        <StoryDetail side={expanded} story={expanded === "A" ? narrative?.a : narrative?.b} />
+      )}
+
+      {narrative?.comparison && (
+        <Comparison story={narrative.comparison} />
+      )}
+
+      {error && (
+        <p className="mt-2 rounded-lg border border-danger/30 bg-danger/10 px-2.5 py-2 text-[10px] leading-relaxed text-danger">
+          일부 AI 결과를 표시하지 못했어요. 가능한 내용만 보여드립니다: {error}
+        </p>
+      )}
+      <p className="mt-2 text-[10px] leading-relaxed text-mut">
+        통계·심리 근거로 작성된 서사를 시각화한 상상도이며, 실제 미래를 예측한 이미지는 아닙니다.
+      </p>
+    </section>
+  );
+}
+
+function StoryCard({ side, result, image, story, avatar, open, onToggle }) {
+  const color = side === "A" ? "#7FD4FF" : "#F5C86B";
+  const structured = story && typeof story === "object";
+  const summary = structured ? story.summary : story;
+  const detail = structured ? story.detail || {} : {};
+  const hasDetail = structured && Boolean(
+    detail.present || detail.transition || detail.future || story.gain || story.cost || story.uncertainty
+  );
+  return (
+    <article className="overflow-hidden rounded-2xl border border-line bg-card">
+      <div className="relative aspect-[4/5] overflow-hidden bg-[#0E1424]">
+        {image ? (
+          <img src={image} alt={`${labelOf(result.choice)} 시나리오 상상도`} className="h-full w-full object-cover" />
+        ) : (
+          <div className="flex h-full flex-col items-center justify-center gap-3 px-3 text-center">
+            <Avatar config={avatar} size={92} />
+            <span className="text-[10px] leading-relaxed text-mut">시뮬레이션을 실행하면<br />서사 기반 장면이 생성됩니다.</span>
+          </div>
+        )}
+        <span className="absolute left-2 top-2 rounded-full border bg-[#0B0F1CDD] px-2 py-1 text-[9px] font-bold" style={{ color, borderColor: `${color}66` }}>UNIVERSE {side}</span>
+      </div>
+      <div className="p-2.5">
+        <p className="text-xs font-bold" style={{ color }}>{labelOf(result.choice)}</p>
+        {structured && story.title && (
+          <h3 className="mt-1 text-[12px] font-semibold leading-snug text-ink">{story.title}</h3>
+        )}
+        <p className="mt-1 text-[11px] leading-relaxed text-sub">
+          {summary || "RAG 서사가 아직 생성되지 않았어요."}
+        </p>
+        {hasDetail && (
+          <button
+            type="button"
+            aria-expanded={open}
+            onClick={onToggle}
+            className="tap mt-2 w-full rounded-lg border border-line px-2 py-1.5 text-[10px] font-semibold text-sub"
+          >
+            {open ? "상세 이야기 접기 ▲" : "상세 이야기 보기 ▼"}
+          </button>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function StoryDetail({ side, story }) {
+  if (!story || typeof story !== "object") return null;
+  const detail = story.detail || {};
+  const color = side === "A" ? "text-cyan" : "text-gold";
+  return (
+    <div className="mt-2.5 rounded-xl border border-line bg-card p-3.5 text-[12px] leading-relaxed">
+      <p className={`mb-2 text-[11px] font-bold ${color}`}>UNIVERSE {side} · 상세 이야기</p>
+      <div className="space-y-3">
+        <StoryBeat label="지금" text={detail.present} />
+        <StoryBeat label="변화 과정" text={detail.transition} />
+        <StoryBeat label="그 이후" text={detail.future} />
+        {(story.gain || story.cost) && (
+          <div className="grid grid-cols-2 gap-2 rounded-lg bg-[#0E1424] p-2.5 text-[11px]">
+            {story.gain && <p><b className="text-cyan">얻게 될 수 있는 것</b><br /><span className="text-sub">{story.gain}</span></p>}
+            {story.cost && <p><b className="text-gold">감수할 수 있는 것</b><br /><span className="text-sub">{story.cost}</span></p>}
+          </div>
+        )}
+        {story.uncertainty && <p className="text-[10px] text-mut">※ {story.uncertainty}</p>}
+      </div>
+    </div>
+  );
+}
+
+function StoryBeat({ label, text }) {
+  if (!text) return null;
+  return <p><b className="text-ink">{label}</b><br /><span className="text-sub">{text}</span></p>;
+}
+
+function Comparison({ story }) {
+  const structured = typeof story === "object";
+  const summary = structured ? story.summary : story;
+  if (!summary) return null;
+  return (
+    <div className="mt-2.5 rounded-xl border border-line bg-[#0E1424] p-3">
+      <p className="text-[10px] font-bold tracking-wide text-mut">A/B 핵심 차이</p>
+      <p className="mt-1 text-[11px] leading-relaxed text-sub">{summary}</p>
+      {structured && story.question && (
+        <p className="mt-2 border-t border-line pt-2 text-[11px] leading-relaxed text-ink">{story.question}</p>
+      )}
+    </div>
+  );
+}

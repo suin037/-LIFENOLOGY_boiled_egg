@@ -62,6 +62,12 @@ class SimulateRequest(CompareRequest):
     diary: Optional[str] = Field(
         None, description="사용자 일기 텍스트(선택). 있으면 감정신호로 개인화 + 서사 반영"
     )
+    choice_a_detail: Optional[str] = Field(
+        None, max_length=500, description="같은 선택 유형을 구분하는 A의 구체적 상황"
+    )
+    choice_b_detail: Optional[str] = Field(
+        None, max_length=500, description="같은 선택 유형을 구분하는 B의 구체적 상황"
+    )
     emotions: Optional[list[str]] = Field(
         None, description="감정 키워드(선택). 심리카드 검색·안전분기에 사용"
     )

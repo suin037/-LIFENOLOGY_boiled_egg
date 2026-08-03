@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     )
 
     anthropic_api_key: str = ""
+    cloudflare_account_id: str = ""
+    cloudflare_api_token: str = ""
+    cloudflare_reference_model: str = "@cf/black-forest-labs/flux-2-klein-4b"
     goms_clean_path: str = "data/goms_clean.csv"
     artifacts_dir: str = "backend/models/artifacts"
 

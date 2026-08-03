@@ -5,7 +5,7 @@ import { Card, Caption } from "../ui.jsx";
 import { A_COLOR, B_COLOR } from "../../data/result.js";
 import { labelOf } from "../../data/prediction.js";
 
-// 평행우주 — A/B 두 갈래의 소득 중앙값 궤적을 한 차트에 겹침.
+// 변화 흐름 — A/B 두 갈래의 소득 중앙값 궤적을 한 차트에 겹침.
 export default function ParallelView({ a, b }) {
   const la = labelOf(a.choice);
   const lb = labelOf(b.choice);
@@ -19,7 +19,7 @@ export default function ParallelView({ a, b }) {
 
   return (
     <Card>
-      <h2 className="mb-1 text-base font-semibold">평행우주 · 소득 궤적</h2>
+      <h2 className="mb-1 text-base font-semibold">A/B 소득 변화 흐름</h2>
       <div className="mt-2 h-[220px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 8, right: 12, left: -14, bottom: 0 }}>

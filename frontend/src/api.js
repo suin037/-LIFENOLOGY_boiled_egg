@@ -128,7 +128,7 @@ export function mapSimulateToResult(sim) {
   };
 }
 
-export async function runSimulate({ profile, choiceA, choiceB, diary }) {
+function buildSimulateBody({ profile, choiceA, choiceB, choiceADetail, choiceBDetail, choiceADomains, choiceBDomains, diary }) {
   const body = {
     profile: {
       age: profile.age,
@@ -143,6 +143,11 @@ export async function runSimulate({ profile, choiceA, choiceB, diary }) {
     choice_a: choiceA,
     choice_b: choiceB,
   };
+  if (choiceADetail?.trim()) body.choice_a_detail = choiceADetail.trim();
+  if (choiceBDetail?.trim()) body.choice_b_detail = choiceBDetail.trim();
+  // 새 삶의 영역 계약용 필드. 현재 백엔드는 extra 필드를 무시하므로 기존 API와 호환된다.
+  if (choiceADomains?.length) body.choice_a_domains = choiceADomains;
+  if (choiceBDomains?.length) body.choice_b_domains = choiceBDomains;
   if (diary) body.diary = diary;
 
   // 심리 성향 서술(MBTI + 서술형 답변) → disposition_block + 답변 수(확신도).
@@ -153,11 +158,47 @@ export async function runSimulate({ profile, choiceA, choiceB, diary }) {
     body.diary_n_answers = disp.n;
   }
 
+  return body;
+}
+
+export async function runSimulateRaw(args) {
+  const body = buildSimulateBody(args);
+
   const res = await fetch(`${API_BASE}/simulate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`simulate ${res.status}`);
-  return mapSimulateToResult(await res.json());
+  return res.json();
+}
+
+export async function runSimulate(args) {
+  return mapSimulateToResult(await runSimulateRaw(args));
+}
+
+export async function generateSceneImages({ avatarBlob, choiceA, choiceB, narrative }) {
+  const storyText = (story) => {
+    if (typeof story === "string") return story;
+    const detail = story?.detail || {};
+    return [story?.summary, detail.present, detail.transition, detail.future, story?.gain, story?.cost]
+      .filter(Boolean)
+      .join(" ");
+  };
+  const form = new FormData();
+  form.append("avatar", avatarBlob, "avatar.png");
+  form.append("choice_a", choiceA);
+  form.append("choice_b", choiceB);
+  form.append("narrative_a", storyText(narrative.a));
+  form.append("narrative_b", storyText(narrative.b));
+  form.append("visual_a", JSON.stringify(narrative.visual_a || {}));
+  form.append("visual_b", JSON.stringify(narrative.visual_b || {}));
+
+  const res = await fetch(`${API_BASE}/visualize`, { method: "POST", body: form });
+  if (!res.ok) {
+    let detail = `visualize ${res.status}`;
+    try { detail = (await res.json()).detail || detail; } catch { /* no-op */ }
+    throw new Error(detail);
+  }
+  return res.json();
 }
