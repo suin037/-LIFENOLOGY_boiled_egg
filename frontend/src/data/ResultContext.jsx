@@ -28,6 +28,38 @@ const DEFAULT_PROFILE = {
   avatarConfig: DEFAULT_AVATAR, // 아바타 빌더 선택(피부·머리·안경·배경)
 };
 
+function applyBackendScenario(base, scenario) {
+  if (!scenario?.raw) return base;
+  const raw = scenario.raw;
+  return {
+    ...base,
+    choice: scenario.choice || base.choice,
+    coverage: scenario.coverage || raw.coverage || "",
+    expected_wage: raw.expected_wage ?? null,
+    causal_effect: raw.causal_effect ?? null,
+    descriptive_effect: null,
+    survival_months: raw.survival_months ?? null,
+    neighbors: raw.neighbors || [],
+    neighbor_changed_ratio: raw.neighbor_changed_ratio ?? null,
+    down_ratio: null,
+    risk_timeline: raw.risk_timeline || {},
+    life_indicators: raw.life_indicators || [],
+    trajectory: raw.trajectory || [],
+    wellbeing_trajectory: raw.wellbeing_trajectory || [],
+    satisfaction_facets: raw.satisfaction_facets || {},
+    confidence: scenario.confidence || {},
+  };
+}
+
+function applyBackendResult(pair, simulation) {
+  const scenarios = simulation?.compare?.scenarios;
+  if (!scenarios) return pair;
+  return {
+    a: applyBackendScenario(pair.a, scenarios.A),
+    b: applyBackendScenario(pair.b, scenarios.B),
+  };
+}
+
 export function ResultProvider({ children }) {
   const [profile, setProfile] = useState(DEFAULT_PROFILE);
   const [choices, setChoices] = useState({ a: "이직", b: "유지" });
@@ -73,8 +105,9 @@ export function ResultProvider({ children }) {
       return fallback;
     }
 
+    const modelPair = applyBackendResult(pair, simulation);
     const storyResult = {
-        ...pair,
+        ...modelPair,
         dataMode: simulation.fallback ? "demo" : "model",
         domains: { a: scenarioDomains.a, b: scenarioDomains.b },
         narrative,

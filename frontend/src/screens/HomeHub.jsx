@@ -70,7 +70,7 @@ export default function HomeHub() {
           </Row>
           {a.causal_effect != null ? (
             <Row label="이직 순수 효과">
-              <span className="font-bold text-cyan">+{a.causal_effect}만원</span>
+              <span className="font-bold text-cyan">{a.causal_effect > 0 ? "+" : ""}{a.causal_effect}만원</span>
             </Row>
           ) : (
             <Row label="A 궤적(현재)">

@@ -11,11 +11,12 @@ export default function CausalView({ a, b }) {
 }
 
 function SideCausal({ result }) {
-  const descriptive = result.descriptive_effect ?? result.causal_effect;
   const effect = result.causal_effect;
-  const gap = +(descriptive - effect).toFixed(1);
-  const scale = descriptive * 1.14;
-  const w = (v) => `${(v / scale) * 100}%`;
+  const descriptive = result.descriptive_effect;
+  const ci = result.confidence?.causal_effect_ci;
+  const signed = (v) => `${v > 0 ? "+" : ""}${Number(v).toFixed(1)}만원`;
+  const includesZero = ci?.ci95_low != null && ci?.ci95_high != null
+    && ci.ci95_low <= 0 && ci.ci95_high >= 0;
 
   return (
     <>
@@ -23,18 +24,22 @@ function SideCausal({ result }) {
         <div className="text-[11px] font-bold tracking-[2px] text-cyan">
           {labelOf(result.choice)} · 단순 비교 vs 보정 추정치 (만원)
         </div>
-        <div className="mt-2.5 text-xs text-sub">겉보기 (그냥 비교)</div>
-        <div className="relative my-1.5 h-3.5 rounded-[7px] bg-[#16203A]">
-          <span className="absolute inset-y-0 left-0 rounded-[7px] bg-gradient-to-r from-cyan to-cyan-deep opacity-60" style={{ width: w(descriptive) }} />
-        </div>
-        <div className="flex justify-end text-xs font-bold text-ink">+{descriptive}만원</div>
+        {descriptive != null && (
+          <div className="mt-2.5 flex items-center justify-between rounded-lg bg-[#16203A] px-3 py-2 text-xs">
+            <span className="text-sub">겉보기 단순 비교</span>
+            <b className="text-ink">{signed(descriptive)}</b>
+          </div>
+        )}
         <div className="mt-2.5 text-xs text-sub">조건을 보정한 추정치</div>
-        <div className="relative my-1.5 h-3.5 rounded-[7px] bg-[#16203A]">
-          <span className="absolute inset-y-0 left-0 rounded-[7px] bg-cyan" style={{ width: w(effect) }} />
-        </div>
-        <div className="flex justify-end text-xs font-bold text-ink">+{effect}만원</div>
+        <div className="mt-1 text-right text-base font-bold text-ink">{signed(effect)}</div>
+        {ci?.ci95_low != null && ci?.ci95_high != null && (
+          <div className="mt-2 rounded-lg border border-line px-3 py-2 text-[11px] text-sub">
+            95% 불확실성 범위: {signed(ci.ci95_low)} ~ {signed(ci.ci95_high)}
+            {includesZero && <p className="mt-1 text-gold">0을 포함하므로 증가·감소를 확정할 수 없습니다.</p>}
+          </div>
+        )}
         <Caption className="mt-2.5">
-          두 값의 차이는 이직자와 비이직자의 원래 조건 차이를 일부 보정한 결과입니다.
+          관측 가능한 조건을 일부 보정한 추정치이며 확정된 미래값이 아닙니다.
         </Caption>
       </Card>
       <Caption>나이·소득·학력 등 관측 가능한 조건을 보정한 추정치이며, 측정되지 않은 차이까지 제거한 확정 효과는 아닙니다.</Caption>
