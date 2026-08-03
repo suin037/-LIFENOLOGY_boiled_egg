@@ -16,6 +16,9 @@ export default function ParallelView({ a, b }) {
     sample_n: p.sample_n,
   }));
   const bothChange = a.choice !== "유지" && b.choice !== "유지";
+  // 창업·진학은 갈래별 소득 추적 데이터가 없어 양쪽이 같은 기준선을 쓴다.
+  // 두 선이 겹쳐 보이는 이유를 밝히지 않으면 '갈래별 예측'으로 오해된다.
+  const baselineSides = [a, b].filter((s) => s.trajectory_is_baseline).map((s) => labelOf(s.choice));
 
   return (
     <Card>
@@ -41,6 +44,15 @@ export default function ParallelView({ a, b }) {
         비슷한 사람들이 각 갈래에서 걸어간 소득 중앙값(만원). 예측이 아니라 관찰된 분포이며, 뒤
         연차일수록 추적 표본이 줄어 불확실합니다.
         {bothChange && " 두 갈래 모두 변화라, 직접 인과비교가 아닌 각각의 거울입니다."}
+        {baselineSides.length > 0 && (
+          <>
+            {" "}
+            <span className="text-gold">
+              {baselineSides.join("·")}는 갈래별 소득 추적 데이터가 없어 또래 기준선을 그대로 표시합니다
+              {baselineSides.length === 2 ? " (그래서 두 선이 겹칩니다)" : ""}.
+            </span>
+          </>
+        )}
       </Caption>
     </Card>
   );

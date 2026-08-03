@@ -2,6 +2,7 @@ import { createContext, useContext, useMemo, useRef, useState } from "react";
 import { getPredictionPair } from "./prediction.js";
 import { DEFAULT_AVATAR } from "./avatarOptions.js";
 import { generateSceneImages, runSimulateRaw } from "../api.js";
+import { mapSimulateToPair } from "./simulateAdapter.js";
 import { avatarToPngBlob } from "./avatarImage.js";
 import { initDemoFromUrl, noteSimulationRun } from "./myUniverse.js";
 
@@ -29,38 +30,6 @@ const DEFAULT_PROFILE = {
   avatarConfig: DEFAULT_AVATAR, // 아바타 빌더 선택(피부·머리·안경·배경)
 };
 
-function applyBackendScenario(base, scenario) {
-  if (!scenario?.raw) return base;
-  const raw = scenario.raw;
-  return {
-    ...base,
-    choice: scenario.choice || base.choice,
-    coverage: scenario.coverage || raw.coverage || "",
-    expected_wage: raw.expected_wage ?? null,
-    causal_effect: raw.causal_effect ?? null,
-    descriptive_effect: null,
-    survival_months: raw.survival_months ?? null,
-    neighbors: raw.neighbors || [],
-    neighbor_changed_ratio: raw.neighbor_changed_ratio ?? null,
-    down_ratio: null,
-    risk_timeline: raw.risk_timeline || {},
-    life_indicators: raw.life_indicators || [],
-    trajectory: raw.trajectory || [],
-    wellbeing_trajectory: raw.wellbeing_trajectory || [],
-    satisfaction_facets: raw.satisfaction_facets || {},
-    confidence: scenario.confidence || {},
-  };
-}
-
-function applyBackendResult(pair, simulation) {
-  const scenarios = simulation?.compare?.scenarios;
-  if (!scenarios) return pair;
-  return {
-    a: applyBackendScenario(pair.a, scenarios.A),
-    b: applyBackendScenario(pair.b, scenarios.B),
-  };
-}
-
 export function ResultProvider({ children }) {
   const [profile, setProfile] = useState(DEFAULT_PROFILE);
   const [choices, setChoices] = useState({ a: "이직", b: "유지" });
@@ -84,6 +53,8 @@ export function ResultProvider({ children }) {
     setResult(pair);
     let simulation;
     let narrative;
+    // 백엔드 엔진(L1~L5) 실수치. 못 받으면 null 로 남고 목업 + '데모 데이터' 배지를 유지한다.
+    let real = null;
     try {
       simulation = await runSimulateRaw({
         profile,
@@ -95,22 +66,38 @@ export function ResultProvider({ children }) {
         choiceBDomains: opts.choiceBDomains ?? scenarioDomains.b,
         diary: currentDiary,
       });
+      // 서사 생성이 실패하더라도 수치는 살린다 → catch 보다 먼저 계산한다.
+      real = mapSimulateToPair(simulation, {
+        choiceA,
+        choiceB,
+        detailA: opts.choiceADetail ?? scenarioTexts.a,
+        detailB: opts.choiceBDetail ?? scenarioTexts.b,
+      });
       narrative = simulation.narrative || {};
       const hasStory = (story) => typeof story === "string" ? Boolean(story.trim()) : Boolean(story?.summary?.trim());
       if (!hasStory(narrative.a) || !hasStory(narrative.b) || narrative._skipped) {
         throw new Error("Claude 응답을 A/B 서사 형식으로 읽지 못했습니다. 백엔드를 재시작한 뒤 다시 시도해주세요.");
       }
     } catch (error) {
-      const fallback = { ...pair, narrativeError: error.message };
+      const fallback = {
+        ...pair,
+        ...(real || {}),
+        dataMode: real ? "model" : "demo",
+        narrativeError: error.message,
+      };
       setResult(fallback);
       return fallback;
     }
 
-    const modelPair = applyBackendResult(pair, simulation);
     const storyResult = {
-        ...modelPair,
-        dataMode: simulation.fallback ? "demo" : "model",
-        domains: { a: scenarioDomains.a, b: scenarioDomains.b },
+        ...pair,
+        ...(real || {}),
+        // 엔진 실수치가 실제로 들어왔을 때만 '데모 데이터' 배지를 내린다.
+        dataMode: real ? "model" : "demo",
+        domains: {
+          a: opts.choiceADomains ?? scenarioDomains.a,
+          b: opts.choiceBDomains ?? scenarioDomains.b,
+        },
         narrative,
         evidence: simulation.evidence,
         imageLoading: true,
