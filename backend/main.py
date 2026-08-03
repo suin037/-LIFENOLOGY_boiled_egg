@@ -11,8 +11,9 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
 import json
+import sys
 
-from config import settings
+from config import ROOT, settings
 from schemas import (
     PredictRequest,
     PredictResponse,
@@ -33,6 +34,17 @@ from rag import safety as rag_safety
 from utils.cloudflare_images import generate_pair
 
 app = FastAPI(title="parallel-me API")
+
+# jy-model의 성향 분석/저장 API를 같은 백엔드 포트에서 제공한다.
+# 선택 의존성 문제로 로딩하지 못해도 기존 예측 API는 계속 기동한다.
+try:
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    from diary_module.qmode.api import app as qmode_app
+
+    app.mount("/qmode", qmode_app)
+except Exception:
+    qmode_app = None
 
 # 프론트(Vite 기본 5173) 에서의 호출 허용
 app.add_middleware(
