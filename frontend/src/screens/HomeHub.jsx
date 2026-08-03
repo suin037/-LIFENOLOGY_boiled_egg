@@ -3,6 +3,7 @@ import { useResult } from "../data/ResultContext.jsx";
 import { Card, Button, Row } from "../components/ui.jsx";
 import { MASCOTS, totalNeighbors } from "../data/result.js";
 import { universeSummary } from "../data/myUniverse.js";
+import Mascot from "../components/Mascot.jsx";
 
 // 홈 = 진입 허브. 인사 + 마스코트 + 새 시뮬 CTA + 최근 결과 요약 + 미니 통계.
 export default function HomeHub() {
@@ -25,11 +26,8 @@ export default function HomeHub() {
 
       {/* 마스코트 한마디 */}
       <Card highlight className="flex items-center gap-3">
-        <div
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xl"
-          style={{ background: "#12203a", border: `1.5px solid ${guide.color}` }}
-        >
-          {guide.emoji}
+        <div className="shrink-0">
+          <Mascot which={guide.key} size={48} />
         </div>
         <div>
           <div className="text-[11px] font-bold" style={{ color: guide.color }}>

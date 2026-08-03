@@ -9,6 +9,7 @@ import { loadPrefs, savePrefs } from "../data/prefs.js";
 import { PSYCH_QUESTIONS } from "../data/psychQuestions.js";
 import Avatar from "../components/Avatar.jsx";
 import AvatarBuilder from "../components/AvatarBuilder.jsx";
+import Mascot from "../components/Mascot.jsx";
 
 // 작은 on/off 토글 (track h-6/w-11 · thumb h-4/w-4 · translate 로 이동 — 크기 균형)
 function Toggle({ on, onClick }) {
@@ -202,19 +203,21 @@ export default function Settings() {
       {/* 가이드 마스코트 */}
       <Card>
         <div className="mb-3 text-xs font-semibold text-mut">가이드 마스코트</div>
-        <div className="flex justify-between gap-2">
+        <div className="space-y-3">
           {Object.values(MASCOTS).map((m) => (
-            <div key={m.name} className="flex flex-1 flex-col items-center gap-1.5 text-center">
-              <span
-                className="flex h-12 w-12 items-center justify-center rounded-full text-2xl"
-                style={{ background: "#12203a", border: `1.5px solid ${m.color}` }}
-              >
-                {m.emoji}
-              </span>
-              <span className="text-[11px] font-bold" style={{ color: m.color }}>
-                {m.name.split(" · ")[0]}
-              </span>
-              <span className="text-[9px] text-mut">{m.role}</span>
+            <div key={m.key} className="flex items-center gap-3">
+              <div className="shrink-0"><Mascot which={m.key} size={52} /></div>
+              <div className="min-w-0">
+                <div className="text-[12px] font-bold" style={{ color: m.color }}>
+                  {m.name} <span className="text-[9px] text-mut">· {m.tag}</span>
+                </div>
+                <p className="mt-0.5 text-[11px] leading-relaxed text-sub">{m.desc}</p>
+                <div className="mt-1 flex gap-1">
+                  {m.traits.map((t) => (
+                    <span key={t} className="rounded-full border border-line px-1.5 py-0.5 text-[9px] text-mut">{t}</span>
+                  ))}
+                </div>
+              </div>
             </div>
           ))}
         </div>

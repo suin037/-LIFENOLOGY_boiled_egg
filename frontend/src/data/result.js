@@ -121,9 +121,24 @@ export const SAVED_UNIVERSES = [
   { id: "C", label: "우주 C", sub: "창업 시나리오", from: "#4d1230", to: "#a01f5a", current: false },
 ];
 
-// 가이드 마스코트 (Nova/Lumi/Cosmo)
+// 가이드 마스코트 (Nova/Lumi/Cosmo) — 얼굴 있는 행성. key 로 <Mascot which=.. /> 렌더.
 export const MASCOTS = {
-  nova: { name: "노바 · Nova", role: "COMET GUIDE", color: "#FF6F9C", emoji: "☄️" },
-  lumi: { name: "루미 · Lumi", role: "STAR GUIDE", color: "#F5C86B", emoji: "⭐" },
-  cosmo: { name: "코스모 · Cosmo", role: "PLANET EXPLORER", color: "#7FD4FF", emoji: "🪐" },
+  nova: {
+    key: "nova", name: "노바 · Nova", role: "COMET GUIDE", tag: "유성 가이드",
+    color: "#FF9EC0", palette: ["#FFE9F0", "#FF9EC0", "#F6689C"],
+    desc: "예상치 못한 기회와 유성 이벤트를 전해주는 에너지 넘치는 가이드예요.",
+    traits: ["호기심", "순발력", "활력"],
+  },
+  lumi: {
+    key: "lumi", name: "루미 · Lumi", role: "STAR GUIDE", tag: "별빛 가이드",
+    color: "#FFD97A", palette: ["#FFF7DA", "#FFD97A", "#FFBB3F"],
+    desc: "별자리와 체크인 기록을 돌보며 사용자의 성장을 응원하는 다정한 안내자예요.",
+    traits: ["다정함", "꾸준함", "응원"],
+  },
+  cosmo: {
+    key: "cosmo", name: "코스모 · Cosmo", role: "PLANET EXPLORER", tag: "행성 탐험가",
+    color: "#7CC3FF", palette: ["#EAF6FF", "#7CC3FF", "#3FBFE0"],
+    desc: "데이터와 시뮬레이션 결과를 분석해 침착하게 미래를 안내하는 탐험가예요.",
+    traits: ["차분함", "분석력", "신뢰"],
+  },
 };
