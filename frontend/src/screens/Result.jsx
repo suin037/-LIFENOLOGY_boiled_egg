@@ -13,13 +13,13 @@ import AvatarComparison from "../components/result/AvatarComparison.jsx";
 
 export default function Result() {
   const navigate = useNavigate();
-  const { result, profile, scenarioDomains } = useResult();
+  const { result, profile, scenarioDomains, retryVisuals } = useResult();
   const { a, b } = result;
 
   const tabs = [
     { key: "indicators", label: "핵심 지표", View: LifeView },
     { key: "change", label: "변화 흐름", View: ChangeView },
-    { key: "evidence", label: "근거와 한계", View: EvidenceView },
+    { key: "evidence", label: "분석 상세", View: EvidenceView },
     { key: "next", label: "다음 단계", View: ActionView },
   ];
 
@@ -47,6 +47,7 @@ export default function Result() {
         narrativeLoading={result.narrativeLoading}
         loading={result.imageLoading}
         error={result.visualError || result.narrativeError}
+        onRetry={result.visualError ? retryVisuals : null}
       />
 
       <PersonaScenario a={a} b={b} />

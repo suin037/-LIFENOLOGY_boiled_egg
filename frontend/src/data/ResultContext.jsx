@@ -124,6 +124,32 @@ export function ResultProvider({ children }) {
     return preview;
   }
 
+  async function retryVisuals() {
+    const narrative = result.narrative;
+    if (!narrative?.a || !narrative?.b) {
+      throw new Error("이미지에 사용할 서사가 아직 준비되지 않았어요.");
+    }
+    setResult((current) => ({ ...current, imageLoading: true, visualError: null }));
+    try {
+      const avatarBlob = await avatarToPngBlob(profile.avatarConfig);
+      const visual = await generateSceneImages({
+        avatarBlob,
+        choiceA: result.a.choice,
+        choiceB: result.b.choice,
+        narrative,
+      });
+      setResult((current) => ({
+        ...current,
+        visuals: visual.images,
+        visualModel: visual.model,
+        imageLoading: false,
+        visualError: null,
+      }));
+    } catch (error) {
+      setResult((current) => ({ ...current, imageLoading: false, visualError: error.message }));
+    }
+  }
+
   const value = useMemo(
     () => ({
       profile, setProfile,
@@ -132,7 +158,7 @@ export function ResultProvider({ children }) {
       scenarioDomains, setScenarioDomains,
       diary, setDiary,
       result, setResult,
-      runSimulation, onboarded, setOnboarded,
+      runSimulation, retryVisuals, onboarded, setOnboarded,
     }),
     [profile, choices, scenarioTexts, scenarioDomains, diary, result, onboarded],
   );

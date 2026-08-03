@@ -1,54 +1,72 @@
 import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import { createRoot } from "react-dom/client";
 import NiceAvatar from "react-nice-avatar";
+import html2canvas from "html2canvas";
 import { normalizeAvatar } from "./avatarOptions.js";
 
-// 설정의 SVG 아바타를 Cloudflare 참고 이미지용 512px PNG로 변환한다.
+// 설정의 조합형 아바타 DOM을 Cloudflare 참고 이미지용 PNG로 변환한다.
+// foreignObject SVG를 canvas에 그리면 브라우저가 canvas를 taint하므로,
+// html2canvas로 실제 DOM 레이어를 직접 캡처한다.
 export async function avatarToPngBlob(config) {
   const normalized = normalizeAvatar(config);
-  // Avatar 컴포넌트의 바깥 div가 아니라 실제 SVG만 직렬화해야 이미지로 읽을 수 있다.
-  let svg = renderToStaticMarkup(createElement(NiceAvatar, {
-    ...normalized,
-    shape: "circle",
-    style: { width: "512px", height: "512px" },
-  }));
-  if (!svg.includes("xmlns=")) {
-    svg = svg.replace("<svg", '<svg xmlns="http://www.w3.org/2000/svg"');
-  }
-  const source = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
-  const url = URL.createObjectURL(source);
+  const host = document.createElement("div");
+  host.style.cssText = [
+    "position:fixed",
+    "left:-10000px",
+    "top:0",
+    "width:512px",
+    "height:512px",
+    "overflow:hidden",
+    "pointer-events:none",
+  ].join(";");
+  document.body.appendChild(host);
+
+  const root = createRoot(host);
   try {
-    const image = await loadImage(url);
-    // Send a face crop, not the avatar card. This prevents the image model from
-    // copying the circular frame, clothing, centered pose, and background.
-    const rendered = document.createElement("canvas");
-    rendered.width = 512;
-    rendered.height = 512;
-    rendered.getContext("2d").drawImage(image, 0, 0, 512, 512);
+    root.render(createElement(NiceAvatar, {
+      ...normalized,
+      shape: "circle",
+      style: { width: "512px", height: "512px" },
+    }));
+    // React 렌더와 SVG 레이아웃이 모두 반영된 다음 캡처한다.
+    await nextFrame();
+    await nextFrame();
+
+    const rendered = await html2canvas(host, {
+      backgroundColor: null,
+      width: 512,
+      height: 512,
+      scale: 1,
+      logging: false,
+      useCORS: false,
+    });
+
+    // 얼굴 중심으로 잘라 모델이 원형 프레임·의상·배경을 복제하지 않게 한다.
+    // Cloudflare reference input 제한에 맞춰 결과는 512px보다 작게 유지한다.
     const canvas = document.createElement("canvas");
-    // Cloudflare reference input은 512x512보다 작아야 한다.
     canvas.width = 480;
     canvas.height = 480;
     const ctx = canvas.getContext("2d");
     ctx.fillStyle = "#f3f0ea";
     ctx.fillRect(0, 0, 480, 480);
     ctx.drawImage(rendered, 112, 64, 288, 288, 30, 30, 420, 420);
-    return await new Promise((resolve, reject) => {
-      canvas.toBlob(
-        (blob) => blob ? resolve(blob) : reject(new Error("아바타 PNG 변환 실패")),
-        "image/png",
-      );
-    });
+
+    return await canvasToBlob(canvas);
   } finally {
-    URL.revokeObjectURL(url);
+    root.unmount();
+    host.remove();
   }
 }
 
-function loadImage(url) {
+function nextFrame() {
+  return new Promise((resolve) => requestAnimationFrame(resolve));
+}
+
+function canvasToBlob(canvas) {
   return new Promise((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("아바타 SVG 로드 실패"));
-    image.src = url;
+    canvas.toBlob(
+      (blob) => blob ? resolve(blob) : reject(new Error("아바타 PNG 변환 실패")),
+      "image/png",
+    );
   });
 }
