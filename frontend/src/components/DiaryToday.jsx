@@ -53,25 +53,25 @@ export default function DiaryToday() {
   return (
     <Card>
       <div className="mb-2 text-sm font-bold">
-        오늘, 어땠나요? <span className="text-[11px] font-normal text-mut">· 30초</span>
+        오늘, 어땠나요? <span className="text-[11px] font-normal text-mut"></span>
       </div>
 
-      {/* 기분 5단계 — 그날 별의 밝기 */}
-      <div className="flex justify-between">
+      {/* 기분 5단계 — 그날 별의 밝기 (핵심 액션) */}
+      <div className="mt-1 flex justify-between gap-1">
         {MOODS.map((m) => {
           const on = m.v === mood;
           return (
             <button
               key={m.v}
               onClick={() => setMood(m.v)}
-              className={`tap flex flex-1 flex-col items-center gap-0.5 rounded-xl py-1.5 transition-colors ${
-                on ? "bg-[#12203a]" : ""
+              className={`tap flex flex-1 flex-col items-center gap-0.5 rounded-2xl py-2 transition-all ${
+                on ? "bg-cyan/15" : "hover:bg-card2"
               }`}
             >
-              <span className={`text-2xl transition-transform ${on ? "scale-110" : "opacity-60"}`}>
+              <span className={`text-[30px] leading-none transition-transform ${on ? "scale-110" : "opacity-70"}`}>
                 {m.emoji}
               </span>
-              <span className={`text-[9px] ${on ? "text-cyan" : "text-mut"}`}>{m.label}</span>
+              <span className={`text-[11px] ${on ? "font-semibold text-cyan" : "text-mut"}`}>{m.label}</span>
             </button>
           );
         })}
@@ -80,26 +80,32 @@ export default function DiaryToday() {
       {/* 데일리 칩 3개 */}
       <div className="mt-3 border-t border-line pt-3">
         <ChipRow label={CHECKIN.energy.q}>
-          {CHECKIN.energy.opts.map((o) => (
-            <Chip key={o.v} on={energy === o.v} onClick={() => setEnergy(o.v)}>
-              {o.emoji}
-              <span className="ml-0.5 text-[9px]">{o.label}</span>
-            </Chip>
-          ))}
+          <div className="grid w-full grid-cols-4 gap-1">
+            {CHECKIN.energy.opts.map((o) => (
+              <Chip full key={o.v} on={energy === o.v} onClick={() => setEnergy(o.v)}>
+                {o.emoji}
+                <span className="ml-0.5">{o.label}</span>
+              </Chip>
+            ))}
+          </div>
         </ChipRow>
 
         <ChipRow label={CHECKIN.competency.q}>
-          {CHECKIN.competency.opts.map((c) => (
-            <Chip key={c} on={competency === c} onClick={() => setCompetency(c)}>{c}</Chip>
-          ))}
+          <div className="grid w-full grid-cols-6 gap-1">
+            {CHECKIN.competency.opts.map((c) => (
+              <Chip dense full key={c} on={competency === c} onClick={() => setCompetency(c)}>{c}</Chip>
+            ))}
+          </div>
         </ChipRow>
 
         <ChipRow label={CHECKIN.emotion.q}>
-          {CHECKIN.emotion.opts.map((o) => (
-            <Chip key={o.key} on={emotion === o.key} onClick={() => setEmotion(o.key)}>
-              {o.emoji} {o.key}
-            </Chip>
-          ))}
+          <div className="grid w-full grid-cols-4 gap-1">
+            {CHECKIN.emotion.opts.map((o) => (
+              <Chip dense full key={o.key} on={emotion === o.key} onClick={() => setEmotion(o.key)}>
+                {o.emoji} {o.key}
+              </Chip>
+            ))}
+          </div>
         </ChipRow>
       </div>
 
@@ -166,22 +172,24 @@ export default function DiaryToday() {
 
 function ChipRow({ label, hint, children }) {
   return (
-    <div className="mb-2.5 last:mb-0">
-      <div className="mb-1 text-[11px] text-sub">
+    <div className="mb-3.5 last:mb-0">
+      <div className="mb-2 text-[12.5px] font-medium text-ink/90">
         {label}
-        {hint && <span className="ml-1 text-[9px] text-mut">{hint}</span>}
+        {hint && <span className="ml-1 text-[10px] text-mut">{hint}</span>}
       </div>
-      <div className="flex flex-wrap gap-1.5">{children}</div>
+      <div className="flex flex-wrap gap-2">{children}</div>
     </div>
   );
 }
 
-function Chip({ on, onClick, children }) {
+function Chip({ on, onClick, children, dense = false, full = false }) {
   return (
     <button
       onClick={onClick}
-      className={`tap rounded-[18px] border px-3 py-1.5 text-[12px] transition-colors ${
-        on ? "border-cyan bg-[#12203a] text-cyan" : "border-line bg-[#0E1424] text-sub"
+      className={`tap !min-h-0 h-[30px] whitespace-nowrap rounded-full border px-2 py-0 text-[12px] font-medium leading-none transition-colors ${
+        full ? "flex w-full items-center justify-center" : ""
+      } ${
+        on ? "border-cyan bg-cyan/15 text-cyan" : "border-line bg-card2 text-sub hover:text-ink"
       }`}
     >
       {children}

@@ -111,7 +111,7 @@ export default function DiaryCheckIn({ onSaved }) {
           {CHECKIN.energy.opts.map((o) => (
             <Chip key={o.v} on={energy === o.v} onClick={() => setEnergy(o.v)}>
               {o.emoji}
-              <span className="ml-0.5 text-[9px]">{o.label}</span>
+              <span className="ml-0.5">{o.label}</span>
             </Chip>
           ))}
         </ChipRow>
@@ -209,7 +209,7 @@ function Chip({ on, onClick, children }) {
   return (
     <button
       onClick={onClick}
-      className={`tap rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+      className={`tap !min-h-0 h-[30px] rounded-full border px-2 py-0 text-[12px] leading-none transition-colors ${
         on ? "border-cyan bg-[#12203a] text-cyan" : "border-line text-sub"
       }`}
     >

@@ -26,7 +26,8 @@ export default {
           "sans-serif",
         ],
       },
-      maxWidth: { phone: "430px" },
+      // Desktop preview size. Real mobile screens still use w-full.
+      maxWidth: { phone: "450px" },
       keyframes: {
         fade: {
           from: { opacity: "0", transform: "translateY(8px)" },

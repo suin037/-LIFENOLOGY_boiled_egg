@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     cloudflare_account_id: str = ""
     cloudflare_api_token: str = ""
     cloudflare_reference_model: str = "@cf/black-forest-labs/flux-2-klein-4b"
+    # Mobile result cards do not need a large source image. Override in .env when needed.
+    cloudflare_image_width: int = 384
+    cloudflare_image_height: int = 480
     # preprocess/preprocess_goms.py의 실제 출력 위치와 통일한다.
     goms_clean_path: str = "data/clean/goms_clean.csv"
     artifacts_dir: str = "backend/models/artifacts"

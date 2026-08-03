@@ -33,8 +33,6 @@ export default function LifeView({ a, b, domains = { a: [], b: [] } }) {
   return (
     <div>
       <h2 className="mb-1 mt-1 text-base font-semibold">이 선택과 관련된 핵심 지표</h2>
-      <Caption>선택한 삶의 영역과 관련 있는 지표만 추렸습니다. 공통 지표는 A/B의 차이가 아니라 비슷한 집단의 참고값입니다.</Caption>
-
       <div className="mt-3 space-y-2.5">
         {empty && <Card><Caption>선택한 삶의 영역에 연결된 수치 데이터가 아직 충분하지 않습니다. 임의 점수는 만들지 않았어요.</Caption></Card>}
         {shared.map((it, i) => <Indicator key={`s${i}`} it={it} />)}
@@ -71,7 +69,7 @@ function Indicator({ it, tag, tagColor }) {
       </div>
       <div className="mt-1.5 flex items-center justify-between text-[10px] text-mut">
         <span>{it.group}</span>
-        <span>{it.source}{it.n ? ` · n=${it.n.toLocaleString()}` : ""}</span>
+        <span>{it.n ? `n=${it.n.toLocaleString()}` : ""}</span>
       </div>
     </div>
   );

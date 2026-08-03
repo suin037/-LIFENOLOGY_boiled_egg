@@ -55,7 +55,7 @@ def build_psych_prompt_block(evidence):
     """근거 카드 → 레이어3 프롬프트에 주입할 한국어 텍스트 블록.
 
     최종 문장이 아니라 '재료'다. 메인 생성기가 이 블록을 근거로 서사를 통합한다.
-    출처를 반드시 인용하도록 지시문을 포함한다.
+    출처는 내부 근거 확인용으로만 포함하고 사용자 문장에는 노출하지 않는다.
     """
     cards = evidence.get("cards", [])
     if not cards:
@@ -66,7 +66,7 @@ def build_psych_prompt_block(evidence):
     lines = [
         "[심리학 근거 카드]",
         f"(초점 지표: {focus}={level}. 아래 이론을 근거로 심리 상태를 해석하고, "
-        "행동 제안 1개를 고르되, 반드시 해당 출처를 문장 안에 인용하라.)",
+        "행동 제안 1개를 고르되 이론명·저자·연도·논문명은 사용자 문장에 쓰지 마라.)",
         "",
     ]
     for i, c in enumerate(cards, 1):

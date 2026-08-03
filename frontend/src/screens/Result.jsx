@@ -4,7 +4,7 @@ import { useResult } from "../data/ResultContext.jsx";
 import { useDiary } from "../data/DiaryContext.jsx";
 import { labelOf } from "../data/prediction.js";
 import { saveMe, getScenario } from "../data/api.js";
-import { Eyebrow, SourceFootnote, Button } from "../components/ui.jsx";
+import { Eyebrow, Button } from "../components/ui.jsx";
 import LifeView from "../components/result/LifeView.jsx";
 import ChangeView from "../components/result/ChangeView.jsx";
 import EvidenceView from "../components/result/EvidenceView.jsx";
@@ -44,6 +44,7 @@ export default function Result() {
         b={b}
         visuals={result.visuals}
         narrative={result.narrative}
+        narrativeLoading={result.narrativeLoading}
         loading={result.imageLoading}
         error={result.visualError || result.narrativeError}
       />
@@ -71,8 +72,6 @@ export default function Result() {
       <div key={tab} className="animate-fade">
         <Active a={a} b={b} domains={result.domains || scenarioDomains} dataMode={result.dataMode || "demo"} />
       </div>
-
-      <SourceFootnote meta={a.meta} />
 
       <Button variant="ghost" className="mt-4" onClick={() => navigate("/input")}>
         다른 갈림길로 다시 해보기

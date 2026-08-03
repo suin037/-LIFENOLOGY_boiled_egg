@@ -14,11 +14,18 @@ export default function Layout() {
   const showProfile = !NO_PROFILE.includes(pathname);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#050A12] p-0 sm:p-6">
+    <div
+      className="flex min-h-screen items-center justify-center bg-[#111827] p-0 sm:p-6"
+      style={{
+        backgroundImage:
+          "radial-gradient(circle at 50% 12%, rgba(73,112,171,.22), transparent 36%), linear-gradient(145deg, #172033 0%, #0D1422 48%, #182235 100%)",
+      }}
+    >
       <div
         className="relative flex h-screen w-full max-w-phone flex-col overflow-hidden bg-bg
-                   sm:h-[820px] sm:max-h-[92vh] sm:rounded-[28px] sm:border sm:border-line/60
-                   sm:shadow-[0_24px_70px_rgba(0,0,0,.55)]"
+                   sm:h-[900px] sm:max-h-[94vh] sm:rounded-[44px] sm:border sm:border-[#52627B]
+                   sm:ring-1 sm:ring-white/10
+                   sm:shadow-[0_30px_90px_rgba(0,0,0,.65),0_0_45px_rgba(65,118,190,.18)]"
         style={{ backgroundImage: "radial-gradient(circle at 85% 8%, rgba(47,111,232,.12), transparent 32%), linear-gradient(180deg, #0B1423 0%, #08101D 100%)" }}
       >
         {/* 서비스 헤더 */}

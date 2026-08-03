@@ -261,9 +261,9 @@ def simulate(req: SimulateRequest) -> dict:
     blk_a = build_psych_prompt_block(psych_a)
     blk_b = build_psych_prompt_block(psych_b)
     if blk_a:
-        note += f"\n\n[A={req.choice_a} 심리근거]\n" + blk_a
+        note += f"\n\n[A={req.choice_a} 심리근거]\n" + blk_a[:900]
     if blk_b:
-        note += f"\n\n[B={req.choice_b} 심리근거]\n" + blk_b
+        note += f"\n\n[B={req.choice_b} 심리근거]\n" + blk_b[:900]
     # 4-1) 성향 개인화 지시문(서술 우선순위·톤·질적강조) 주입 — 지윤 handoff §2.
     #      성향(가중치)이 실제로 있을 때만 붙인다.
     if value_weights:

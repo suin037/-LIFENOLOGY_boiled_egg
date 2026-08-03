@@ -49,8 +49,8 @@ def _generate_one(avatar_png, choice, narrative, visual_scene, seed):
         headers={"Authorization": f"Bearer {settings.cloudflare_api_token}"},
         data={
             "prompt": build_visual_prompt(choice, narrative, visual_scene),
-            "width": "768",
-            "height": "960",
+            "width": str(settings.cloudflare_image_width),
+            "height": str(settings.cloudflare_image_height),
             "seed": str(seed),
         },
         files={"input_image_0": ("avatar.png", avatar_png, "image/png")},
@@ -75,12 +75,14 @@ async def generate_pair(
         raise RuntimeError("Cloudflare Workers AI is not configured")
     if not avatar_png:
         raise ValueError("Avatar image is empty")
-    # 참고 이미지 모델은 응답이 커서 무료 계정에서 동시 요청 시 연결이
-    # 끊길 수 있다. 작업 스레드에서 A/B를 순차 생성해 안정성을 우선한다.
-    image_a = await asyncio.to_thread(
-        _generate_one, avatar_png, choice_a, narrative_a, visual_a, 427
-    )
-    image_b = await asyncio.to_thread(
-        _generate_one, avatar_png, choice_b, narrative_b, visual_b, 9281
+    # The two scenes are independent. Generate them concurrently so their
+    # latencies do not add up.
+    image_a, image_b = await asyncio.gather(
+        asyncio.to_thread(
+            _generate_one, avatar_png, choice_a, narrative_a, visual_a, 427
+        ),
+        asyncio.to_thread(
+            _generate_one, avatar_png, choice_b, narrative_b, visual_b, 9281
+        ),
     )
     return {"a": image_a, "b": image_b}

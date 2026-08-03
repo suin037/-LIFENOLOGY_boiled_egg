@@ -45,10 +45,10 @@ export const CHECKIN = {
   energy: {
     q: "오늘 에너지 레벨은?",
     opts: [
-      { v: 1, emoji: "🥱", label: "방전" },
-      { v: 2, emoji: "😌", label: "보통" },
-      { v: 3, emoji: "🙂", label: "좋음" },
-      { v: 4, emoji: "🔥", label: "넘침" },
+      { v: 1, label: "낮음" },
+      { v: 2, label: "보통" },
+      { v: 3, label: "좋음" },
+      { v: 4, label: "넘침" },
     ],
   },
   competency: {
@@ -58,10 +58,10 @@ export const CHECKIN = {
   emotion: {
     q: "오늘 감정 키워드 하나는?",
     opts: [
-      { key: "성취감", emoji: "😄", mood: 5 },
-      { key: "설렘", emoji: "🥰", mood: 4 },
-      { key: "답답함", emoji: "😣", mood: 2 },
-      { key: "지침", emoji: "😮‍💨", mood: 1 },
+      { key: "성취감", mood: 5 },
+      { key: "설렘", mood: 4 },
+      { key: "답답함", mood: 2 },
+      { key: "지침", mood: 1 },
     ],
   },
 };
