@@ -55,7 +55,7 @@ export function Button({ children, onClick, variant = "primary", type = "button"
   const styles =
     variant === "ghost"
       ? "bg-card font-semibold text-sub hover:bg-card2"
-      : "border-none bg-cyan text-[#111827] hover:bg-[#91AAFF]";
+      : "border border-[#67A3FF]/40 bg-gradient-to-r from-[#2F6FE8] via-[#397EF4] to-[#4C91FF] text-white shadow-[0_10px_28px_rgba(47,111,232,.28)] hover:brightness-110";
   return (
     <button type={type} onClick={onClick} className={`${base} ${styles} ${className}`}>
       {children}

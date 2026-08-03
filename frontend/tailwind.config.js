@@ -4,15 +4,15 @@ export default {
   theme: {
     extend: {
       colors: {
-        bg: "#101216",
-        card: "#191C22",
-        card2: "#20242C",
-        line: "#2A2F39",
-        ink: "#F4F6F8",
-        sub: "#B2B8C3",
-        mut: "#767E8C",
-        cyan: { DEFAULT: "#7C9BFF", deep: "#5878E8" }, // 선택 A / primary
-        gold: { DEFAULT: "#F3B867", deep: "#D99338" }, // 선택 B
+        bg: "#09111F",
+        card: "#111B2A",
+        card2: "#172337",
+        line: "#26354A",
+        ink: "#F6F8FC",
+        sub: "#B8C2D2",
+        mut: "#748198",
+        cyan: { DEFAULT: "#4C91FF", deep: "#2F6FE8" }, // 선택 A / primary
+        gold: { DEFAULT: "#FF9F32", deep: "#E98418" }, // 선택 B
         danger: "#FF7B7B",
       },
       fontFamily: {

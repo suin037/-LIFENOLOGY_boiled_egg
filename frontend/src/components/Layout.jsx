@@ -14,15 +14,16 @@ export default function Layout() {
   const showProfile = !NO_PROFILE.includes(pathname);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#0b0c0f] p-0 sm:p-6">
+    <div className="flex min-h-screen items-center justify-center bg-[#050A12] p-0 sm:p-6">
       <div
         className="relative flex h-screen w-full max-w-phone flex-col overflow-hidden bg-bg
                    sm:h-[820px] sm:max-h-[92vh] sm:rounded-[28px] sm:border sm:border-line/60
-                   sm:shadow-[0_24px_70px_rgba(0,0,0,.45)]"
+                   sm:shadow-[0_24px_70px_rgba(0,0,0,.55)]"
+        style={{ backgroundImage: "radial-gradient(circle at 85% 8%, rgba(47,111,232,.12), transparent 32%), linear-gradient(180deg, #0B1423 0%, #08101D 100%)" }}
       >
         {/* 서비스 헤더 */}
         <header className="z-20 flex h-14 shrink-0 items-center justify-between px-5">
-          <button onClick={() => navigate("/home")} className="text-[15px] font-bold tracking-[-.03em] text-ink">
+          <button onClick={() => navigate("/home")} className="text-[17px] font-bold tracking-[-.035em] text-ink">
             Parallel Me
           </button>
           <div>
@@ -30,7 +31,7 @@ export default function Layout() {
               <button
                 onClick={() => navigate("/settings")}
                 aria-label="프로필 · 설정"
-                className="tap flex h-10 w-10 items-center justify-center rounded-full bg-card text-sub transition-colors hover:bg-card2"
+                className="tap flex h-10 w-10 items-center justify-center rounded-full border border-line bg-card/80 text-sub transition-colors hover:bg-card2"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                   <circle cx="12" cy="8" r="3.2" />

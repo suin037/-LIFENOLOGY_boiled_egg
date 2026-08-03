@@ -15,6 +15,7 @@ const ResultContext = createContext(null);
 initDemoFromUrl();
 
 const DEFAULT_PROFILE = {
+  name: "",
   age: 29,
   sex: "2",
   major: "사회", // 전공 계열

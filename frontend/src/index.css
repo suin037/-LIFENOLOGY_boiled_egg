@@ -10,9 +10,9 @@
   }
   body {
     @apply bg-bg text-ink font-sans antialiased;
-    background: #0b0c0f;
+    background: #050A12;
     margin: 0;
-    letter-spacing: -0.012em;
+    letter-spacing: -0.018em;
   }
   /* 터치 하이라이트 제거 */
   * {

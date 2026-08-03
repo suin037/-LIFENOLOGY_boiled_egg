@@ -23,7 +23,7 @@ export default function Landing() {
       <Card className="mt-8">
         <div className="mb-2 text-sm font-semibold text-ink">예측이 아닌 비교 정보예요</div>
         <div className="text-[13px] leading-[1.6] text-sub">
-          미래를 지어내지 않습니다. 한국 패널 데이터(GOMS·YP)에서 실제 응답자를 찾아 보여줍니다.
+          미래를 지어내지 않습니다. 한국 패널 데이터에서 실제 응답자를 찾아 보여줍니다.
         </div>
       </Card>
 
