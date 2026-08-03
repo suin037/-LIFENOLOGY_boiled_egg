@@ -1,93 +1,73 @@
 import Avatar from "./Avatar.jsx";
 import {
-  SKINS,
-  HAIR_COLORS,
-  HAIR_STYLES,
-  GLASSES,
-  BACKGROUNDS,
-  DEFAULT_AVATAR,
+  HAIR_PRESETS, FACE_PRESETS, ACC_PRESETS, OUTFIT_PRESETS, BG_COLORS,
+  normalizeAvatar,
 } from "../data/avatarOptions.js";
 
-function Swatch({ color, on, onClick }) {
+function Arrow({ dir, onClick }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      style={{ background: color }}
-      className={`tap h-7 w-7 rounded-full ${
-        on ? "ring-2 ring-cyan ring-offset-2 ring-offset-[#0E1424]" : "border border-line"
-      }`}
-    />
-  );
-}
-
-function Chip({ label, on, onClick }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`tap rounded-full border px-3 py-1.5 text-[12px] ${
-        on ? "border-cyan bg-[#12203a] text-cyan" : "border-line bg-[#0E1424] text-sub"
-      }`}
+      aria-label={dir < 0 ? "이전" : "다음"}
+      className="tap flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line bg-[#12203a] text-cyan text-[16px] active:scale-95"
     >
-      {label}
+      {dir < 0 ? "‹" : "›"}
     </button>
   );
 }
 
-function Group({ label, children }) {
+// 조합 프리셋을 넘기는 스텝퍼 (현재 config 와 일치하는 프리셋을 찾아 인덱스 표시)
+function PresetStepper({ label, presets, config, onChange }) {
+  let i = presets.findIndex((p) => Object.entries(p.cfg).every(([k, v]) => config[k] === v));
+  if (i < 0) i = 0;
+  const cur = presets[i];
+  const go = (d) => onChange({ ...config, ...presets[(i + d + presets.length) % presets.length].cfg });
   return (
-    <div className="mt-3">
-      <div className="mb-1.5 text-[11px] text-sub">{label}</div>
-      <div className="flex flex-wrap items-center gap-2">{children}</div>
+    <div className="mt-3 flex items-center gap-2 rounded-2xl border border-line bg-[#0E1424] px-3 py-2.5">
+      <div className="w-14 shrink-0 text-[13px] font-semibold text-sub">{label}</div>
+      <Arrow dir={-1} onClick={() => go(-1)} />
+      <div className="flex-1 text-center">
+        <div className="text-[13px] font-medium text-ink">{cur.label}</div>
+        <div className="text-[10px] text-mut">{i + 1} / {presets.length}</div>
+      </div>
+      <Arrow dir={1} onClick={() => go(1)} />
+    </div>
+  );
+}
+
+function ColorStepper({ label, colors, value, onChange }) {
+  let i = colors.indexOf(value);
+  if (i < 0) i = 0;
+  const go = (d) => onChange(colors[(i + d + colors.length) % colors.length]);
+  return (
+    <div className="mt-3 flex items-center gap-2 rounded-2xl border border-line bg-[#0E1424] px-3 py-2.5">
+      <div className="w-14 shrink-0 text-[13px] font-semibold text-sub">{label}</div>
+      <Arrow dir={-1} onClick={() => go(-1)} />
+      <div className="flex flex-1 items-center justify-center gap-2">
+        <span className="h-6 w-6 rounded-full border border-line" style={{ background: colors[i] }} />
+        <span className="text-[10px] text-mut">{i + 1} / {colors.length}</span>
+      </div>
+      <Arrow dir={1} onClick={() => go(1)} />
     </div>
   );
 }
 
 export default function AvatarBuilder({ config, onChange }) {
-  const c = { ...DEFAULT_AVATAR, ...(config || {}) };
-  const set = (patch) => onChange({ ...c, ...patch });
+  const c = normalizeAvatar(config);
 
   return (
     <div>
-      <div className="flex items-center gap-3">
-        <Avatar config={c} size={92} />
-        <p className="text-[11px] leading-relaxed text-mut">
-          피부·머리·안경·배경을 골라 나만의 아바타를 만들어요.
-          <br />
-          평행우주 A/B도 이 아바타로 그려집니다.
-        </p>
+      <div className="mb-3 flex flex-col items-center">
+        <Avatar config={c} size={148} />
+        <p className="mt-2 text-[11px] text-mut">화살표로 넘겨서 나만의 아바타를 만들어요</p>
       </div>
 
-      <Group label="피부톤">
-        {SKINS.map((s) => (
-          <Swatch key={s} color={s} on={c.skin === s} onClick={() => set({ skin: s })} />
-        ))}
-      </Group>
-
-      <Group label="머리 스타일">
-        {HAIR_STYLES.map((h) => (
-          <Chip key={h.id} label={h.label} on={c.hair === h.id} onClick={() => set({ hair: h.id })} />
-        ))}
-      </Group>
-
-      <Group label="머리색">
-        {HAIR_COLORS.map((h) => (
-          <Swatch key={h} color={h} on={c.hairColor === h} onClick={() => set({ hairColor: h })} />
-        ))}
-      </Group>
-
-      <Group label="안경">
-        {GLASSES.map((g) => (
-          <Chip key={g.id} label={g.label} on={c.glasses === g.id} onClick={() => set({ glasses: g.id })} />
-        ))}
-      </Group>
-
-      <Group label="배경">
-        {BACKGROUNDS.map((b) => (
-          <Swatch key={b.id} color={b.stops[0]} on={c.bg === b.id} onClick={() => set({ bg: b.id })} />
-        ))}
-      </Group>
+      <PresetStepper label="머리" presets={HAIR_PRESETS} config={c} onChange={onChange} />
+      <PresetStepper label="얼굴" presets={FACE_PRESETS} config={c} onChange={onChange} />
+      <PresetStepper label="액세서리" presets={ACC_PRESETS} config={c} onChange={onChange} />
+      <PresetStepper label="의상" presets={OUTFIT_PRESETS} config={c} onChange={onChange} />
+      <ColorStepper label="배경" colors={BG_COLORS} value={c.bgColor} onChange={(v) => onChange({ ...c, bgColor: v })} />
     </div>
   );
 }

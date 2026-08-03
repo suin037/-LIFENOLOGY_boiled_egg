@@ -1,35 +1,72 @@
-// 아바타 빌더 옵션 세트 + 기본값. (직접 SVG 합성 — 라이브러리 불필요 · 치비/귀여운 톤)
-export const SKINS = ["#F6D3AE", "#EBB98F", "#D19A6B", "#A06E49", "#7E4E31"];
-export const HAIR_COLORS = ["#33291F", "#141118", "#6B4326", "#B4652F", "#9A8AA6"];
+// 아바타 옵션 — react-nice-avatar 기반. 5개 카루셀(머리·얼굴·액세서리·의상·배경).
+// 각 항목은 색·스타일을 조합한 프리셋 다수. (기본 모양은 라이브러리 한계로 고정, 색·조합으로 확장)
 
-// faceR 로 머리 드러나는 정도 조절. back=긴머리 패널(backH=바닥 y), bun=묶음, bald=민머리.
-export const HAIR_STYLES = [
-  { id: "short", label: "짧은머리", faceR: 20 },
-  { id: "bob", label: "단발", faceR: 19, back: true, backH: 66 },
-  { id: "long", label: "긴머리", faceR: 19, back: true, backH: 82 },
-  { id: "bun", label: "묶음", faceR: 20, bun: true },
-  { id: "crop", label: "아주 짧게", faceR: 21.2 },
-  { id: "bald", label: "민머리", faceR: 21, bald: true },
+export const BG_COLORS = [
+  "#6BD9E9", "#F4D150", "#E0DDFF", "#FFB6C1", "#9287FF", "#D2EFF3", "#FFE0B2",
+  "#B5EAD7", "#FFDAC1", "#C7CEEA", "#FF9AA2", "#A0E7E5", "#FBE7C6", "#111827",
 ];
 
-export const GLASSES = [
-  { id: "none", label: "없음" },
-  { id: "round", label: "동글" },
-  { id: "square", label: "각진" },
+// ── 머리: 성별×스타일×색 ─────────────────────────────
+const HAIRC = [
+  ["갈색", "#4E3629"], ["흑발", "#2C1B18"], ["밝은갈", "#B0703C"],
+  ["금발", "#D6B370"], ["핑크", "#FC909F"], ["애쉬", "#8A8D91"], ["보라", "#A56BBF"],
+];
+const WOMAN_HAIR = [["롱", "womanLong"], ["단발", "womanShort"], ["숏", "normal"]];
+// ⚠ react-nice-avatar 의 thick/mohawk 는 hairColor 를 무시(항상 검정) → 색 변형 없이 1종씩만.
+export const HAIR_PRESETS = [
+  ...WOMAN_HAIR.flatMap(([hn, hs]) =>
+    HAIRC.map(([cn, cc]) => ({ label: `${hn} ${cn}`, cfg: { sex: "woman", hairStyle: hs, hairColor: cc, eyeBrowStyle: "upWoman" } }))),
+  ...HAIRC.slice(0, 5).map(([cn, cc]) => ({ label: `숏 ${cn}`, cfg: { sex: "man", hairStyle: "normal", hairColor: cc, eyeBrowStyle: "up" } })),
+  { label: "덥수룩 (검정)", cfg: { sex: "man", hairStyle: "thick", hairColor: "#2C1B18", eyeBrowStyle: "up" } },
+  { label: "모히칸 (검정)", cfg: { sex: "man", hairStyle: "mohawk", hairColor: "#2C1B18", eyeBrowStyle: "up" } },
 ];
 
-// stops=배경 그라디언트, cloth=옷(어깨) 색
-export const BACKGROUNDS = [
-  { id: "cyan", label: "시안", stops: ["#15324e", "#0a1524"], cloth: "#3D6FA0" },
-  { id: "violet", label: "보라", stops: ["#2a1f4d", "#120a24"], cloth: "#6B4FA0" },
-  { id: "teal", label: "청록", stops: ["#123f39", "#08201d"], cloth: "#2F8F83" },
-  { id: "rose", label: "로즈", stops: ["#4a1f33", "#220a16"], cloth: "#A85878" },
+// ── 얼굴: 피부톤×(눈·입·코) 표정 ─────────────────────
+const SKIN = [["밝은", "#F9C9B6"], ["보통", "#F1C27D"], ["웜", "#E0AC69"], ["구릿빛", "#C68642"], ["어두운", "#8D5524"]];
+const EXPR = [
+  ["미소", { eyeStyle: "smile", mouthStyle: "smile", noseStyle: "short" }],
+  ["활짝웃음", { eyeStyle: "smile", mouthStyle: "laugh", noseStyle: "round" }],
+  ["동그란눈", { eyeStyle: "circle", mouthStyle: "smile", noseStyle: "short" }],
+  ["차분", { eyeStyle: "oval", mouthStyle: "peace", noseStyle: "long" }],
+  ["장난", { eyeStyle: "circle", mouthStyle: "laugh", noseStyle: "round" }],
 ];
+export const FACE_PRESETS = SKIN.flatMap(([sn, sc]) =>
+  EXPR.map(([en, e]) => ({ label: `${sn}·${en}`, cfg: { faceColor: sc, ...e } })));
+
+// ── 액세서리: 안경/모자 조합 ─────────────────────────
+const HATC = [["흑", "#2C1B18"], ["갈", "#77311D"], ["보라", "#9287FF"], ["청록", "#6BD9E9"], ["핑크", "#FC909F"]];
+export const ACC_PRESETS = [
+  { label: "없음", cfg: { glassesStyle: "none", hatStyle: "none" } },
+  { label: "동근안경", cfg: { glassesStyle: "round", hatStyle: "none" } },
+  { label: "각진안경", cfg: { glassesStyle: "square", hatStyle: "none" } },
+  ...HATC.map(([cn, cc]) => ({ label: `비니 ${cn}`, cfg: { glassesStyle: "none", hatStyle: "beanie", hatColor: cc } })),
+  ...HATC.map(([cn, cc]) => ({ label: `터번 ${cn}`, cfg: { glassesStyle: "none", hatStyle: "turban", hatColor: cc } })),
+  { label: "비니+안경", cfg: { glassesStyle: "round", hatStyle: "beanie", hatColor: "#2C1B18" } },
+  { label: "터번+안경", cfg: { glassesStyle: "square", hatStyle: "turban", hatColor: "#9287FF" } },
+];
+
+// ── 의상: 스타일×색 ─────────────────────────────────
+const SHIRT = [["후드", "hoody"], ["티셔츠", "short"], ["폴로", "polo"]];
+const SHIRTC = [
+  ["보라", "#9287FF"], ["청록", "#6BD9E9"], ["핑크", "#FC909F"], ["노랑", "#F4D150"],
+  ["갈색", "#77311D"], ["검정", "#111827"], ["연보라", "#E0DDFF"], ["크림", "#E7DBC0"], ["민트", "#B5EAD7"],
+];
+export const OUTFIT_PRESETS = SHIRT.flatMap(([sn, ss]) =>
+  SHIRTC.map(([cn, cc]) => ({ label: `${cn} ${sn}`, cfg: { shirtStyle: ss, shirtColor: cc } })));
 
 export const DEFAULT_AVATAR = {
-  skin: SKINS[1],
-  hair: "short",
-  hairColor: HAIR_COLORS[0],
-  glasses: "none",
-  bg: "cyan",
+  ...HAIR_PRESETS[0].cfg,
+  ...FACE_PRESETS[0].cfg,
+  ...ACC_PRESETS[0].cfg,
+  ...OUTFIT_PRESETS[0].cfg,
+  bgColor: BG_COLORS[0],
+  earSize: "small",
+  shape: "circle",
 };
+
+export function normalizeAvatar(config) {
+  if (!config || typeof config.sex === "undefined" || typeof config.faceColor === "undefined") {
+    return { ...DEFAULT_AVATAR };
+  }
+  return { ...DEFAULT_AVATAR, ...config };
+}

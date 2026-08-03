@@ -6,9 +6,10 @@ import { MASCOTS } from "../data/result.js";
 import ValueRankingInput from "../components/ValueRankingInput.jsx";
 import { topAxes } from "../data/valueCards.js";
 import { loadPrefs, savePrefs } from "../data/prefs.js";
-import { MBTI_TYPES, PSYCH_QUESTIONS } from "../data/psychQuestions.js";
+import { PSYCH_QUESTIONS } from "../data/psychQuestions.js";
 import Avatar from "../components/Avatar.jsx";
 import AvatarBuilder from "../components/AvatarBuilder.jsx";
+import Mascot from "../components/Mascot.jsx";
 
 // 작은 on/off 토글 (track h-6/w-11 · thumb h-4/w-4 · translate 로 이동 — 크기 균형)
 function Toggle({ on, onClick }) {
@@ -26,6 +27,55 @@ function Toggle({ on, onClick }) {
         }`}
       />
     </button>
+  );
+}
+
+// MBTI — 16개 목록 대신 4축(E/I·N/S·T/F·J/P)을 각각 고른다. profile.mbti 는 "INTJ" 같은 문자열/"모름".
+const MBTI_AXES = [["E", "I"], ["N", "S"], ["T", "F"], ["J", "P"]];
+function MbtiPicker({ value, onChange }) {
+  const valid = /^[EI][NS][TF][JP]$/.test(value || "");
+  const L = valid ? value.split("") : [null, null, null, null];
+  const pick = (i, letter) => {
+    const base = valid ? value.split("") : ["I", "N", "T", "J"];
+    base[i] = letter;
+    onChange(base.join(""));
+  };
+  return (
+    <div>
+      <div className="grid grid-cols-4 gap-2">
+        {MBTI_AXES.map((pair, i) => (
+          <div key={i} className="flex overflow-hidden rounded-xl border border-line">
+            {pair.map((letter) => {
+              const on = L[i] === letter;
+              return (
+                <button
+                  key={letter}
+                  type="button"
+                  onClick={() => pick(i, letter)}
+                  className={`tap flex-1 py-2.5 text-[14px] font-bold ${
+                    on ? "bg-cyan text-[#08131f]" : "bg-[#0E1424] text-sub"
+                  }`}
+                >
+                  {letter}
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 flex items-center justify-between">
+        <span className="text-[13px] font-semibold text-ink">{valid ? value : "미설정"}</span>
+        <button
+          type="button"
+          onClick={() => onChange("모름")}
+          className={`tap rounded-full border px-3 py-1 text-[11px] ${
+            !valid ? "border-cyan text-cyan" : "border-line text-mut"
+          }`}
+        >
+          모름
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -109,15 +159,10 @@ export default function Settings() {
         <div className="mb-2 text-xs font-semibold text-mut">심리 성향</div>
 
         <label className="mb-1.5 block text-[11px] text-sub">MBTI</label>
-        <select
-          value={profile.mbti || "모름"}
-          onChange={(e) => setProfile((p) => ({ ...p, mbti: e.target.value }))}
-          className="tap w-full rounded-xl border border-line bg-[#0E1424] px-3.5 py-2.5 text-sm text-ink outline-none focus:border-cyan"
-        >
-          {MBTI_TYPES.map((t) => (
-            <option key={t}>{t}</option>
-          ))}
-        </select>
+        <MbtiPicker
+          value={profile.mbti}
+          onChange={(v) => setProfile((p) => ({ ...p, mbti: v }))}
+        />
 
         <p className="mb-1 mt-4 text-[11px] text-sub">
           성향 질문 <span className="text-mut">(편하게 적을수록 서사가 너에게 맞춰져요)</span>
@@ -158,19 +203,21 @@ export default function Settings() {
       {/* 가이드 마스코트 */}
       <Card>
         <div className="mb-3 text-xs font-semibold text-mut">가이드 마스코트</div>
-        <div className="flex justify-between gap-2">
+        <div className="space-y-3">
           {Object.values(MASCOTS).map((m) => (
-            <div key={m.name} className="flex flex-1 flex-col items-center gap-1.5 text-center">
-              <span
-                className="flex h-12 w-12 items-center justify-center rounded-full text-2xl"
-                style={{ background: "#12203a", border: `1.5px solid ${m.color}` }}
-              >
-                {m.emoji}
-              </span>
-              <span className="text-[11px] font-bold" style={{ color: m.color }}>
-                {m.name.split(" · ")[0]}
-              </span>
-              <span className="text-[9px] text-mut">{m.role}</span>
+            <div key={m.key} className="flex items-center gap-3">
+              <div className="shrink-0"><Mascot which={m.key} size={52} /></div>
+              <div className="min-w-0">
+                <div className="text-[12px] font-bold" style={{ color: m.color }}>
+                  {m.name} <span className="text-[9px] text-mut">· {m.tag}</span>
+                </div>
+                <p className="mt-0.5 text-[11px] leading-relaxed text-sub">{m.desc}</p>
+                <div className="mt-1 flex gap-1">
+                  {m.traits.map((t) => (
+                    <span key={t} className="rounded-full border border-line px-1.5 py-0.5 text-[9px] text-mut">{t}</span>
+                  ))}
+                </div>
+              </div>
             </div>
           ))}
         </div>

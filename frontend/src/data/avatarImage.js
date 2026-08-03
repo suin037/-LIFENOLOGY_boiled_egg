@@ -2,12 +2,17 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import Avatar from "../components/Avatar.jsx";
 
-// 설정의 SVG 아바타를 Cloudflare 참고 이미지용 512px PNG로 변환한다.
+// 설정의 아바타(react-nice-avatar)를 Cloudflare 참고 이미지용 512px PNG로 변환한다.
+// react-nice-avatar 는 <div><svg>..</div> 구조라 그대로는 SVG 로 못 쓴다 →
+// foreignObject 로 감싸 하나의 SVG 로 만든 뒤 캔버스에 래스터라이즈한다.
 export async function avatarToPngBlob(config) {
-  let svg = renderToStaticMarkup(createElement(Avatar, { config, size: 512 }));
-  if (!svg.includes("xmlns=")) {
-    svg = svg.replace("<svg", '<svg xmlns="http://www.w3.org/2000/svg"');
-  }
+  const inner = renderToStaticMarkup(createElement(Avatar, { config, size: 512, ring: false }));
+  const svg =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512">' +
+    '<foreignObject x="0" y="0" width="512" height="512">' +
+    '<div xmlns="http://www.w3.org/1999/xhtml" style="width:512px;height:512px">' +
+    inner +
+    "</div></foreignObject></svg>";
   const source = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
   const url = URL.createObjectURL(source);
   try {
