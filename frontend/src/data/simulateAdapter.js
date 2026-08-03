@@ -121,7 +121,13 @@ export function mapSimulateToPair(sim, { choiceA, choiceB, detailA = "", detailB
   const a = buildSide(A, choiceA, detailA, profile, ev.A, dc.A, ds.A);
   const b = buildSide(B, choiceB, detailB, profile, ev.B, dc.B, ds.B);
 
-  // 궤적이 양쪽 다 비면 그릴 수치가 없다는 뜻 → 실수치 모드로 넘어가지 않는다.
-  if (!a.trajectory.length && !b.trajectory.length) return null;
+  // 실데이터가 하나라도 있으면 실수치 모드. 연차별 궤적이 비어도(관측범위 밖/표본부족)
+  // 이웃·인과·기대임금·지표 같은 실측이 있으면 목업으로 되돌리지 않는다.
+  const hasReal = (s) =>
+    (s.trajectory && s.trajectory.length) ||
+    (s.neighbors && s.neighbors.length) ||
+    s.causal_effect != null || s.expected_wage != null || s.survival_months != null ||
+    (s.life_indicators && s.life_indicators.length);
+  if (!hasReal(a) && !hasReal(b)) return null;
   return { a, b };
 }
