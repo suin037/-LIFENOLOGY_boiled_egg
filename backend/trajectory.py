@@ -52,8 +52,9 @@ def _panel():
         feats.append("정규여부")
     b["이직"] = pd.to_numeric(b["이직"], errors="coerce").fillna(0)
     mu, sd = b[feats].mean(), b[feats].std().replace(0, 1)
-    by_pid = {pid: g.set_index("wave") for pid, g in b.groupby("pid")}
-    return {"b": b, "mu": mu, "sd": sd, "by_pid": by_pid, "feats": feats}
+    # pid별 DataFrame 사전은 약 3만 개 객체를 만들어 서버 첫 기동을 크게 늦춘다.
+    # 선택된 시작점만 아래에서 한 번 merge하면 같은 추적을 벡터 연산으로 수행할 수 있다.
+    return {"b": b, "mu": mu, "sd": sd, "feats": feats}
 
 
 def project_trajectory(features: dict, horizon: int = 10, k: int = 300,
@@ -62,7 +63,7 @@ def project_trajectory(features: dict, horizon: int = 10, k: int = 300,
     P = _panel()
     if P is None:
         return []
-    b, mu, sd, by_pid, feats = P["b"], P["mu"], P["sd"], P["by_pid"], P["feats"]
+    b, mu, sd, feats = P["b"], P["mu"], P["sd"], P["feats"]
 
     A = features.get("age")
     if A is None:
@@ -91,24 +92,23 @@ def project_trajectory(features: dict, horizon: int = 10, k: int = 300,
     zq = np.array([(q[c] - mu[c]) / sd[c] for c in feats])
     Z = ((cand[feats] - mu) / sd).to_numpy()
     dist = np.sqrt(((Z - zq) ** 2).sum(axis=1))
-    starts = cand.assign(_d=dist).nsmallest(k, "_d")[["pid", "wave"]].to_numpy()
+    starts = (cand.assign(_d=dist).nsmallest(k, "_d")[["pid", "wave"]]
+              .rename(columns={"wave": "start_wave"}).reset_index(drop=True))
+    starts["start_id"] = np.arange(len(starts))
+    followed = starts.merge(
+        b[["pid", "wave", "월임금_실질", "이직"]], on="pid", how="left"
+    )
+    followed["year_from_start"] = followed["wave"] - followed["start_wave"]
+    followed = followed[followed["year_from_start"].between(0, horizon)]
 
     out = []
     for h in range(horizon + 1):
-        incs, moved, tot = [], 0, 0
-        for pid, w0 in starts:
-            g = by_pid.get(pid)
-            if g is None:
-                continue
-            w = int(w0) + h
-            if w in g.index:
-                r = g.loc[w]
-                r = r.iloc[0] if isinstance(r, pd.DataFrame) else r
-                incs.append(float(r["월임금_실질"]))
-            seg = g[(g.index > int(w0)) & (g.index <= int(w0) + h)]
-            if len(seg):
-                tot += 1
-                moved += int((seg["이직"] == 1).any())
+        incs = followed.loc[followed["year_from_start"] == h, "월임금_실질"].to_numpy()
+        seg = followed[(followed["year_from_start"] > 0) &
+                       (followed["year_from_start"] <= h)]
+        moved_by_start = seg.groupby("start_id")["이직"].max() if len(seg) else []
+        tot = len(moved_by_start)
+        moved = int(np.sum(moved_by_start)) if tot else 0
         if len(incs) >= min_n:
             out.append({
                 "year": h, "age": int(A) + h, "sample_n": len(incs),

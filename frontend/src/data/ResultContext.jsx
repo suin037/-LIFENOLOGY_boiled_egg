@@ -1,7 +1,7 @@
 import { createContext, useContext, useMemo, useRef, useState } from "react";
 import { getPredictionPair } from "./prediction.js";
 import { DEFAULT_AVATAR } from "./avatarOptions.js";
-import { generateSceneImages, runSimulateRaw } from "../api.js";
+import { generateSceneImages, runCompareRaw, runSimulateRaw } from "../api.js";
 import { mapSimulateToPair } from "./simulateAdapter.js";
 import { avatarToPngBlob } from "./avatarImage.js";
 import { initDemoFromUrl, noteSimulationRun } from "./myUniverse.js";
@@ -51,72 +51,77 @@ export function ResultProvider({ children }) {
     noteSimulationRun();
     const pair = { ...getPredictionPair({ profile, choiceA, choiceB, detail: currentDiary }), dataMode: "demo" };
     setResult(pair);
-    let simulation;
-    let narrative;
-    // 백엔드 엔진(L1~L5) 실수치. 못 받으면 null 로 남고 목업 + '데모 데이터' 배지를 유지한다.
-    let real = null;
+    const requestArgs = {
+      profile,
+      choiceA,
+      choiceB,
+      choiceADetail: opts.choiceADetail ?? scenarioTexts.a,
+      choiceBDetail: opts.choiceBDetail ?? scenarioTexts.b,
+      choiceADomains: opts.choiceADomains ?? scenarioDomains.a,
+      choiceBDomains: opts.choiceBDomains ?? scenarioDomains.b,
+      diary: currentDiary,
+    };
+    let preview;
     try {
-      simulation = await runSimulateRaw({
-        profile,
-        choiceA,
-        choiceB,
-        choiceADetail: opts.choiceADetail ?? scenarioTexts.a,
-        choiceBDetail: opts.choiceBDetail ?? scenarioTexts.b,
-        choiceADomains: opts.choiceADomains ?? scenarioDomains.a,
-        choiceBDomains: opts.choiceBDomains ?? scenarioDomains.b,
-        diary: currentDiary,
-      });
-      // 서사 생성이 실패하더라도 수치는 살린다 → catch 보다 먼저 계산한다.
-      real = mapSimulateToPair(simulation, {
+      const comparison = await runCompareRaw(requestArgs);
+      const real = mapSimulateToPair({ compare: comparison }, {
         choiceA,
         choiceB,
         detailA: opts.choiceADetail ?? scenarioTexts.a,
         detailB: opts.choiceBDetail ?? scenarioTexts.b,
       });
-      narrative = simulation.narrative || {};
-      const hasStory = (story) => typeof story === "string" ? Boolean(story.trim()) : Boolean(story?.summary?.trim());
-      if (!hasStory(narrative.a) || !hasStory(narrative.b) || narrative._skipped) {
-        throw new Error("Claude 응답을 A/B 서사 형식으로 읽지 못했습니다. 백엔드를 재시작한 뒤 다시 시도해주세요.");
-      }
-    } catch (error) {
-      const fallback = {
+      preview = {
         ...pair,
         ...(real || {}),
-        dataMode: real ? "model" : "demo",
-        narrativeError: error.message,
-      };
-      setResult(fallback);
-      return fallback;
-    }
-
-    const storyResult = {
-        ...pair,
-        ...(real || {}),
-        // 엔진 실수치가 실제로 들어왔을 때만 '데모 데이터' 배지를 내린다.
         dataMode: real ? "model" : "demo",
         domains: {
           a: opts.choiceADomains ?? scenarioDomains.a,
           b: opts.choiceBDomains ?? scenarioDomains.b,
         },
-        narrative,
-        evidence: simulation.evidence,
-        imageLoading: true,
-    };
-    // Claude 글은 이미지 생성과 무관하게 먼저 보존한다.
-    setResult(storyResult);
-    // 이미지는 결과 이동을 막지 않고 백그라운드에서 생성한다.
+        narrativeLoading: true,
+        imageLoading: false,
+      };
+      setResult(preview);
+    } catch (error) {
+      const fallback = { ...pair, dataMode: "demo", narrativeError: error.message };
+      setResult(fallback);
+      return fallback;
+    }
+
+    // 결과 화면은 수치가 준비되는 즉시 열고, 느린 Claude·이미지는 뒤에서 채운다.
     void (async () => {
       try {
-        const avatarBlob = await avatarToPngBlob(profile.avatarConfig);
-        const visual = await generateSceneImages({ avatarBlob, choiceA, choiceB, narrative });
+        const simulation = await runSimulateRaw(requestArgs);
         if (simulationRunRef.current !== runId) return;
-        setResult({ ...storyResult, visuals: visual.images, visualModel: visual.model, imageLoading: false });
+        const narrative = simulation.narrative || {};
+        const hasStory = (story) => typeof story === "string" ? Boolean(story.trim()) : Boolean(story?.summary?.trim());
+        if (!hasStory(narrative.a) || !hasStory(narrative.b) || narrative._skipped) {
+          throw new Error("Claude 응답을 A/B 서사 형식으로 읽지 못했습니다.");
+        }
+        const storyResult = {
+          ...preview,
+          narrative,
+          evidence: simulation.evidence,
+          narrativeLoading: false,
+          imageLoading: true,
+        };
+        setResult(storyResult);
+
+        try {
+          const avatarBlob = await avatarToPngBlob(profile.avatarConfig);
+          const visual = await generateSceneImages({ avatarBlob, choiceA, choiceB, narrative });
+          if (simulationRunRef.current !== runId) return;
+          setResult({ ...storyResult, visuals: visual.images, visualModel: visual.model, imageLoading: false });
+        } catch (imageError) {
+          if (simulationRunRef.current !== runId) return;
+          setResult({ ...storyResult, imageLoading: false, visualError: imageError.message });
+        }
       } catch (error) {
         if (simulationRunRef.current !== runId) return;
-        setResult({ ...storyResult, imageLoading: false, visualError: error.message });
+        setResult({ ...preview, narrativeLoading: false, imageLoading: false, narrativeError: error.message });
       }
     })();
-    return storyResult;
+    return preview;
   }
 
   const value = useMemo(

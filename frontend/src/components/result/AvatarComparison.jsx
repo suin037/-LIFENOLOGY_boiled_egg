@@ -2,21 +2,20 @@ import { useState } from "react";
 import Avatar from "../Avatar.jsx";
 import { labelOf } from "../../data/prediction.js";
 
-export default function AvatarComparison({ avatar, a, b, visuals, narrative, loading, error }) {
+export default function AvatarComparison({ avatar, a, b, visuals, narrative, narrativeLoading, loading, error }) {
   const [expanded, setExpanded] = useState(null);
   return (
     <section className="mt-4" aria-labelledby="visual-story-title">
       <div className="mb-2 flex items-end justify-between gap-3">
         <div>
-          <p className="text-[10px] font-bold tracking-[.16em] text-mut">RAG VISUAL STORY</p>
+          <p className="text-[10px] font-bold tracking-[.16em] text-mut">VISUAL STORY</p>
           <h2 id="visual-story-title" className="mt-0.5 text-base font-semibold">두 갈림길 속의 나</h2>
         </div>
-        <span className="text-[10px] text-mut">AI 상상도</span>
       </div>
 
       <div className="grid grid-cols-2 gap-2.5">
-        <StoryCard side="A" result={a} image={visuals?.a} story={narrative?.a} avatar={avatar} open={expanded === "A"} onToggle={() => setExpanded((v) => v === "A" ? null : "A")} />
-        <StoryCard side="B" result={b} image={visuals?.b} story={narrative?.b} avatar={avatar} open={expanded === "B"} onToggle={() => setExpanded((v) => v === "B" ? null : "B")} />
+        <StoryCard side="A" result={a} image={visuals?.a} story={narrative?.a} storyLoading={narrativeLoading} avatar={avatar} open={expanded === "A"} onToggle={() => setExpanded((v) => v === "A" ? null : "A")} />
+        <StoryCard side="B" result={b} image={visuals?.b} story={narrative?.b} storyLoading={narrativeLoading} avatar={avatar} open={expanded === "B"} onToggle={() => setExpanded((v) => v === "B" ? null : "B")} />
       </div>
 
       {expanded && (
@@ -32,17 +31,11 @@ export default function AvatarComparison({ avatar, a, b, visuals, narrative, loa
           일부 AI 결과를 표시하지 못했어요. 가능한 내용만 보여드립니다: {error}
         </p>
       )}
-      {loading && !visuals && (
-        <p className="mt-2 text-[10px] text-mut">이미지는 백그라운드에서 생성 중이에요. 서사와 결과는 먼저 확인할 수 있습니다.</p>
-      )}
-      <p className="mt-2 text-[10px] leading-relaxed text-mut">
-        통계·심리 근거로 작성된 서사를 시각화한 상상도이며, 실제 미래를 예측한 이미지는 아닙니다.
-      </p>
     </section>
   );
 }
 
-function StoryCard({ side, result, image, story, avatar, open, onToggle }) {
+function StoryCard({ side, result, image, story, storyLoading, avatar, open, onToggle }) {
   const color = side === "A" ? "#7FD4FF" : "#F5C86B";
   const structured = story && typeof story === "object";
   const summary = structured ? story.summary : story;
@@ -69,7 +62,7 @@ function StoryCard({ side, result, image, story, avatar, open, onToggle }) {
           <h3 className="mt-1 text-[12px] font-semibold leading-snug text-ink">{story.title}</h3>
         )}
         <p className="mt-1 text-[11px] leading-relaxed text-sub">
-          {summary || "RAG 서사가 아직 생성되지 않았어요."}
+          {summary || (storyLoading ? "RAG 서사를 생성하고 있어요…" : "RAG 서사를 아직 생성하지 못했어요.")}
         </p>
         {hasDetail && (
           <button
@@ -103,7 +96,6 @@ function StoryDetail({ side, story }) {
             {story.cost && <p><b className="text-gold">감수할 수 있는 것</b><br /><span className="text-sub">{story.cost}</span></p>}
           </div>
         )}
-        {story.uncertainty && <p className="text-[10px] text-mut">※ {story.uncertainty}</p>}
       </div>
     </div>
   );

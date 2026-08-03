@@ -69,9 +69,10 @@ def _fmt_evidence(evidence: list[dict]) -> str:
     if not evidence:
         return "(근거 없음)"
     out = []
-    for e in evidence:
+    # 검색 결과 전체 대신 실제 서사에 인용할 상위 근거만 전달해 지연을 줄인다.
+    for e in evidence[:2]:
         out.append(
-            f"- ({e.get('indicator','')}) {e.get('text','')[:220]}  [출처: {e.get('source','')[:60]}]"
+            f"- ({e.get('indicator','')}) {e.get('text','')[:160]}  [출처: {e.get('source','')[:50]}]"
         )
     return "\n".join(out)
 
@@ -121,11 +122,11 @@ def generate_scenarios(
 - 숫자를 새로 지어내지 마라. 아래 제공된 수치·근거 안에서만 말하라.
 - "너와 비슷한 사람들이 그 길을 갔을 때"의 관점으로 서술하라(단정 예측 금지).
 - 따뜻하되 현실적으로 작성하고 단정적인 미래 예측 대신 가능성을 표현하라.
-- a와 b는 각각 title, summary, detail, gain, cost, uncertainty를 포함한다.
+- 이론명, 저자명, 출판연도, 논문명은 서사에 직접 인용하지 마라. 근거는 자연스러운 설명으로만 반영하라.
+- a와 b는 각각 title, summary, detail, gain, cost를 포함한다.
 - title은 20자 이내, summary는 핵심 trade-off 한 문장(90자 이내)으로 압축한다.
-- detail은 present, transition, future로 구성하며 각각 한 문장(100자 이내)이고 summary를 반복하지 않는다.
-- gain과 cost는 각각 45자 이내로 작성한다.
-- uncertainty에는 데이터 한계나 달라질 조건을 한 문장(80자 이내)으로 쓴다.
+- detail은 present, transition, future로 구성하며 각각 한 문장(70자 이내)이고 summary를 반복하지 않는다.
+- gain과 cost는 각각 35자 이내로 작성한다.
 - comparison은 summary와 question을 포함한다. A/B를 억지로 정답/오답 또는 긍정/부정으로 나누지 않는다.
 - 모든 서사 필드는 한국어로 작성하고, 아래에서 요구하는 이미지 장면 필드까지 포함해 JSON으로만 출력한다.
 
@@ -146,12 +147,12 @@ JSON만 출력하라."""
 
     prompt += """
 
-IMAGE SCENE DIRECTIONS (required):
+IMAGE SCENE DIRECTIONS (required, very concise):
 - In addition to the Korean structured story fields a, b, and comparison, return visual_a and
   visual_b as JSON objects written in concise English.
-- Each visual object must contain: core_moment, setting, character_action, body_pose,
-  facial_emotion, wardrobe, foreground, background, lighting, camera, color_palette.
-- Keep every visual field concise (at most 20 English words per field).
+- Each visual object must contain only one field named scene.
+- scene is one vivid sentence of at most 35 English words covering setting, action,
+  emotion, key objects, and camera angle.
 - Make A and B compositionally distinct. Choose story-specific locations, actions,
   poses, props, camera angles, lighting, and palettes. Never default both scenes to
   a person sitting at a laptop.
@@ -160,11 +161,12 @@ IMAGE SCENE DIRECTIONS (required):
   reflections, portraits, or background figures. Express social context through
   the environment and objects instead. Include no readable text.
 - Final output must be one JSON object with this shape:
-  {"a":{"title":"...","summary":"...","detail":{"present":"...","transition":"...","future":"..."},"gain":"...","cost":"...","uncertainty":"..."},"b":{"title":"...","summary":"...","detail":{"present":"...","transition":"...","future":"..."},"gain":"...","cost":"...","uncertainty":"..."},"comparison":{"summary":"...","question":"..."},"visual_a":{...},"visual_b":{...}}
+  {"a":{"title":"...","summary":"...","detail":{"present":"...","transition":"...","future":"..."},"gain":"...","cost":"..."},"b":{"title":"...","summary":"...","detail":{"present":"...","transition":"...","future":"..."},"gain":"...","cost":"..."},"comparison":{"summary":"...","question":"..."},"visual_a":{"scene":"..."},"visual_b":{"scene":"..."}}
 """
 
     resp = _get_client().messages.create(
         model=used_model,
+        # 한국어 JSON은 토큰 효율이 낮아 너무 작게 제한하면 객체 끝이 잘린다.
         max_tokens=3000,
         messages=[{"role": "user", "content": prompt}],
     )

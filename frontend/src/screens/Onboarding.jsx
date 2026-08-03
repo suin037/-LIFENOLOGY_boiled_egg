@@ -1,6 +1,7 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useResult } from "../data/ResultContext.jsx";
-import { Eyebrow, Button, Caption } from "../components/ui.jsx";
+import { Eyebrow, Button } from "../components/ui.jsx";
 
 const OCCUPATIONS = [
   "연구·공학기술",
@@ -39,12 +40,25 @@ export default function Onboarding() {
   const navigate = useNavigate();
   const { profile, setProfile, setOnboarded } = useResult();
 
-  const agePct = ((profile.age - 25) / 5) * 100;
+  const [visibleThrough, setVisibleThrough] = useState(0);
+  const agePct = ((profile.age - 18) / 52) * 100;
   const ranked = profile.values; // 라벨 배열, 앞이 1순위
+  const steps = ["이름", "나이", "직종", "소득", "가치", "성격유형"];
 
   function finish() {
     setOnboarded(true); // 이후 홈 탭은 '나의 우주' 허브로 진입
     navigate("/home");
+  }
+
+  function reveal(index) {
+    setVisibleThrough((current) => Math.max(current, index));
+  }
+
+  function revealOnEnter(event, index) {
+    // 한글 조합 중 Enter는 글자 확정에 사용되므로 다음 항목을 열지 않는다.
+    if (event.key !== "Enter" || event.nativeEvent?.isComposing) return;
+    event.preventDefault();
+    reveal(index);
   }
 
   // 탭한 순서 = 우선순위. 다시 누르면 해제(뒤 순위 자동 당겨짐). 부분순위 허용.
@@ -72,89 +86,58 @@ export default function Onboarding() {
     });
   }
 
-  return (
-    <div>
-      <Eyebrow>ONBOARDING · 나를 알려주세요</Eyebrow>
-      <div className="my-2.5 flex gap-1.5">
-        <b className="h-[3px] flex-1 rounded bg-cyan" />
-        <b className="h-[3px] flex-1 rounded bg-[#1E2740]" />
-      </div>
-      <h1 className="text-[22px] font-bold leading-[1.25]">
-        비슷한 사람을 찾으려면
-        <br />
-        당신이 누군지 알아야 해요
-      </h1>
-      <Caption>
-        이 정보로 데이터에서 ‘나와 비슷한 200명’을 찾습니다. 처음 한 번만 입력해요.
-      </Caption>
-
-      <label className="mb-2 mt-4 block text-xs text-sub">이름</label>
-      <input
-        type="text"
-        value={profile.name || ""}
-        maxLength={20}
-        aria-label="이름"
-        placeholder="이름 또는 닉네임"
+  const stepContent = [
+    <div key="name">
+      <label className="mb-2 block text-xs text-sub">이름</label>
+      <input type="text" value={profile.name || ""} maxLength={20} autoFocus
+        aria-label="이름" placeholder="이름 또는 닉네임"
         onChange={(e) => setProfile((p) => ({ ...p, name: e.target.value }))}
-        className="tap w-full rounded-xl border border-line bg-[#0E1424] px-3.5 py-3 text-sm text-ink outline-none placeholder:text-mut focus:border-cyan"
-      />
-
-      {/* 나이 슬라이더 */}
-      <label className="mb-2 mt-4 block text-xs text-sub">
-        나이
-        <span className="float-right font-bold text-cyan">{profile.age}세</span>
-      </label>
-      <input
-        type="range"
-        min="25"
-        max="30"
-        value={profile.age}
-        onChange={(e) => setProfile((p) => ({ ...p, age: Number(e.target.value) }))}
+        onKeyDown={(e) => profile.name?.trim() && revealOnEnter(e, 1)}
+        className="w-full rounded-xl border border-line bg-[#0E1424] px-3.5 py-3 text-sm text-ink outline-none placeholder:text-mut focus:border-cyan" />
+    </div>,
+    <div key="age">
+      <label className="mb-2 block text-xs text-sub">나이<span className="float-right font-bold text-cyan">{profile.age}세</span></label>
+      <input type="range" min="18" max="70" value={profile.age}
+        onChange={(e) => {
+          setProfile((p) => ({ ...p, age: Number(e.target.value) }));
+          reveal(2);
+        }}
         className="h-1 w-full cursor-pointer appearance-none rounded-full outline-none
           [&::-webkit-slider-thumb]:h-[18px] [&::-webkit-slider-thumb]:w-[18px]
           [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full
           [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-[0_0_8px_rgba(127,212,255,.6)]"
-        style={{
-          background: `linear-gradient(90deg, #7FD4FF, #4A90E2 ${agePct}%, #1E2740 ${agePct}%)`,
+        style={{ background: `linear-gradient(90deg, #7FD4FF, #4A90E2 ${agePct}%, #1E2740 ${agePct}%)` }} />
+      <div className="mt-3 flex justify-between text-[11px] text-mut"><span>18세</span><span>70세</span></div>
+    </div>,
+    <div key="occupation">
+      <label className="mb-2 block text-xs text-sub">직종</label>
+      <select value={profile.occupation}
+        onChange={(e) => {
+          setProfile((p) => ({ ...p, occupation: e.target.value }));
+          reveal(3);
         }}
-      />
-
-      {/* 직종 */}
-      <label className="mb-2 mt-4 block text-xs text-sub">직종</label>
-      <select
-        value={profile.occupation}
-        onChange={(e) => setProfile((p) => ({ ...p, occupation: e.target.value }))}
-        className="tap w-full rounded-xl border border-line bg-[#0E1424] px-3.5 py-3 text-sm text-ink outline-none focus:border-cyan"
-      >
-        {OCCUPATIONS.map((o) => (
-          <option key={o}>{o}</option>
-        ))}
+        className="w-full rounded-xl border border-line bg-[#0E1424] px-3.5 py-3 text-sm text-ink outline-none focus:border-cyan">
+        {OCCUPATIONS.map((o) => <option key={o}>{o}</option>)}
       </select>
-
-      {/* 월소득 */}
-      <label className="mb-2 mt-4 block text-xs text-sub">현재 월소득</label>
+    </div>,
+    <div key="income">
+      <label className="mb-2 block text-xs text-sub">현재 월소득</label>
       <div className="flex items-center gap-2">
-        <input
-          type="number"
-          value={profile.income}
-          onChange={(e) => setProfile((p) => ({ ...p, income: Number(e.target.value) }))}
-          className="tap w-full rounded-xl border border-line bg-[#0E1424] px-3.5 py-3 text-sm text-ink outline-none focus:border-cyan"
-        />
+        <input type="number" min="0" value={profile.income}
+          onChange={(e) => {
+            setProfile((p) => ({ ...p, income: Number(e.target.value) }));
+            if (e.target.value !== "") reveal(4);
+          }}
+          className="w-full rounded-xl border border-line bg-[#0E1424] px-3.5 py-3 text-sm text-ink outline-none focus:border-cyan" />
         <span className="whitespace-nowrap text-[11px] text-mut">만원 / 월</span>
       </div>
-
-      {/* 가치 강제순위 (다중선택 아님 — 중요한 순서대로) */}
-      <label className="mb-1 mt-4 block text-xs text-sub">
-        지금 내 삶에서 중요한 <b className="text-cyan">순서대로</b> 골라주세요
-        <span className="float-right text-[10px] text-mut">
-          {ranked.length}/8 · 다 안 해도 돼요
-        </span>
-      </label>
-      <p className="mb-2 text-[10px] leading-relaxed text-mut">
-        정답은 없어요. 둘 중 뭐가 더 중요한지 고르다 보면 우선순위가 드러나요.
-        이 순위가 시나리오에서 ‘어떤 결과부터’ 보여줄지 정합니다.
-      </p>
-      <div className="flex flex-col gap-1.5">
+    </div>,
+    <div key="values">
+      <div className="flex items-center justify-between gap-3">
+        <label className="text-xs text-sub">지금 내 삶에서 중요한 <b className="text-cyan">순서대로</b> 골라주세요</label>
+        <span className="shrink-0 text-[11px] text-mut">{ranked.length}개 선택</span>
+      </div>
+      <div className="mt-2 flex flex-col gap-1.5">
         {VALUE_CARDS.map((c) => {
           const rank = ranked.indexOf(c.label); // -1 = 미선택
           const on = rank >= 0;
@@ -182,14 +165,16 @@ export default function Onboarding() {
           );
         })}
       </div>
-
-      {/* MBTI (선택) — 스타일 초기 힌트. 일기가 쌓이면 갱신 */}
-      <label className="mb-1 mt-4 block text-xs text-sub">
-        성격유형 (MBTI) <span className="text-[10px] text-mut">· 선택 · 알면 골라주세요</span>
-      </label>
-      <p className="mb-2 text-[10px] leading-relaxed text-mut">
-        결정·태도의 <b className="text-cyan">초기 힌트</b>로만 써요. 확정 아니고, 일기가 쌓이면 갱신돼요.
-      </p>
+      {ranked.length > 0 && (
+        <button type="button" onClick={() => reveal(5)}
+          className="tap mt-2.5 w-full rounded-xl border border-cyan/60 bg-[#12203a] py-2.5 text-[12px] font-semibold text-cyan">
+          선택 완료
+        </button>
+      )}
+    </div>,
+    <div key="mbti">
+      <label className="mb-1 block text-xs text-sub">성격유형 (MBTI) <span className="text-[10px] text-mut">· 선택</span></label>
+      <p className="mb-2 text-[10px] text-mut">모르거나 원하지 않으면 선택하지 않아도 돼요.</p>
       <div className="flex flex-col gap-1.5">
         {MBTI_AXES.map((ax) => (
           <div key={ax.i} className="flex gap-1.5">
@@ -211,13 +196,29 @@ export default function Onboarding() {
           </div>
         ))}
       </div>
+    </div>
+  ];
 
-      <Button className="mt-5" onClick={finish}>
-        저장하고 시작하기
-      </Button>
-      <p className="mt-3.5 text-center text-[10px] leading-relaxed text-mut">
-        입력할수록 더 비슷한 사람을 찾아 정교해집니다.
-      </p>
+  return (
+    <div>
+      <Eyebrow>나를 알려주세요 · {Math.min(visibleThrough + 1, steps.length)}/{steps.length}</Eyebrow>
+      <div className="mb-8 flex gap-1.5">
+        {steps.map((label, index) => (
+          <b key={label} className={`h-1 flex-1 rounded-full ${index <= visibleThrough ? "bg-cyan" : "bg-[#1E2740]"}`} />
+        ))}
+      </div>
+
+      <div className="space-y-5">
+        {stepContent.slice(0, visibleThrough + 1).map((content, index) => (
+          <section key={steps[index]} className="animate-fade">
+            {content}
+          </section>
+        ))}
+      </div>
+
+      {visibleThrough >= steps.length - 1 && (
+        <Button className="mb-2 mt-8" onClick={finish}>저장하고 시작하기</Button>
+      )}
     </div>
   );
 }

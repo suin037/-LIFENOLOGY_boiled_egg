@@ -173,11 +173,26 @@ export async function runSimulateRaw(args) {
   return res.json();
 }
 
+export async function runCompareRaw(args) {
+  const body = buildSimulateBody(args);
+  const res = await fetch(`${API_BASE}/compare`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      profile: body.profile,
+      choice_a: body.choice_a,
+      choice_b: body.choice_b,
+    }),
+  });
+  if (!res.ok) throw new Error(`compare ${res.status}`);
+  return res.json();
+}
+
 export async function runSimulate(args) {
   return mapSimulateToResult(await runSimulateRaw(args));
 }
 
-export async function generateSceneImages({ avatarBlob, choiceA, choiceB, narrative, timeoutMs = 35000 }) {
+export async function generateSceneImages({ avatarBlob, choiceA, choiceB, narrative, timeoutMs = 60000 }) {
   const storyText = (story) => {
     if (typeof story === "string") return story;
     const detail = story?.detail || {};
