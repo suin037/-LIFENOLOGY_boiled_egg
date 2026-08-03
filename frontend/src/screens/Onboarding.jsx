@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useResult } from "../data/ResultContext.jsx";
 import { Eyebrow, Button } from "../components/ui.jsx";
+import AvatarBuilder from "../components/AvatarBuilder.jsx";
 
 const OCCUPATIONS = [
   "연구·공학기술",
@@ -43,7 +44,7 @@ export default function Onboarding() {
   const [visibleThrough, setVisibleThrough] = useState(0);
   const agePct = ((profile.age - 18) / 52) * 100;
   const ranked = profile.values; // 라벨 배열, 앞이 1순위
-  const steps = ["이름", "나이", "직종", "소득", "가치", "성격유형"];
+  const steps = ["이름", "나이", "직종", "소득", "가치", "성격유형", "아바타"];
 
   function finish() {
     setOnboarded(true); // 이후 홈 탭은 '나의 우주' 허브로 진입
@@ -111,13 +112,16 @@ export default function Onboarding() {
     </div>,
     <div key="occupation">
       <label className="mb-2 block text-xs text-sub">직종</label>
-      <select value={profile.occupation}
+      <select value={OCCUPATIONS.includes(profile.occupation) ? profile.occupation : ""}
         onChange={(e) => {
           setProfile((p) => ({ ...p, occupation: e.target.value }));
           reveal(3);
         }}
-        className="w-full rounded-xl border border-line bg-[#0E1424] px-3.5 py-3 text-sm text-ink outline-none focus:border-cyan">
-        {OCCUPATIONS.map((o) => <option key={o}>{o}</option>)}
+        className={`w-full rounded-xl border border-line bg-[#0E1424] px-3.5 py-3 text-sm outline-none focus:border-cyan ${
+          OCCUPATIONS.includes(profile.occupation) ? "text-ink" : "text-mut"
+        }`}>
+        <option value="" disabled hidden>직종을 골라주세요</option>
+        {OCCUPATIONS.map((o) => <option key={o} className="text-ink">{o}</option>)}
       </select>
     </div>,
     <div key="income">
@@ -196,6 +200,17 @@ export default function Onboarding() {
           </div>
         ))}
       </div>
+      <button type="button" onClick={() => reveal(6)}
+        className="tap mt-2.5 w-full rounded-xl border border-cyan/60 bg-[#12203a] py-2.5 text-[12px] font-semibold text-cyan">
+        다음
+      </button>
+    </div>,
+    <div key="avatar">
+      <label className="mb-2 block text-xs text-sub">내 아바타 만들기 <span className="text-[10px] text-mut">· 나중에 설정에서 언제든 바꿀 수 있어요</span></label>
+      <AvatarBuilder
+        config={profile.avatarConfig}
+        onChange={(cfg) => setProfile((p) => ({ ...p, avatarConfig: cfg }))}
+      />
     </div>
   ];
 
