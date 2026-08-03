@@ -50,6 +50,55 @@ def _domain_labels(keys) -> list[str]:
     return [DOMAIN_LABELS.get(k, k) for k in (keys or [])]
 
 
+# ── 근거 수준(로드맵 항목4) ──────────────────────────────────────────────
+# 응답이 '어떤 강도의 근거'인지 프론트에 명시 → 데이터 없는데 숫자 만드는 문제 방지.
+EVIDENCE_LABEL = {
+    "model": "모델예측",        # 개별·인과 모델 산출(econml 인과효과 / lifelines 생존)
+    "group_stat": "집단통계",   # 유사집단 중앙값 궤적(GOMS/YP/KOSIS 등)
+    "rag": "RAG설명",           # 수치 없이 심리·이론 근거만
+    "insufficient": "데이터부족",  # 뒷받침 데이터 없음 → 숫자 만들지 않음
+}
+
+# 삶의 영역별 '현재 실제 배선된' 정량 근거 수준(항목3 라우터 완성 전까지의 커버리지).
+DOMAIN_DATA = {
+    "career": "model", "education": "group_stat", "business": "group_stat",
+    "finance": "group_stat", "health": "group_stat",
+    "housing": "insufficient", "relationship": "rag",
+    "lifestyle": "rag", "long_term_values": "rag",
+}
+
+
+def _has_available(arr) -> bool:
+    return any((p or {}).get("available") for p in (arr or []))
+
+
+def _scenario_evidence(scen: dict, has_rag: bool) -> dict:
+    """시나리오를 뒷받침하는 '가장 강한' 근거 수준 + 구성요소."""
+    raw = scen.get("raw") or {}
+    has_model = raw.get("causal_effect") is not None or raw.get("survival_months") is not None
+    has_group = any(_has_available(scen.get(k))
+                    for k in ("income", "satisfaction", "growth_potential", "regret"))
+    level = ("model" if has_model else "group_stat" if has_group
+             else "rag" if has_rag else "insufficient")
+    return {"level": level, "label": EVIDENCE_LABEL[level],
+            "components": {"model": has_model, "group_stat": has_group, "rag": bool(has_rag)}}
+
+
+def _domain_coverage(domains) -> dict:
+    """요청 domain 들의 정량 근거 커버리지 + 수치 그래프 표시 정당성(그래프 가드)."""
+    doms = domains or []
+    per = {d: {"label": DOMAIN_LABELS.get(d, d), "evidence": DOMAIN_DATA.get(d, "insufficient")}
+           for d in doms}
+    quant = any(DOMAIN_DATA.get(d, "insufficient") in ("model", "group_stat") for d in doms)
+    return {
+        "per_domain": per,
+        "quantitative_ok": quant if doms else True,  # domain 미지정이면 기존대로 허용
+        "guard_note": (None if (quant or not doms) else
+                       "이 질문의 삶의 영역은 정량 예측 데이터가 없어요 — "
+                       "수치 그래프 대신 통계·설명 근거로만 답합니다."),
+    }
+
+
 app = FastAPI(title="parallel-me API")
 
 # jy-model의 성향 분석/저장 API를 같은 백엔드 포트에서 제공한다.
@@ -312,6 +361,15 @@ def simulate(req: SimulateRequest) -> dict:
                   "cards": [c["card_id"] for c in psych_b.get("cards", [])]},
         },
         "evidence": {"A": ev_a, "B": ev_b},
+        # 근거 수준(항목4): 시나리오별 4단계 라벨 + domain 그래프 가드
+        "evidence_levels": {
+            "A": _scenario_evidence(cmp["scenarios"]["A"], bool(psych_a.get("cards"))),
+            "B": _scenario_evidence(cmp["scenarios"]["B"], bool(psych_b.get("cards"))),
+        },
+        "domain_coverage": {
+            "A": _domain_coverage(req.choice_a_domains),
+            "B": _domain_coverage(req.choice_b_domains),
+        },
         "diary": diary,
         "safety_level": safety_level,
         "support_note": diary_bridge.crisis_message(diary["crisis_level"])
