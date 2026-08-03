@@ -45,7 +45,7 @@ function pickTrajectory(raw, choice) {
 const maxYear = (rows, fallback) =>
   Array.isArray(rows) && rows.length ? Math.max(...rows.map((p) => p.year ?? 0)) : fallback;
 
-function buildSide(scenario, choice, detail, profile) {
+function buildSide(scenario, choice, detail, profile, evidence, domainCov) {
   const raw = scenario?.raw || {};
   const { rows: trajectory, isBaseline } = pickTrajectory(raw, choice);
   const wellbeing = raw.wellbeing_trajectory || [];
@@ -87,6 +87,13 @@ function buildSide(scenario, choice, detail, profile) {
     down_ratio: null,
     risk_timeline: hasIndividual ? raw.risk_timeline || {} : {},
     risk_label: hasIndividual ? scenario?.regret_summary?.label ?? null : null,
+
+    // 근거 수준(항목4) — 이 갈래가 어떤 강도의 근거인지 + 수치그래프 표시 정당성.
+    evidence_level: evidence?.level || null,      // model | group_stat | rag | insufficient
+    evidence_label: evidence?.label || null,      // "모델예측" 등
+    // 정량 그래프 가드: false 면 이 영역엔 수치 데이터가 없어 그래프 대신 설명으로.
+    quantitative_ok: domainCov ? domainCov.quantitative_ok !== false : true,
+    graph_guard_note: domainCov?.guard_note || null,
   };
 }
 
@@ -105,8 +112,10 @@ export function mapSimulateToPair(sim, { choiceA, choiceB, detailA = "", detailB
   if (!A || !B) return null;
 
   const profile = cmp.profile || {};
-  const a = buildSide(A, choiceA, detailA, profile);
-  const b = buildSide(B, choiceB, detailB, profile);
+  const ev = sim.evidence_levels || {};
+  const dc = sim.domain_coverage || {};
+  const a = buildSide(A, choiceA, detailA, profile, ev.A, dc.A);
+  const b = buildSide(B, choiceB, detailB, profile, ev.B, dc.B);
 
   // 궤적이 양쪽 다 비면 그릴 수치가 없다는 뜻 → 실수치 모드로 넘어가지 않는다.
   if (!a.trajectory.length && !b.trajectory.length) return null;
