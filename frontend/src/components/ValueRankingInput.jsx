@@ -25,7 +25,7 @@ export default function ValueRankingInput({ value = [], onChange, max = 8 }) {
     <div>
       <p className="mb-2 text-xs text-sub">
         중요한 순서대로 눌러주세요{" "}
-        <span className="text-mut">(3개면 충분 · 다시 누르면 취소)</span>
+        <span className="text-mut">(3순위 이상)</span>
       </p>
 
       <div className="grid grid-cols-2 gap-2">

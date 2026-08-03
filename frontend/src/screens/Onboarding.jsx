@@ -18,14 +18,14 @@ const OCCUPATIONS = [
 // 성향 = 가치 강제순위(8카드 → 5축). diary_module/qmode/value_ranking.py 와 1:1.
 // 다중선택이 아니라 '순서'를 받는다 — "다 중요해요" 편향을 막고 진짜 우선순위를 드러냄.
 const VALUE_CARDS = [
-  { id: "money", label: "경제적 여유", desc: "돈 걱정 없이 사는 것" },
-  { id: "status", label: "인정·지위", desc: "일에서 인정받고 자리를 갖는 것" },
-  { id: "family", label: "가족·사랑", desc: "가까운 사람과의 깊은 유대" },
-  { id: "friends", label: "친구·소속", desc: "사람들과 어울리고 소속되는 것" },
-  { id: "growth", label: "배움·성취", desc: "실력이 늘고 목표를 이루는 것" },
-  { id: "freedom", label: "자유·자율", desc: "내 방식대로 결정하며 사는 것" },
-  { id: "meaning", label: "의미·나다움", desc: "의미 있고 나다운 삶" },
-  { id: "stability", label: "건강·안정", desc: "몸과 삶이 안정적인 것" },
+  { id: "money", label: "경제적 여유" },
+  { id: "status", label: "인정·지위" },
+  { id: "family", label: "가족·사랑" },
+  { id: "friends", label: "친구·소속" },
+  { id: "growth", label: "배움·성취" },
+  { id: "freedom", label: "자유·자율" },
+  { id: "meaning", label: "의미·나다움" },
+  { id: "stability", label: "건강·안정" },
 ];
 const VALUE_IDS = Object.fromEntries(VALUE_CARDS.map((card) => [card.label, card.id]));
 
