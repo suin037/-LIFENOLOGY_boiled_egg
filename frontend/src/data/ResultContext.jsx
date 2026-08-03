@@ -1,6 +1,7 @@
 import { createContext, useContext, useMemo, useRef, useState } from "react";
 import { getPredictionPair } from "./prediction.js";
 import { DEFAULT_AVATAR } from "./avatarOptions.js";
+import { loadCosmetics } from "./cosmetics.js";
 import { generateSceneImages, runCompareRaw, runSimulateRaw } from "../api.js";
 import { mapSimulateToPair } from "./simulateAdapter.js";
 import { avatarToPngBlob } from "./avatarImage.js";
@@ -15,6 +16,8 @@ const ResultContext = createContext(null);
 // 발표/체험 링크의 ?demo=1 요청이 있을 때만 나의 우주 예시 기록을 준비한다.
 initDemoFromUrl();
 
+const savedCosmetics = loadCosmetics();
+
 const DEFAULT_PROFILE = {
   name: "",
   age: 29,
@@ -27,7 +30,10 @@ const DEFAULT_PROFILE = {
   value_ranking: ["growth", "stability"], // 가치 카드 id 중요한 순 → 개인화 입력(백엔드가 가중치로 변환)
   mbti: "", // 심리 성향 input
   psych_answers: {}, // { D2:"…", D1:"…", D4:"…" } 서술형 답변 → disposition_block 로 전송
-  avatarConfig: DEFAULT_AVATAR, // 아바타 빌더 선택(피부·머리·안경·배경)
+  avatarConfig: {
+    ...DEFAULT_AVATAR,
+    ...(savedCosmetics.avatarBackground ? { bgColor: savedCosmetics.avatarBackground } : {}),
+  }, // 아바타 빌더 선택(피부·머리·안경·배경)
 };
 
 export function ResultProvider({ children }) {

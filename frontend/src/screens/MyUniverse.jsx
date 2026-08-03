@@ -27,6 +27,7 @@ import {
   clearSavedReports,
   REPORT_UID,
 } from "../data/dispositionApi.js";
+import { nextReward, unlockedRewards } from "../data/unlocks.js";
 
 // 나의 우주 = 개인화 대시보드. 레벨/XP · 별자리 · 행성 · 평행우주 저장 · 통계.
 // 수치는 전부 localStorage 의 실제 활동 기록(pm.myuniverse.v1)에서 파생된다.
@@ -38,6 +39,8 @@ export default function MyUniverse() {
   const refresh = () => setTick((t) => t + 1);
 
   const u = useMemo(() => universeSummary(), [tick]);
+  const ownedRewards = unlockedRewards(u.highestLevel);
+  const upcomingReward = nextReward(u.highestLevel);
   const [slot, setSlot] = useState("A");
   const [picked, setPicked] = useState(null); // 탭한 별
   const [weekBack, setWeekBack] = useState(0); // 0 = 이번 주, 1 = 지난주 …
@@ -175,6 +178,44 @@ export default function MyUniverse() {
             />
           </div>
         </div>
+      </Card>
+
+      <Card>
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-[13px] font-bold text-ink">탐험 보상</div>
+            <p className="mt-0.5 text-[10px] text-mut">활동 레벨로 꾸미기 아이템을 열 수 있어요.</p>
+          </div>
+          <span className="rounded-full bg-cyan/10 px-2.5 py-1 text-[10px] font-semibold text-cyan">
+            {ownedRewards.length}개 보유
+          </span>
+        </div>
+
+        {upcomingReward ? (
+          <div className="mt-3 flex items-center gap-3 rounded-xl bg-[#0B1423] px-3 py-2.5">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line bg-card2 text-[13px] text-mut">
+              Lv.{upcomingReward.level}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-[11px] text-mut">다음 보상</div>
+              <div className="truncate text-[12px] font-semibold text-ink">{upcomingReward.name}</div>
+            </div>
+          </div>
+        ) : (
+          <p className="mt-3 rounded-xl bg-[#0B1423] px-3 py-2.5 text-[11px] text-sub">
+            현재 준비된 탐험 보상을 모두 열었어요.
+          </p>
+        )}
+
+        {ownedRewards.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {ownedRewards.map((reward) => (
+              <span key={reward.id} className="rounded-full border border-cyan/25 bg-cyan/10 px-2.5 py-1 text-[10px] text-cyan">
+                {reward.name}
+              </span>
+            ))}
+          </div>
+        )}
       </Card>
 
       {/* 별자리 만들기 */}
