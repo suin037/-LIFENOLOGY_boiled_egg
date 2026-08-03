@@ -11,7 +11,11 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
 import json
+import logging
 import sys
+import traceback
+
+log = logging.getLogger("parallel-me")
 
 from config import ROOT, settings
 from schemas import (
@@ -198,6 +202,12 @@ def simulate(req: SimulateRequest) -> dict:
     try:
         cmp = build_comparison(req).model_dump()
     except FileNotFoundError:
+        return _simulate_without_artifacts(req, diary, safety_level)
+    except Exception:
+        # 아티팩트는 있는데 입력 데이터 스키마가 어긋난 경우(예: 패널 컬럼 누락).
+        # 500 으로 죽이면 프론트가 원인을 알 수 없으므로 서사 폴백으로 내려가되,
+        # 조용히 넘어가지 않도록 서버 로그에는 전체 스택을 남긴다.
+        log.error("build_comparison 실패 — 서사 폴백으로 전환\n%s", traceback.format_exc())
         return _simulate_without_artifacts(req, diary, safety_level)
     scen_a = cmp["scenarios"]["A"]
     scen_b = cmp["scenarios"]["B"]
