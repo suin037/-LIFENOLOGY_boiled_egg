@@ -37,6 +37,19 @@ from rag.psych_narrative import get_psych_evidence, build_psych_prompt_block
 from rag import safety as rag_safety
 from utils.cloudflare_images import generate_pair
 
+# 삶의 영역(domain) key → 라벨. 프론트 LIFE_DOMAINS 와 1:1 (행동+영역 구조화 입력).
+DOMAIN_LABELS = {
+    "career": "직업", "education": "교육", "business": "사업", "finance": "재무",
+    "health": "건강", "housing": "주거", "relationship": "관계",
+    "lifestyle": "생활방식", "long_term_values": "장기 가치",
+}
+
+
+def _domain_labels(keys) -> list[str]:
+    """domain key 리스트 → 라벨 리스트(모르는 key 는 그대로)."""
+    return [DOMAIN_LABELS.get(k, k) for k in (keys or [])]
+
+
 app = FastAPI(title="parallel-me API")
 
 # jy-model의 성향 분석/저장 API를 같은 백엔드 포트에서 제공한다.
@@ -255,6 +268,10 @@ def simulate(req: SimulateRequest) -> dict:
         note += f"\n[사용자가 적은 A의 구체적 상황] {req.choice_a_detail}"
     if req.choice_b_detail:
         note += f"\n[사용자가 적은 B의 구체적 상황] {req.choice_b_detail}"
+    # 삶의 영역(domain) 컨텍스트 — '행동+영역' 구조화 입력의 영역 축을 서사에 알린다.
+    _dl = _domain_labels(req.choice_a_domains) + _domain_labels(req.choice_b_domains)
+    if _dl:
+        note += "\n[관련 삶의 영역] " + " · ".join(dict.fromkeys(_dl))
     dctx = diary_bridge.diary_context_line(diary)
     if dctx:
         note += "  /  [일기 신호] " + dctx

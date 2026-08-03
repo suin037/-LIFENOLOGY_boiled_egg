@@ -70,6 +70,15 @@ class SimulateRequest(CompareRequest):
     choice_b_detail: Optional[str] = Field(
         None, max_length=500, description="같은 선택 유형을 구분하는 B의 구체적 상황"
     )
+    # 삶의 영역(9개 domain key: career/education/business/finance/health/housing/
+    # relationship/lifestyle/long_term_values). 프론트 detectLifeDomains 산출.
+    # '행동(choice) + 삶의 영역(domain)' 구조화 입력의 domain 축 — 영역별 데이터 라우팅·근거수준 분기에 사용.
+    choice_a_domains: Optional[list[str]] = Field(
+        None, description="선택 A가 건드리는 삶의 영역 키 리스트(예: ['career'])"
+    )
+    choice_b_domains: Optional[list[str]] = Field(
+        None, description="선택 B가 건드리는 삶의 영역 키 리스트(예: ['relationship'])"
+    )
     emotions: Optional[list[str]] = Field(
         None, description="감정 키워드(선택). 심리카드 검색·안전분기에 사용"
     )
