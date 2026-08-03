@@ -1,74 +1,73 @@
-// 별자리 = 이번 주 일기. 7개 요일 슬롯(월~일)에 배치. 유명 별자리 모티브, 직선으로 이음.
-// 기록한 날 = 밝은 별(색=기분), 안 한 날 = 흐린 빈 자리. 별 클릭 → onSelect(i).
+// 별자리 = 중심점 극좌표. 요일=각도(월→일), 기분=반지름(좋을수록 바깥) + 색.
+// minju constellationGroups().stars 를 그대로 받는다. 별 클릭 → onSelect(star).
 
-// 주별로 다른 실제 별자리 (weeksAgo로 선택). 각 pos[i] = 요일 i(월=0 … 일=6).
-const SHAPES = [
-  {
-    name: "북두칠성",
-    pos: [[0.10, 0.58], [0.15, 0.82], [0.35, 0.84], [0.37, 0.58], [0.56, 0.46], [0.75, 0.38], [0.93, 0.28]],
-    links: [[0, 1], [1, 2], [2, 3], [3, 0], [3, 4], [4, 5], [5, 6]],
-  },
-  {
-    name: "백조자리(북십자성)",
-    pos: [[0.50, 0.14], [0.50, 0.46], [0.50, 0.86], [0.26, 0.50], [0.74, 0.50], [0.08, 0.54], [0.92, 0.54]],
-    links: [[0, 1], [1, 2], [5, 3], [3, 1], [1, 4], [4, 6]],
-  },
-];
+const W = 200, H = 200, CX = 100, CY = 96;
+const R_MIN = 16, R_SPREAD = 60; // 힘든 날=중심, 좋은 날=바깥
+const COL = ["#E24B4A", "#D85A30", "#EDA100", "#5DCAA5", "#378ADD"]; // 기분 1~5 색
 
-export function shapeFor(weeksAgo = 0) {
-  return SHAPES[weeksAgo % SHAPES.length];
+// valence(-1~1) 또는 mood(1~5) → 기분레벨 1~5
+function level(s) {
+  if (s.mood != null) return Math.max(1, Math.min(5, Math.round(s.mood)));
+  if (s.valence != null) return Math.max(1, Math.min(5, Math.round(s.valence * 2 + 3)));
+  return 3;
+}
+export const starColor = (s) => COL[level(s) - 1];
+
+function coord(i, s, filled) {
+  const norm = filled ? (level(s) - 1) / 4 : 0; // 빈 날은 중심 근처
+  const r = R_MIN + norm * R_SPREAD;
+  const a = (-90 + i * (360 / 7)) * Math.PI / 180; // 요일마다 360/7°
+  return [CX + r * Math.cos(a), CY + r * Math.sin(a)];
 }
 
-// 그날 기분(1~5) → 별 색. 실제 별처럼: 빨강(저온·힘듦) → 파랑하양(고온·좋음).
-const STAR_COLORS = ["#F0736F", "#F3A24E", "#F5D45E", "#EAF0FB", "#8FCBFF"];
-export const starColor = (v) => STAR_COLORS[Math.max(1, Math.min(5, Math.round(v || 3))) - 1];
-
-export default function Constellation({ slots, weeksAgo = 0, selectedIdx, onSelect }) {
-  const W = 300, H = 158, pad = 26;
-  const shape = shapeFor(weeksAgo);
-  const XY = (i) => {
-    const [nx, ny] = shape.pos[i];
-    return [pad + nx * (W - 2 * pad), pad + ny * (H - 2 * pad)];
-  };
+export default function Constellation({ stars = [], onSelect, selectedDate = null, todayDate = null }) {
+  if (!stars.length) return null;
+  const pts = stars.map((s, i) => {
+    const filled = !s.empty && (s.mood != null || s.valence != null);
+    const [x, y] = coord(i, s, filled);
+    return { ...s, x, y, filled, lvl: level(s) };
+  });
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 168 }}>
-      {/* 배경 잔별 */}
-      {[[26, 20], [268, 24], [150, 142], [46, 132], [286, 120], [206, 14]].map(([x, y], k) => (
-        <circle key={`bg${k}`} cx={x} cy={y} r={0.7} fill="#4A5578" />
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img"
+      aria-label={`이번 주 ${pts.filter((p) => p.filled).length}일의 기록으로 그린 별자리`}
+      style={{ maxHeight: 210, display: "block" }}>
+      {/* 중심점 */}
+      <circle cx={CX} cy={CY} r={2} fill="#5A6B8C" opacity={0.5} />
+      {/* 중심→별 살(spoke) */}
+      {pts.map((p, i) => (
+        <line key={`sp${i}`} x1={CX} y1={CY} x2={p.x} y2={p.y}
+          stroke="#5A6B8C" strokeWidth={0.5} strokeOpacity={0.16} />
       ))}
-      {/* 별자리 연결선 (직선, 전체 모양 흐리게) */}
-      {shape.links.map(([a, b], k) => {
-        const [x1, y1] = XY(a);
-        const [x2, y2] = XY(b);
-        const lit = slots[a]?.filled && slots[b]?.filled;
+      {/* 별끼리 잇는 별자리 선(순서대로, 마지막→처음 닫기) */}
+      {pts.map((p, i) => {
+        const q = pts[(i + 1) % pts.length];
+        const solid = p.filled && q.filled;
         return (
-          <line key={`l${k}`} x1={x1} y1={y1} x2={x2} y2={y2}
-            stroke="#7FD4FF" strokeOpacity={lit ? 0.4 : 0.12} strokeWidth={1} />
+          <line key={`ln${i}`} x1={p.x} y1={p.y} x2={q.x} y2={q.y}
+            stroke="#9FB0CE" strokeWidth={solid ? 1 : 0.8}
+            strokeOpacity={solid ? 0.42 : 0.14}
+            strokeDasharray={solid ? undefined : "2 4"} />
         );
       })}
-      {/* 7개 요일 슬롯 */}
-      {slots.map((s, i) => {
-        const [x, y] = XY(i);
-        if (!s.filled) {
-          // 안 쓴 날 = 흐린 빈 자리
-          return (
-            <g key={i}>
-              <circle cx={x} cy={y} r={2} fill="none" stroke="#39435F" strokeWidth={1} />
-              <text x={x} y={y - 5} fontSize={7} fill="#4A5578" textAnchor="middle">{s.weekday}</text>
-            </g>
-          );
+      {/* 별 */}
+      {pts.map((p, i) => {
+        const isSel = selectedDate && p.date === selectedDate;
+        const isToday = todayDate && p.date === todayDate;
+        if (!p.filled) {
+          return <circle key={i} cx={p.x} cy={p.y} r={2} fill="none"
+            stroke="#39435F" strokeWidth={0.8} strokeDasharray="1.5 2" opacity={0.5} />;
         }
-        const on = i === selectedIdx;
-        const col = starColor(s.v);
-        const r = 2.8 + (s.v / 5) * 4.2;
+        const r = 2.4 + (p.lvl / 5) * 3.2;
+        const col = COL[p.lvl - 1];
         return (
-          <g key={i} onClick={() => onSelect(i)} style={{ cursor: "pointer" }}>
-            <circle cx={x} cy={y} r={r + (on ? 9 : 3 + s.v)} fill={col} opacity={on ? 0.45 : 0.12 + s.v * 0.03} />
-            <circle cx={x} cy={y} r={r} fill={col}
-              stroke="#FFFFFF" strokeOpacity={on ? 0.9 : 0.35} strokeWidth={on ? 1.6 : 0.6} />
-            <text x={x} y={y - r - 3} fontSize={7.5} textAnchor="middle"
-              fill={on ? "#FFFFFF" : "#9FB0CE"} fontWeight={on ? 700 : 400}>{s.weekday}</text>
+          <g key={i} onClick={() => onSelect?.(p)} style={{ cursor: onSelect ? "pointer" : "default" }}>
+            <circle cx={p.x} cy={p.y} r={r + (isSel ? 8 : 3)} fill={col} opacity={isSel ? 0.4 : 0.14} />
+            <circle cx={p.x} cy={p.y} r={r} fill={col}
+              stroke="#FFFFFF" strokeOpacity={isToday ? 0.9 : 0.35} strokeWidth={isToday ? 1.4 : 0.6} />
+            {p.hasDiary && <circle cx={p.x} cy={p.y} r={r + 3} fill="none" stroke="#9FB0CE" strokeWidth={0.7} opacity={0.45} />}
+            {/* 별이 작아서 탭 영역 별도 */}
+            <circle cx={p.x} cy={p.y} r={13} fill="transparent" />
           </g>
         );
       })}
