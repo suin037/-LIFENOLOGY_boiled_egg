@@ -45,7 +45,7 @@ function pickTrajectory(raw, choice) {
 const maxYear = (rows, fallback) =>
   Array.isArray(rows) && rows.length ? Math.max(...rows.map((p) => p.year ?? 0)) : fallback;
 
-function buildSide(scenario, choice, detail, profile, evidence, domainCov) {
+function buildSide(scenario, choice, detail, profile, evidence, domainCov, domainStats) {
   const raw = scenario?.raw || {};
   const { rows: trajectory, isBaseline } = pickTrajectory(raw, choice);
   const wellbeing = raw.wellbeing_trajectory || [];
@@ -94,6 +94,8 @@ function buildSide(scenario, choice, detail, profile, evidence, domainCov) {
     // 정량 그래프 가드: false 면 이 영역엔 수치 데이터가 없어 그래프 대신 설명으로.
     quantitative_ok: domainCov ? domainCov.quantitative_ok !== false : true,
     graph_guard_note: domainCov?.guard_note || null,
+    // 영역별 실측 집단통계 지표(항목3) — { domainKey: {label, evidence, indicators[]} }
+    domain_stats: domainStats || {},
   };
 }
 
@@ -114,8 +116,9 @@ export function mapSimulateToPair(sim, { choiceA, choiceB, detailA = "", detailB
   const profile = cmp.profile || {};
   const ev = sim.evidence_levels || {};
   const dc = sim.domain_coverage || {};
-  const a = buildSide(A, choiceA, detailA, profile, ev.A, dc.A);
-  const b = buildSide(B, choiceB, detailB, profile, ev.B, dc.B);
+  const ds = sim.domain_stats || {};
+  const a = buildSide(A, choiceA, detailA, profile, ev.A, dc.A, ds.A);
+  const b = buildSide(B, choiceB, detailB, profile, ev.B, dc.B, ds.B);
 
   // 궤적이 양쪽 다 비면 그릴 수치가 없다는 뜻 → 실수치 모드로 넘어가지 않는다.
   if (!a.trajectory.length && !b.trajectory.length) return null;
