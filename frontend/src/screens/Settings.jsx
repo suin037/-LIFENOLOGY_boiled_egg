@@ -10,6 +10,7 @@ import { PSYCH_QUESTIONS } from "../data/psychQuestions.js";
 import Avatar from "../components/Avatar.jsx";
 import AvatarBuilder from "../components/AvatarBuilder.jsx";
 import Mascot from "../components/Mascot.jsx";
+import { universeSummary } from "../data/myUniverse.js";
 
 // 작은 on/off 토글 (track h-6/w-11 · thumb h-4/w-4 · translate 로 이동 — 크기 균형)
 function Toggle({ on, onClick }) {
@@ -92,6 +93,7 @@ export default function Settings() {
   const navigate = useNavigate();
   const { profile, setProfile, setOnboarded } = useResult();
   const [prefs, setPrefs] = useState(loadPrefs);
+  const unlockLevel = universeSummary().highestLevel;
 
   function update(patch) {
     setPrefs((p) => {
@@ -145,6 +147,7 @@ export default function Settings() {
         <AvatarBuilder
           config={profile.avatarConfig}
           onChange={(cfg) => setProfile((p) => ({ ...p, avatarConfig: cfg }))}
+          unlockLevel={unlockLevel}
         />
       </Card>
 

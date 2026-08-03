@@ -11,6 +11,7 @@
 import { listUniverses } from "./savedUniverses.js";
 
 const KEY = "pm.myuniverse.v1";
+const HIGHEST_LEVEL_KEY = "pm.highestLevel.v1";
 
 // 별자리 하나를 이루는 별 수. 12(황도12궁)는 완성까지 12일이라 신규 사용자가
 // 첫 별자리를 영영 못 본다. 7일이면 1주 리듬 + 주간 리포트와 주기가 맞는다.
@@ -251,6 +252,24 @@ export function levelFrom(xp) {
   return { level, xpInLevel: rest, xpMax: need };
 }
 
+function storedHighestLevel() {
+  try {
+    return Math.max(1, Number(localStorage.getItem(HIGHEST_LEVEL_KEY) || 1));
+  } catch {
+    return 1;
+  }
+}
+
+function rememberHighestLevel(level) {
+  const highest = Math.max(storedHighestLevel(), level);
+  try {
+    localStorage.setItem(HIGHEST_LEVEL_KEY, String(highest));
+  } catch {
+    // localStorage 불가 환경에서는 현재 계산 레벨만 사용한다.
+  }
+  return highest;
+}
+
 const TITLES = [
   [1, "첫 별 관측자"],
   [3, "성운 여행자"],
@@ -292,11 +311,14 @@ export function universeSummary() {
   const universes = safeUniverses();
   const xp = totalXp(s, universes);
   const { level, xpInLevel, xpMax } = levelFrom(xp);
+  // 데모 데이터로 얻은 레벨은 실제 계정 보상으로 영구 저장하지 않는다.
+  const highestLevel = isDemo(s) ? level : rememberHighestLevel(level);
   const cur = currentConstellation(s);
 
   return {
     state: s,
     level,
+    highestLevel,
     title: titleFor(level),
     xp,
     xpInLevel,

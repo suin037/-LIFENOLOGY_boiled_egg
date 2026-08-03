@@ -36,6 +36,59 @@ from utils.claude_api import generate_scenarios
 from rag.psych_narrative import get_psych_evidence, build_psych_prompt_block
 from rag import safety as rag_safety
 from utils.cloudflare_images import generate_pair
+from domain_router import route_domains
+
+# 삶의 영역(domain) key → 라벨. 프론트 LIFE_DOMAINS 와 1:1 (행동+영역 구조화 입력).
+DOMAIN_LABELS = {
+    "career": "직업", "education": "교육", "business": "사업", "finance": "재무",
+    "health": "건강", "housing": "주거", "relationship": "관계",
+    "lifestyle": "생활방식", "long_term_values": "장기 가치",
+}
+
+
+def _domain_labels(keys) -> list[str]:
+    """domain key 리스트 → 라벨 리스트(모르는 key 는 그대로)."""
+    return [DOMAIN_LABELS.get(k, k) for k in (keys or [])]
+
+
+# ── 근거 수준(로드맵 항목4) ──────────────────────────────────────────────
+# 응답이 '어떤 강도의 근거'인지 프론트에 명시 → 데이터 없는데 숫자 만드는 문제 방지.
+EVIDENCE_LABEL = {
+    "model": "모델예측",        # 개별·인과 모델 산출(econml 인과효과 / lifelines 생존)
+    "group_stat": "집단통계",   # 유사집단 중앙값 궤적(GOMS/YP/KOSIS 등)
+    "rag": "RAG설명",           # 수치 없이 심리·이론 근거만
+    "insufficient": "데이터부족",  # 뒷받침 데이터 없음 → 숫자 만들지 않음
+}
+
+def _has_available(arr) -> bool:
+    return any((p or {}).get("available") for p in (arr or []))
+
+
+def _scenario_evidence(scen: dict, has_rag: bool) -> dict:
+    """시나리오를 뒷받침하는 '가장 강한' 근거 수준 + 구성요소."""
+    raw = scen.get("raw") or {}
+    has_model = raw.get("causal_effect") is not None or raw.get("survival_months") is not None
+    has_group = any(_has_available(scen.get(k))
+                    for k in ("income", "satisfaction", "growth_potential", "regret"))
+    level = ("model" if has_model else "group_stat" if has_group
+             else "rag" if has_rag else "insufficient")
+    return {"level": level, "label": EVIDENCE_LABEL[level],
+            "components": {"model": has_model, "group_stat": has_group, "rag": bool(has_rag)}}
+
+
+def _coverage_from_routes(routed: dict) -> dict:
+    """route_domains 결과 → 수치 그래프 표시 정당성(그래프 가드). 라우터가 근거의 단일 소스."""
+    # 정량 근거: career(모델) 또는 실제 지표가 잡힌 group_stat 영역이 하나라도 있어야 정당.
+    quant = any(v["evidence"] == "model" or (v["evidence"] == "group_stat" and v["indicators"])
+                for v in routed.values())
+    return {
+        "per_domain": {k: {"label": v["label"], "evidence": v["evidence"]} for k, v in routed.items()},
+        "quantitative_ok": quant if routed else True,  # domain 미지정이면 기존대로 허용
+        "guard_note": (None if (quant or not routed) else
+                       "이 질문의 삶의 영역은 정량 예측 데이터가 없어요 — "
+                       "수치 그래프 대신 통계·설명 근거로만 답합니다."),
+    }
+
 
 app = FastAPI(title="parallel-me API")
 
@@ -157,9 +210,21 @@ def predict(req: PredictRequest) -> PredictResponse:
     return run_prediction(req)
 
 
-@app.post("/compare", response_model=CompareResponse)
-def compare(req: CompareRequest) -> CompareResponse:
-    return build_comparison(req)
+@app.post("/compare")
+def compare(req: CompareRequest) -> dict:
+    # 발표 카드용 수치 + 영역 라우팅/근거수준(항목3·4)을 함께 반환.
+    # 프론트가 화면 수치를 /compare 에서 읽으므로 여기에도 실어야 표시된다.
+    cmp = build_comparison(req).model_dump()
+    routed_a = route_domains(getattr(req, "choice_a_domains", None), cmp["profile"])
+    routed_b = route_domains(getattr(req, "choice_b_domains", None), cmp["profile"])
+    cmp["domain_stats"] = {"A": routed_a, "B": routed_b}
+    cmp["domain_coverage"] = {"A": _coverage_from_routes(routed_a),
+                              "B": _coverage_from_routes(routed_b)}
+    cmp["evidence_levels"] = {
+        "A": _scenario_evidence(cmp["scenarios"]["A"], has_rag=False),
+        "B": _scenario_evidence(cmp["scenarios"]["B"], has_rag=False),
+    }
+    return cmp
 
 
 @app.post("/simulate")
@@ -255,6 +320,10 @@ def simulate(req: SimulateRequest) -> dict:
         note += f"\n[사용자가 적은 A의 구체적 상황] {req.choice_a_detail}"
     if req.choice_b_detail:
         note += f"\n[사용자가 적은 B의 구체적 상황] {req.choice_b_detail}"
+    # 삶의 영역(domain) 컨텍스트 — '행동+영역' 구조화 입력의 영역 축을 서사에 알린다.
+    _dl = _domain_labels(req.choice_a_domains) + _domain_labels(req.choice_b_domains)
+    if _dl:
+        note += "\n[관련 삶의 영역] " + " · ".join(dict.fromkeys(_dl))
     dctx = diary_bridge.diary_context_line(diary)
     if dctx:
         note += "  /  [일기 신호] " + dctx
@@ -280,6 +349,10 @@ def simulate(req: SimulateRequest) -> dict:
     except Exception as exc:  # 키/ API 오류에도 수치·지표·근거는 반환
         narrative = {"a": f"(서사 생성 실패: {type(exc).__name__})", "b": "", "comparison": "", "_error": str(exc)[:300]}
 
+    # 영역별 데이터 라우팅(항목3) — 각 선택의 삶의 영역 → 실측 집단통계 지표
+    routed_a = route_domains(req.choice_a_domains, cmp["profile"])
+    routed_b = route_domains(req.choice_b_domains, cmp["profile"])
+
     return {
         "profile": cmp["profile"],
         "choice_a": cmp["choice_a"],
@@ -295,6 +368,17 @@ def simulate(req: SimulateRequest) -> dict:
                   "cards": [c["card_id"] for c in psych_b.get("cards", [])]},
         },
         "evidence": {"A": ev_a, "B": ev_b},
+        # 근거 수준(항목4): 시나리오별 4단계 라벨 + domain 그래프 가드
+        "evidence_levels": {
+            "A": _scenario_evidence(cmp["scenarios"]["A"], bool(psych_a.get("cards"))),
+            "B": _scenario_evidence(cmp["scenarios"]["B"], bool(psych_b.get("cards"))),
+        },
+        # 영역별 데이터 라우팅(항목3): 각 선택의 삶의 영역 → 실측 집단통계 지표
+        "domain_stats": {"A": routed_a, "B": routed_b},
+        "domain_coverage": {
+            "A": _coverage_from_routes(routed_a),
+            "B": _coverage_from_routes(routed_b),
+        },
         "diary": diary,
         "safety_level": safety_level,
         "support_note": diary_bridge.crisis_message(diary["crisis_level"])

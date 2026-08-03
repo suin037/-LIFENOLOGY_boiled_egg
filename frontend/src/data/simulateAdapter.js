@@ -45,7 +45,7 @@ function pickTrajectory(raw, choice) {
 const maxYear = (rows, fallback) =>
   Array.isArray(rows) && rows.length ? Math.max(...rows.map((p) => p.year ?? 0)) : fallback;
 
-function buildSide(scenario, choice, detail, profile) {
+function buildSide(scenario, choice, detail, profile, evidence, domainCov, domainStats) {
   const raw = scenario?.raw || {};
   const { rows: trajectory, isBaseline } = pickTrajectory(raw, choice);
   const wellbeing = raw.wellbeing_trajectory || [];
@@ -87,6 +87,15 @@ function buildSide(scenario, choice, detail, profile) {
     down_ratio: null,
     risk_timeline: hasIndividual ? raw.risk_timeline || {} : {},
     risk_label: hasIndividual ? scenario?.regret_summary?.label ?? null : null,
+
+    // 근거 수준(항목4) — 이 갈래가 어떤 강도의 근거인지 + 수치그래프 표시 정당성.
+    evidence_level: evidence?.level || null,      // model | group_stat | rag | insufficient
+    evidence_label: evidence?.label || null,      // "모델예측" 등
+    // 정량 그래프 가드: false 면 이 영역엔 수치 데이터가 없어 그래프 대신 설명으로.
+    quantitative_ok: domainCov ? domainCov.quantitative_ok !== false : true,
+    graph_guard_note: domainCov?.guard_note || null,
+    // 영역별 실측 집단통계 지표(항목3) — { domainKey: {label, evidence, indicators[]} }
+    domain_stats: domainStats || {},
   };
 }
 
@@ -105,10 +114,20 @@ export function mapSimulateToPair(sim, { choiceA, choiceB, detailA = "", detailB
   if (!A || !B) return null;
 
   const profile = cmp.profile || {};
-  const a = buildSide(A, choiceA, detailA, profile);
-  const b = buildSide(B, choiceB, detailB, profile);
+  // 근거수준·영역지표·가드는 이제 /compare 응답(cmp)에 실려온다. (구 /simulate 최상위도 폴백 지원)
+  const ev = cmp.evidence_levels || sim.evidence_levels || {};
+  const dc = cmp.domain_coverage || sim.domain_coverage || {};
+  const ds = cmp.domain_stats || sim.domain_stats || {};
+  const a = buildSide(A, choiceA, detailA, profile, ev.A, dc.A, ds.A);
+  const b = buildSide(B, choiceB, detailB, profile, ev.B, dc.B, ds.B);
 
-  // 궤적이 양쪽 다 비면 그릴 수치가 없다는 뜻 → 실수치 모드로 넘어가지 않는다.
-  if (!a.trajectory.length && !b.trajectory.length) return null;
+  // 실데이터가 하나라도 있으면 실수치 모드. 연차별 궤적이 비어도(관측범위 밖/표본부족)
+  // 이웃·인과·기대임금·지표 같은 실측이 있으면 목업으로 되돌리지 않는다.
+  const hasReal = (s) =>
+    (s.trajectory && s.trajectory.length) ||
+    (s.neighbors && s.neighbors.length) ||
+    s.causal_effect != null || s.expected_wage != null || s.survival_months != null ||
+    (s.life_indicators && s.life_indicators.length);
+  if (!hasReal(a) && !hasReal(b)) return null;
   return { a, b };
 }

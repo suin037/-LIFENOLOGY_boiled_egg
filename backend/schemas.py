@@ -52,6 +52,15 @@ class CompareRequest(BaseModel):
     profile: Profile
     choice_a: str = Field(..., description="선택지 A (예: 이직)")
     choice_b: str = Field(..., description="선택지 B (예: 대학원 진학)")
+    # 삶의 영역(9개 domain key: career/education/business/finance/health/housing/
+    # relationship/lifestyle/long_term_values). 프론트 detectLifeDomains 산출.
+    # '행동(choice)+삶의 영역(domain)' 구조화 입력의 domain 축 — 영역별 데이터 라우팅·근거수준 분기.
+    choice_a_domains: Optional[list[str]] = Field(
+        None, description="선택 A가 건드리는 삶의 영역 키 리스트(예: ['career'])"
+    )
+    choice_b_domains: Optional[list[str]] = Field(
+        None, description="선택 B가 건드리는 삶의 영역 키 리스트(예: ['relationship'])"
+    )
 
 
 class SimulateRequest(CompareRequest):

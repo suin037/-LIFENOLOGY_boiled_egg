@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useResult } from "../data/ResultContext.jsx";
 import { Eyebrow, Button } from "../components/ui.jsx";
 import AvatarBuilder from "../components/AvatarBuilder.jsx";
+import { universeSummary } from "../data/myUniverse.js";
 
 const OCCUPATIONS = [
   "연구·공학기술",
@@ -42,6 +43,7 @@ export default function Onboarding() {
   const { profile, setProfile, setOnboarded } = useResult();
 
   const [visibleThrough, setVisibleThrough] = useState(0);
+  const unlockLevel = universeSummary().highestLevel;
   const agePct = ((profile.age - 18) / 52) * 100;
   const ranked = profile.values; // 라벨 배열, 앞이 1순위
   const steps = ["이름", "나이", "직종", "소득", "가치", "성격유형", "아바타"];
@@ -210,6 +212,7 @@ export default function Onboarding() {
       <AvatarBuilder
         config={profile.avatarConfig}
         onChange={(cfg) => setProfile((p) => ({ ...p, avatarConfig: cfg }))}
+        unlockLevel={unlockLevel}
       />
     </div>
   ];

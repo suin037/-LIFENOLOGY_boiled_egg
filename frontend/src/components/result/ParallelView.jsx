@@ -6,9 +6,42 @@ import { A_COLOR, B_COLOR } from "../../data/result.js";
 import { labelOf } from "../../data/prediction.js";
 
 // 변화 흐름 — A/B 두 갈래의 소득 중앙값 궤적을 한 차트에 겹침.
+// 근거 수준 라벨 → 뱃지 색. (항목4)
+const EV_STYLE = {
+  모델예측: { bg: "#123049", fg: "#7FD4FF", bd: "#245a80" },
+  집단통계: { bg: "#123a2e", fg: "#5FE0B0", bd: "#1f5a45" },
+  RAG설명: { bg: "#2a2340", fg: "#C4A6FF", bd: "#463a6a" },
+  데이터부족: { bg: "#3a1220", fg: "#FF9EC0", bd: "#5a2436" },
+};
+function EvBadge({ label }) {
+  if (!label) return null;
+  const s = EV_STYLE[label] || EV_STYLE.데이터부족;
+  return (
+    <span style={{ background: s.bg, color: s.fg, border: `1px solid ${s.bd}` }}
+      className="rounded-full px-2 py-0.5 text-[10px] font-semibold">{label}</span>
+  );
+}
+
 export default function ParallelView({ a, b }) {
   const la = labelOf(a.choice);
   const lb = labelOf(b.choice);
+
+  // 근거 가드(항목4) — 정량 데이터 없는 삶의 영역이면 오해 소지 있는 수치 그래프 대신 안내.
+  const guarded = a.quantitative_ok === false || b.quantitative_ok === false;
+  if (guarded) {
+    const guardNote = a.graph_guard_note || b.graph_guard_note ||
+      "이 질문의 삶의 영역은 정량 예측 데이터가 없어요 — 수치 그래프 대신 통계·설명 근거로만 답합니다.";
+    return (
+      <Card>
+        <h2 className="mb-1 text-base font-semibold">A/B 소득 변화 흐름</h2>
+        <div className="mt-2 rounded-xl border border-line bg-[#0E1424] px-4 py-7 text-center">
+          <div className="text-[13px] font-semibold text-gold">📊 수치 그래프 없음</div>
+          <p className="mx-auto mt-2 max-w-[300px] text-[12.5px] leading-relaxed text-sub">{guardNote}</p>
+        </div>
+      </Card>
+    );
+  }
+
   const data = a.trajectory.map((p, i) => ({
     year: `${p.year}년`,
     [la]: p.income_p50,
@@ -22,7 +55,13 @@ export default function ParallelView({ a, b }) {
 
   return (
     <Card>
-      <h2 className="mb-1 text-base font-semibold">A/B 소득 변화 흐름</h2>
+      <div className="mb-1 flex items-center gap-2">
+        <h2 className="text-base font-semibold">A/B 소득 변화 흐름</h2>
+        <span className="ml-auto flex items-center gap-1">
+          <span className="text-[10px] text-mut">{la}</span><EvBadge label={a.evidence_label} />
+          <span className="ml-1 text-[10px] text-mut">{lb}</span><EvBadge label={b.evidence_label} />
+        </span>
+      </div>
       <div className="mt-2 h-[220px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 8, right: 12, left: -14, bottom: 0 }}>

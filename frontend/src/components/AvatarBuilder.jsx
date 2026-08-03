@@ -1,4 +1,6 @@
 import Avatar from "./Avatar.jsx";
+import { saveCosmetics } from "../data/cosmetics.js";
+import { rewardsOfType } from "../data/unlocks.js";
 import {
   HAIR_PRESETS, FACE_PRESETS, ACC_PRESETS, OUTFIT_PRESETS, BG_COLORS,
   normalizeAvatar,
@@ -48,8 +50,14 @@ function ColorStepper({ label, colors, value, onChange }) {
   );
 }
 
-export default function AvatarBuilder({ config, onChange }) {
+export default function AvatarBuilder({ config, onChange, unlockLevel = 1 }) {
   const c = normalizeAvatar(config);
+  const rewardBackgrounds = rewardsOfType("avatarBackground");
+
+  function setBackground(bgColor) {
+    saveCosmetics({ avatarBackground: bgColor });
+    onChange({ ...c, bgColor });
+  }
   return (
     <div>
       <div className="mb-3 flex flex-col items-center">
@@ -60,8 +68,43 @@ export default function AvatarBuilder({ config, onChange }) {
       <PresetStepper label="얼굴" presets={FACE_PRESETS} config={c} onChange={onChange} />
       <PresetStepper label="액세서리" presets={ACC_PRESETS} config={c} onChange={onChange} />
       <PresetStepper label="의상" presets={OUTFIT_PRESETS} config={c} onChange={onChange} />
-      <ColorStepper label="배경" colors={BG_COLORS} value={c.bgColor}
-        onChange={(v) => onChange({ ...c, bgColor: v })} />
+      <ColorStepper label="배경" colors={BG_COLORS} value={c.bgColor} onChange={setBackground} />
+
+      <div className="mt-3 rounded-2xl border border-line bg-[#0B1423] px-3 py-3">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-[12px] font-semibold text-sub">레벨 배경</span>
+          <span className="text-[10px] text-mut">최고 Lv.{unlockLevel}</span>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {rewardBackgrounds.map((reward) => {
+            const unlocked = unlockLevel >= reward.level;
+            const selected = c.bgColor === reward.value;
+            return (
+              <button
+                key={reward.id}
+                type="button"
+                disabled={!unlocked}
+                onClick={() => setBackground(reward.value)}
+                className={`relative min-h-[66px] rounded-xl border px-2 py-2 text-center transition-colors ${
+                  selected
+                    ? "border-cyan bg-[#12203a]"
+                    : unlocked
+                      ? "border-line bg-card hover:border-cyan/50"
+                      : "border-line bg-card/40 opacity-55"
+                }`}
+              >
+                <span
+                  className="mx-auto block h-7 w-7 rounded-full border border-white/20"
+                  style={{ background: reward.value, boxShadow: unlocked ? `0 0 12px ${reward.value}66` : "none" }}
+                />
+                <span className={`mt-1 block text-[9px] ${selected ? "text-cyan" : "text-sub"}`}>
+                  {unlocked ? reward.name : `Lv.${reward.level}`}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
