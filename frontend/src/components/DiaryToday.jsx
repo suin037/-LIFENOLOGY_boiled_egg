@@ -1,30 +1,49 @@
 import { useState } from "react";
 import { Card, Caption } from "./ui.jsx";
 import { useDiary, MOODS } from "../data/DiaryContext.jsx";
-import { detectEmotions } from "../data/prediction.js";
+import { todayQuestions, CHECKIN } from "../data/questions.js";
 
-// 홈 "오늘 기록" 카드 — 30초. 기분 5단계 + 한 줄. 저장 시 자동 태깅.
+// 홈 "체크인" 카드 — 2층 일기.
+//  · 30초 데일리: 기분 5단계(→ 그날 별 밝기) + 에너지·역량·감정키워드 칩
+//  · '자세히 답하기' 버튼 → 오늘의 질문(고정2+랜덤2) 펼침 → 성향 신호
 export default function DiaryToday() {
   const { saveToday, todayEntry, lastSim, daysSince } = useDiary();
   const [mood, setMood] = useState(todayEntry?.mood ?? null);
+  const [energy, setEnergy] = useState(todayEntry?.energy ?? null);
+  const [competency, setCompetency] = useState(todayEntry?.competency ?? null);
+  const [emotion, setEmotion] = useState(todayEntry?.emotion ?? null);
   const [text, setText] = useState(todayEntry?.text ?? "");
   const [editing, setEditing] = useState(!todayEntry);
+  const [openDetail, setOpenDetail] = useState(!!todayEntry?.answers);
+  const [answers, setAnswers] = useState(todayEntry?.answers ?? {});
 
-  const emotions = detectEmotions(text);
+  const questions = todayQuestions();
   const tag = `${lastSim.label} 이후 ${daysSince(lastSim.date)}일째`;
+  const answeredCount = Object.values(answers).filter((v) => (v || "").trim()).length;
+
+  function save() {
+    saveToday(mood, text.trim(), answers, { energy, competency, emotion });
+    setEditing(false);
+  }
 
   if (todayEntry && !editing) {
+    const nAns = todayEntry.answers
+      ? Object.values(todayEntry.answers).filter((v) => (v || "").trim()).length
+      : 0;
     return (
       <Card>
         <div className="flex items-center justify-between">
           <div className="text-xs font-bold text-cyan">오늘 기록 완료 ✦</div>
-          <button onClick={() => setEditing(true)} className="tap text-[11px] text-mut">
-            수정
-          </button>
+          <button onClick={() => setEditing(true)} className="tap text-[11px] text-mut">수정</button>
         </div>
         <div className="mt-2 flex items-center gap-2">
-          <span className="text-2xl">{MOODS.find((m) => m.v === todayEntry.mood)?.emoji}</span>
+          <span className="text-2xl">{MOODS.find((m) => m.v === todayEntry.mood)?.emoji || "✦"}</span>
           <p className="text-[13px] text-sub">{todayEntry.text || "(한 줄 없음)"}</p>
+        </div>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {todayEntry.emotion && <Tag>{todayEntry.emotion}</Tag>}
+          {todayEntry.competency && <Tag>{todayEntry.competency}</Tag>}
+          {nAns > 0 && <Tag>질문 {nAns}개 ✍️</Tag>}
         </div>
         <Caption>{tag}</Caption>
       </Card>
@@ -33,7 +52,11 @@ export default function DiaryToday() {
 
   return (
     <Card>
-      <div className="mb-2 text-sm font-bold">오늘, 어땠나요? <span className="text-[11px] font-normal text-mut">· 30초</span></div>
+      <div className="mb-2 text-sm font-bold">
+        오늘, 어땠나요? <span className="text-[11px] font-normal text-mut">· 30초</span>
+      </div>
+
+      {/* 기분 5단계 — 그날 별의 밝기 */}
       <div className="flex justify-between">
         {MOODS.map((m) => {
           const on = m.v === mood;
@@ -53,39 +76,123 @@ export default function DiaryToday() {
           );
         })}
       </div>
+
+      {/* 데일리 칩 3개 */}
+      <div className="mt-3 border-t border-line pt-3">
+        <ChipRow label={CHECKIN.energy.q}>
+          {CHECKIN.energy.opts.map((o) => (
+            <Chip key={o.v} on={energy === o.v} onClick={() => setEnergy(o.v)}>
+              {o.emoji}
+              <span className="ml-0.5 text-[9px]">{o.label}</span>
+            </Chip>
+          ))}
+        </ChipRow>
+
+        <ChipRow label={CHECKIN.competency.q}>
+          {CHECKIN.competency.opts.map((c) => (
+            <Chip key={c} on={competency === c} onClick={() => setCompetency(c)}>{c}</Chip>
+          ))}
+        </ChipRow>
+
+        <ChipRow label={CHECKIN.emotion.q}>
+          {CHECKIN.emotion.opts.map((o) => (
+            <Chip key={o.key} on={emotion === o.key} onClick={() => setEmotion(o.key)}>
+              {o.emoji} {o.key}
+            </Chip>
+          ))}
+        </ChipRow>
+      </div>
+
       <input
         value={text}
         onChange={(e) => setText(e.target.value)}
         maxLength={80}
         placeholder="한 줄로 남겨보세요 (예: 새 팀 적응이 막막함)"
-        className="mt-3 w-full rounded-xl border border-line bg-[#0E1424] px-3.5 py-2.5 text-sm text-ink outline-none focus:border-cyan"
+        className="mt-1 w-full rounded-xl border border-line bg-[#0E1424] px-3.5 py-2.5 text-sm text-ink outline-none focus:border-cyan"
       />
 
-      {emotions.length > 0 && (
-        <Caption>
-          감지된 감정:{" "}
-          {emotions.map((e) => (
-            <span key={e.keyword} className="text-cyan">
-              {e.keyword}
+      {!openDetail && (
+        <button
+          onClick={() => setOpenDetail(true)}
+          className="tap mt-3 flex w-full items-center justify-center gap-1.5 rounded-2xl border border-cyan bg-[#12203a] py-3 text-[13px] font-bold text-cyan"
+        >
+          ✍️ 오늘의 질문에 자세히 답하기
+          <span className="text-[11px] font-normal text-sub">· 4문항</span>
+        </button>
+      )}
+
+      {openDetail && (
+        <div className="mt-3 border-t border-line pt-3">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-[12px] font-bold text-cyan">
+              ✍️ 자세히 남기기 <span className="font-normal text-mut">· 오늘의 질문 (선택)</span>
             </span>
-          )).reduce((a, b) => [a, " · ", b])}{" "}
-          → {emotions[0].card} 카드
-        </Caption>
+            <button onClick={() => setOpenDetail(false)} className="tap text-[11px] text-mut">접기</button>
+          </div>
+          <div className="flex flex-col gap-2.5">
+            {questions.map((q, i) => (
+              <div key={q.id}>
+                <p className="mb-1 text-[12px] leading-snug text-sub">
+                  <b className="mr-1 text-cyan">{i + 1}.</b>
+                  {q.text}
+                </p>
+                <textarea
+                  value={answers[q.id] || ""}
+                  onChange={(e) => setAnswers((a) => ({ ...a, [q.id]: e.target.value }))}
+                  rows={2}
+                  placeholder="편하게 적어보세요"
+                  className="w-full resize-none rounded-xl border border-line bg-[#0E1424] px-3 py-2 text-[13px] text-ink outline-none focus:border-cyan"
+                />
+              </div>
+            ))}
+          </div>
+          <Caption>답한 질문일수록 성향을 더 정확히 읽어요.</Caption>
+        </div>
       )}
 
       <button
         disabled={!mood}
-        onClick={() => {
-          saveToday(mood, text.trim());
-          setEditing(false);
-        }}
+        onClick={save}
         className={`tap mt-3 w-full rounded-2xl py-2.5 text-[13px] font-bold transition-colors ${
           mood ? "bg-gradient-to-r from-cyan to-cyan-deep text-[#04203a]" : "bg-[#1E2740] text-mut"
         }`}
       >
-        기록 저장
+        기록 저장{answeredCount > 0 ? ` · 질문 ${answeredCount}개` : ""}
       </button>
       <Caption>{tag}로 자동 기록됩니다.</Caption>
     </Card>
+  );
+}
+
+function ChipRow({ label, hint, children }) {
+  return (
+    <div className="mb-2.5 last:mb-0">
+      <div className="mb-1 text-[11px] text-sub">
+        {label}
+        {hint && <span className="ml-1 text-[9px] text-mut">{hint}</span>}
+      </div>
+      <div className="flex flex-wrap gap-1.5">{children}</div>
+    </div>
+  );
+}
+
+function Chip({ on, onClick, children }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`tap rounded-[18px] border px-3 py-1.5 text-[12px] transition-colors ${
+        on ? "border-cyan bg-[#12203a] text-cyan" : "border-line bg-[#0E1424] text-sub"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Tag({ children }) {
+  return (
+    <span className="rounded-md border border-line bg-[#0E1424] px-2 py-0.5 text-[10px] text-mut">
+      {children}
+    </span>
   );
 }

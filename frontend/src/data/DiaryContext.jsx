@@ -8,7 +8,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 //    감정 궤적을 선택의 '인과 결과'로 단정하지 않는다.
 // ─────────────────────────────────────────────────────────────
 const DiaryContext = createContext(null);
-const KEY = "pm_diary_v1";
+const KEY = "pm_diary_v5"; // 시드 갱신 시 버전업 → 옛 localStorage 무시하고 새 시드 로드
 
 export const MOODS = [
   { v: 1, emoji: "😞", label: "힘듦" },
@@ -35,18 +35,49 @@ export const SIM_LOG = [
   { id: 1, label: "창업 시뮬 #1", date: iso(daysAgo(180)), title: "29세 · 보건·의료", branch: "창업 vs 현상 유지", headline: "창업 1년 생존율 64.6%, 5년 33%" },
 ];
 
-// 최근 2주 목업 일기 (감정 흐름이 보이도록 살짝 회복하는 추세)
+// 최근 한 달(4주) 데모 일기 — 워라밸·이직 고민(은우). 1주 무기력 → 4주 '면접 결심'까지,
+// 한 달에 걸쳐 기분이 회복되고 성향이 '움직이는 사람'으로 빌드업되는 흐름.
 function seedEntries() {
   const rows = [
-    { d: 13, mood: 2, text: "새 팀 적응이 아직 버겁다. 잘한 선택인지 막막함." },
-    { d: 11, mood: 2, text: "야근. 그래도 배우는 건 있는 듯." },
-    { d: 9, mood: 3, text: "동료랑 점심. 조금 나아짐." },
-    { d: 7, mood: 3, text: "프로젝트 방향이 잡혔다." },
-    { d: 5, mood: 4, text: "작은 성과. 인정받는 기분." },
-    { d: 3, mood: 3, text: "주말 앞두고 피곤하지만 괜찮음." },
-    { d: 1, mood: 4, text: "이직 결정, 지금은 후회 없다." },
+    // 4주 전(가장 오래) — 순수 번아웃·무기력
+    { d: 28, mood: 1, text: "그냥 버틴다. 하루가 어떻게 갔는지 모르겠다." },
+    { d: 27, mood: 1, text: "야근. 퇴근하고 넷플에 맥주 한 캔이 유일한 내 시간." },
+    { d: 26, mood: 2, text: "무한도전 옛날 편 또 봄. 새로운 거 볼 기력도 없다." },
+    { d: 25, mood: 1, text: "회의 내내 멍했다. 아무 생각이 없다." },    { d: 23, mood: 1, text: "다 놓고 싶다는 생각이 문득. 근데 그냥 출근한다." },
+    { d: 22, mood: 2, text: "점심 한 시간이 하루의 유일한 낙." },
+    // 3주 전 — 문제 자각
+    { d: 21, mood: 2, text: "아침에 일어나기가 너무 힘들다. 번아웃인가." },
+    { d: 20, mood: 2, text: "정시 퇴근 실패. 상사가 6시에 일 던짐." },
+    { d: 19, mood: 2, text: "이게 맞나 싶다. 연봉은 나쁘지 않은데 삶이 없다." },    { d: 17, mood: 2, text: "주말 출근 얘기에 거절을 못 했다. 자책." },
+    { d: 16, mood: 2, text: "몸이 자꾸 신호를 보낸다. 두통, 소화불량." },
+    { d: 15, mood: 3, text: "친구들이랑 저녁. 회사 밖 사람 만나니 숨통 트임." },
+    // 2주 전 — 준비 시작
+    { d: 14, mood: 2, text: "친구가 워라밸 좋은 데로 이직했다는 소식. 부러웠다." },    { d: 12, mood: 3, text: "주말 등산. 정상서 김밥 꿀맛. 이 맛에 버틴다." },
+    { d: 11, mood: 3, text: "이력서 초안을 드디어 썼다. 미루던 걸 시작해 후련." },    { d: 9, mood: 3, text: "이직한 선배한테 조언 구하려고 먼저 연락했다." },
+    { d: 8, mood: 3, text: "이직 지원 두 군데 넣음. 겁나도 일단 넣으니 되긴 하네.",
+      answers: { C2: "지원 버튼 누르기까지 오래 걸렸다. 겁났지만 결국 눌렀다.",
+                 D2: "저녁 있는 삶을 늘리고 싶고, 의미 없는 야근을 줄이고 싶다." } },
+    // 이번 주(가장 최근) — 결심
+    { d: 7, mood: 3, text: "일요일 늦잠에 브런치. 이런 여유가 오랜만." },
+    { d: 6, mood: 3, text: "지원 버튼 앞에서 또 망설였다. 그래도 정시 퇴근은 지켰다." },
+    { d: 5, mood: 3, text: "부당한 요청에 처음으로 선을 그었다. 늘 참던 나인데." },
+    // 한 줄 없이 '질문 일기'만 쓴 날 (표시·분석 둘 다 되는지 데모)
+    { d: 4, mood: 3, text: "",
+      answers: { C2: "면접 제안이 왔는데 안정 놓기가 무서워 답장을 미뤘다. 이 망설임이 계속 나를 잡는다.",
+                 R4: "평소 도전 안 하던 내가 이직을 진지하게 보는 게 좀 나답지 않다." } },
+    { d: 3, mood: 4, text: "퇴근하고 홈트하니 개운. 이직한 선배에게 조언도 구했다.",
+      answers: { C1: "홈트 끝나고 개운했던 저녁.",
+                 R3: "먼저 연락해 선배한테 조언 구한 것. 움직이니까 정보가 생긴다." } },
+    { d: 2, mood: 3, text: "면접 볼지 조건 표로 비교 중. 결정을 못 내리는 내가 제일 지친다." },
+    { d: 1, mood: 4, text: "결국 면접 보기로 답장했다. 미루기만 하던 내가 움직였다.",
+      answers: { C1: "면접 보기로 답장을 보낸 순간.",
+                 C2: "안정을 놓기가 무서웠지만 지금처럼 사는 게 더 무서웠다. 결국 눌렀다.",
+                 R3: "미루기만 하던 내가 움직인 것. 지친 저녁 판단 말고 개운한 날 결정한 게 컸다." } },
   ];
-  return rows.map((r, i) => ({ id: `seed-${i}`, date: iso(daysAgo(r.d)), mood: r.mood, text: r.text }));
+  return rows.map((r, i) => ({
+    id: `seed-${i}`, date: iso(daysAgo(r.d)), mood: r.mood, text: r.text,
+    ...(r.answers ? { answers: r.answers } : {}),
+  }));
 }
 
 function load() {
@@ -66,14 +97,17 @@ export function DiaryProvider({ children }) {
     } catch (_) {}
   }, [entries]);
 
-  // 오늘 기록 추가/갱신 (하루 1개, 같은 날이면 덮어씀)
-  function saveToday(mood, text) {
+  // 오늘 기록 추가/갱신 (하루 1개, 같은 날이면 덮어씀).
+  // answers: {qid: 답변} — 질문형 일기(자세히 쓰기). 없으면 빠른 체크인만.
+  function saveToday(mood, text, answers = null, extra = {}) {
     const today = iso(new Date());
     setEntries((prev) => {
       const rest = prev.filter((e) => e.date !== today);
-      return [...rest, { id: `e-${today}`, date: today, mood, text }].sort((a, b) =>
-        a.date < b.date ? -1 : 1,
-      );
+      const entry = { id: `e-${today}`, date: today, mood, text, ...extra }; // extra: energy·competency·emotion
+      if (answers && Object.values(answers).some((v) => (v || "").trim())) {
+        entry.answers = answers;
+      }
+      return [...rest, entry].sort((a, b) => (a.date < b.date ? -1 : 1));
     });
   }
 

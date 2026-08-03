@@ -1,8 +1,15 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { LineChart, Line, ResponsiveContainer, YAxis } from "recharts";
 import { Card } from "../components/ui.jsx";
 import { MY_UNIVERSE, PLANETS, SAVED_UNIVERSES } from "../data/result.js";
+import { useDiary, moodEmoji } from "../data/DiaryContext.jsx";
+import { weeklyConstellations } from "../data/constellation.js";
+import Constellation, { shapeFor, starColor } from "../components/Constellation.jsx";
+import { WEEKLY_REPORTS } from "../data/weeklyReports.js";
+import { questionText } from "../data/questions.js";
+import { useResult } from "../data/ResultContext.jsx";
+import { analyzeDisposition } from "../data/api.js";
 
 // 나의 우주 = 개인화 대시보드. 레벨/XP · 별자리 · 행성 · 평행우주 저장 · 통계.
 export default function MyUniverse() {
@@ -10,6 +17,47 @@ export default function MyUniverse() {
   const u = MY_UNIVERSE;
   const [planet, setPlanet] = useState("career");
   const [slot, setSlot] = useState("A");
+
+  // 별자리 = 일기로 생성(주별). 각 일기 = 별, 주마다 모양 변화.
+  const { entries } = useDiary();
+  const weeks = useMemo(() => weeklyConstellations(entries), [entries]);
+  const [wIdx, setWIdx] = useState(Math.max(0, weeks.length - 1));
+  const [showReport, setShowReport] = useState(false);
+  const [selIdx, setSelIdx] = useState(null); // 선택한 별(일기) 인덱스
+  const { profile } = useResult();
+  const [live, setLive] = useState(null);   // 실시간 분석 결과
+  const [busy, setBusy] = useState(false);
+  const [apiErr, setApiErr] = useState(null);
+  const week = weeks[wIdx] || null;
+
+  async function runAnalyze() {
+    if (!week) return;
+    setBusy(true); setApiErr(null); setLive(null);
+    try {
+      // 누적: 가장 오래된 주 ~ 선택한 주 까지 전체(성향 빌드업이 보이게)
+      const cum = weeks.slice(0, wIdx + 1).flatMap((w) => w.stars);
+      const entries = cum.map((s) => ({
+        date: s.date, mood: s.v, text: s.text, answers: s.answers || {},
+      }));
+      const r = await analyzeDisposition({
+        ranked_cards: profile.values, mbti: profile.mbti, entries,
+      });
+      setLive(r);
+    } catch (e) {
+      setApiErr(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const sel = week && selIdx != null && week.slots[selIdx]?.filled ? week.slots[selIdx] : null;
+  const realReport = week ? WEEKLY_REPORTS[week.weeksAgo] : null;
+  function goWeek(delta) {
+    setWIdx((i) => Math.min(weeks.length - 1, Math.max(0, i + delta)));
+    setShowReport(false);
+    setSelIdx(null);
+    setLive(null);
+    setApiErr(null);
+  }
 
   const xpPct = Math.min(100, (u.xp / u.xpMax) * 100);
   const selectedPlanet = PLANETS.find((p) => p.key === planet);
@@ -40,31 +88,126 @@ export default function MyUniverse() {
         </div>
       </Card>
 
-      {/* 별자리 만들기 */}
+      {/* 별자리 = 이번 주 일기 (각 일기 = 별, 주마다 모양 변화) */}
       <Card>
-        <div className="mb-1 flex items-center gap-1.5 text-base font-semibold">✦ 별자리 만들기</div>
-        <span className="inline-block rounded-lg border border-line px-2.5 py-1 text-[11px] text-sub">
-          ✏️ 도전형 성장 별자리
-        </span>
-        <div className="mt-3 h-[110px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={u.constellation} margin={{ top: 12, right: 8, left: 8, bottom: 4 }}>
-              <YAxis hide domain={[0, 6]} />
-              <Line
-                type="monotone"
-                dataKey="v"
-                stroke="#9FB0CE"
-                strokeWidth={1.5}
-                dot={{ r: 3.5, fill: "#EAF0FB", stroke: "#7FD4FF", strokeWidth: 1 }}
-                isAnimationActive={false}
+        <div className="mb-2 flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-base font-semibold">✦ 이번 주 별자리</div>
+          {weeks.length > 1 && (
+            <div className="flex items-center gap-2 text-[11px] text-sub">
+              <button disabled={wIdx === 0} onClick={() => goWeek(-1)}
+                className="tap px-1 text-mut disabled:opacity-30">◀</button>
+              <span className="min-w-[44px] text-center font-bold text-cyan">{week?.label}</span>
+              <button disabled={wIdx >= weeks.length - 1} onClick={() => goWeek(1)}
+                className="tap px-1 text-mut disabled:opacity-30">▶</button>
+            </div>
+          )}
+        </div>
+
+        {!week ? (
+          <p className="py-6 text-center text-[12px] text-mut">
+            일기를 쓰면 그날의 별이 하나씩 떠요. 첫 별을 남겨보세요 ✦
+          </p>
+        ) : (
+          <>
+            <span className="inline-block rounded-lg border border-line px-2.5 py-1 text-[11px] text-sub">
+              ✦ {shapeFor(week.weeksAgo).name} · 별 {week.n}개
+            </span>
+
+            <div className="mt-2">
+              <Constellation
+                slots={week.slots}
+                weeksAgo={week.weeksAgo}
+                selectedIdx={selIdx}
+                onSelect={setSelIdx}
               />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="mt-2 grid grid-cols-2 gap-2.5">
-          <MiniStat label="오늘 수집한 별" value={`${u.starsToday}개`} />
-          <MiniStat label="누적 체크인" value={`${u.checkinDays}일`} />
-        </div>
+              <div className="mt-1 flex items-center justify-center gap-1 text-[9px] text-mut">
+                <span>힘듦</span>
+                {[1, 2, 3, 4, 5].map((v) => (
+                  <span key={v} className="inline-block h-2 w-2 rounded-full"
+                    style={{ background: starColor(v) }} />
+                ))}
+                <span>좋음 · 별 색·크기 = 그날 기분</span>
+              </div>
+            </div>
+
+            {/* 별 클릭 → 그날 일기 밑에 */}
+            {sel ? (
+              <div className="rounded-xl border border-cyan bg-[#12203a] px-3.5 py-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">{moodEmoji(sel.v)}</span>
+                  <span className="shrink-0 text-[11px] text-mut">{sel.date.slice(5)}</span>
+                  <span className="flex-1 text-[12px] text-sub">{sel.text || "(한 줄 없음)"}</span>
+                </div>
+                {sel.answers &&
+                  Object.entries(sel.answers).filter(([, v]) => (v || "").trim()).length > 0 && (
+                    <div className="mt-2 flex flex-col gap-1 border-t border-line pt-2">
+                      {Object.entries(sel.answers)
+                        .filter(([, v]) => (v || "").trim())
+                        .map(([qid, v]) => (
+                          <div key={qid}>
+                            <p className="text-[10px] leading-snug text-mut">{questionText(qid)}</p>
+                            <p className="text-[11px] leading-snug text-sub">{v}</p>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+              </div>
+            ) : (
+              <p className="rounded-xl border border-dashed border-line py-2.5 text-center text-[11px] text-mut">
+                ✦ 별을 눌러 그날 일기를 봐요
+              </p>
+            )}
+
+            <div className="mt-3 grid grid-cols-2 gap-2.5">
+              <MiniStat label={`${week.label} 별`} value={`${week.n}개`} />
+              <MiniStat label="기분 평균" value={`${moodEmoji(Math.round(week.avg))} ${week.avg}`} />
+            </div>
+
+            {/* 모든 주 = 그 주까지 '누적' 라이브 분석 → 확신도·성향이 쌓이며 변하는 걸 봄 */}
+            <button
+              onClick={() => {
+                const next = !showReport;
+                setShowReport(next);
+                if (next && !live && !busy) runAnalyze();
+              }}
+              className="tap mt-3 w-full rounded-2xl border border-cyan bg-[#12203a] py-2.5 text-[12px] font-bold text-cyan"
+            >
+              {showReport ? "리포트 접기 ▴" : `🔮 ${week.label}까지 누적 분석 (내 모델) ▾`}
+            </button>
+
+            {showReport && (
+              <div className="mt-2 rounded-xl border border-line bg-[#0E1424] px-3.5 py-3">
+                {busy ? (
+                  <p className="text-[12px] text-mut">분석 중… 내 모델이 {week.label}까지 읽고 있어요</p>
+                ) : apiErr ? (
+                  <p className="text-[11px] leading-relaxed text-[#F0736F]">
+                    API 연결 실패 — 로컬 서버(python diary_module/qmode/api.py) 켜졌나요?{" "}
+                    <button onClick={runAnalyze} className="tap underline">다시 시도</button>
+                  </p>
+                ) : live ? (
+                  <>
+                    <div className="flex items-baseline justify-between">
+                      <div className="text-[12px] font-bold text-cyan">🔮 {week.label}까지 누적</div>
+                      <div className="text-[10px] text-mut">
+                        {live.disposition.n_answers}일 · 확신 {live.disposition.confidence?.level}
+                      </div>
+                    </div>
+                    <p className="mt-1 text-[11px] text-sub">
+                      대처 <b className="text-ink">{live.disposition.coping || "—"}</b> · 위험감수{" "}
+                      <b className="text-ink">{live.disposition.risk_tolerance ?? "—"}</b>
+                      {live.disposition.decision_style ? ` · 결정 ${live.disposition.decision_style}` : ""}
+                    </p>
+                    <div className="mt-2 whitespace-pre-line border-t border-line pt-2 text-[12px] leading-relaxed text-sub">
+                      {live.report}
+                    </div>
+                  </>
+                ) : (
+                  <button onClick={runAnalyze} className="tap text-[12px] text-cyan">분석 시작하기 →</button>
+                )}
+              </div>
+            )}
+          </>
+        )}
       </Card>
 
       {/* 행성 선택 */}
@@ -173,6 +316,38 @@ function MiniStat({ label, value, center = false }) {
     >
       <div className="text-[10px] text-mut">{label}</div>
       <div className="mt-0.5 text-lg font-bold text-ink">{value}</div>
+    </div>
+  );
+}
+
+// 별 하나 = 그날 일기. 질문에 답한 날은 눌러서 답변까지 펼침.
+function StarRow({ star }) {
+  const [open, setOpen] = useState(false);
+  const answers = star.answers
+    ? Object.entries(star.answers).filter(([, v]) => (v || "").trim())
+    : [];
+  const hasAnswers = answers.length > 0;
+  return (
+    <div className="rounded-xl border border-line bg-[#0E1424] px-3 py-2">
+      <button
+        onClick={() => hasAnswers && setOpen((o) => !o)}
+        className={`flex w-full items-center gap-2 text-left ${hasAnswers ? "tap" : "cursor-default"}`}
+      >
+        <span className="text-base">{moodEmoji(star.v)}</span>
+        <span className="w-[36px] shrink-0 text-[10px] text-mut">{star.date.slice(5)}</span>
+        <span className="flex-1 truncate text-[12px] text-sub">{star.text || "(한 줄 없음)"}</span>
+        {hasAnswers && <span className="shrink-0 text-[10px] text-cyan">✍️{open ? "▴" : "▾"}</span>}
+      </button>
+      {open && hasAnswers && (
+        <div className="mt-1.5 flex flex-col gap-1 border-t border-line pt-1.5">
+          {answers.map(([qid, v]) => (
+            <p key={qid} className="text-[11px] leading-snug text-sub">
+              <b className="mr-1 text-cyan">{qid}</b>
+              {v}
+            </p>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

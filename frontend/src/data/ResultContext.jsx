@@ -12,7 +12,8 @@ const DEFAULT_PROFILE = {
   major: "공학",
   edu_level: 7, // 7=대졸
   income: 280, // 만원/월
-  values: ["성장 가능성"],
+  values: [], // 가치 강제순위(라벨 배열, 앞이 1순위) — qmode value_ranking 과 매칭
+  mbti: "", // 성격유형 4글자(선택) — 스타일 초기 prior, 일기가 갱신(qmode mbti.py)
 };
 
 export function ResultProvider({ children }) {

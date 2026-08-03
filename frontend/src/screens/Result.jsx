@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useResult } from "../data/ResultContext.jsx";
+import { useDiary } from "../data/DiaryContext.jsx";
 import { labelOf } from "../data/prediction.js";
+import { saveMe, getScenario } from "../data/api.js";
 import { Eyebrow, SourceFootnote, Button } from "../components/ui.jsx";
 import SummaryView from "../components/result/SummaryView.jsx";
 import ParallelView from "../components/result/ParallelView.jsx";
@@ -48,6 +50,8 @@ export default function Result() {
         <span className="font-bold text-gold">{labelOf(b.choice)}</span>
       </p>
 
+      <PersonaScenario a={a} b={b} />
+
       {/* 서브뷰 칩 */}
       <div className="no-scrollbar my-2.5 flex gap-1.5 overflow-x-auto pb-1">
         {tabs.map((t) => {
@@ -75,6 +79,77 @@ export default function Result() {
       <Button variant="ghost" className="mt-4" onClick={() => navigate("/input")}>
         다른 갈림길로 다시 해보기
       </Button>
+    </div>
+  );
+}
+
+// 저장된 내 성향(온보딩+일기) → 이 이직 예측 서사에 반영 (수치 불변, 순서·톤만)
+function PersonaScenario({ a, b }) {
+  const { profile } = useResult();
+  const { entries } = useDiary();
+  const jc = a.choice === "이직" ? a : b.choice === "이직" ? b : null;
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const [res, setRes] = useState(null);
+
+  if (!jc) return null; // 이직 시나리오 없으면 표시 안 함
+
+  async function run() {
+    setBusy(true); setErr(null); setRes(null);
+    try {
+      await saveMe({
+        ranked_cards: profile.values,
+        mbti: profile.mbti,
+        profile: { age: profile.age, occupation: profile.occupation, income: profile.income },
+        entries: entries.map((e) => ({
+          date: e.date, mood: e.mood, text: e.text, answers: e.answers || {},
+          energy: e.energy, competency: e.competency, emotion: e.emotion,
+        })),
+      });
+      const r = await getScenario({
+        uid: "me", choice: "이직",
+        expected_wage: jc.expected_wage || 0,
+        causal_effect: jc.causal_effect || 0,
+        survival_months: jc.survival_months || 0,
+        age: jc.meta?.age, major: jc.meta?.occupation,
+      });
+      setRes(r);
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mb-3 mt-1 rounded-2xl border border-cyan bg-[#12203a] p-3.5">
+      <div className="flex items-center justify-between">
+        <div className="text-[13px] font-bold text-cyan">🔮 내 성향이 반영된 이직 서사</div>
+        <button
+          onClick={run}
+          disabled={busy}
+          className="tap rounded-xl bg-cyan px-3 py-1.5 text-[11px] font-bold text-[#04203a] disabled:opacity-60"
+        >
+          {busy ? "생성 중…" : res ? "다시" : "생성"}
+        </button>
+      </div>
+      {err && <p className="mt-2 text-[10px] text-[#F0736F]">API 실패 — 서버(:8000) 켜졌나요? {err}</p>}
+      {res ? (
+        <>
+          <p className="mt-2 whitespace-pre-line text-[12px] leading-relaxed text-sub">{res.narrative}</p>
+          <p className="mt-1.5 text-[10px] text-mut">
+            {res.persona_used
+              ? "✓ 저장된 내 성향(온보딩+일기) 반영 — 예측 수치는 동일, 서술 순서·톤만 조정"
+              : "성향 미반영(저장된 데이터 없음)"}
+          </p>
+        </>
+      ) : (
+        !busy && (
+          <p className="mt-2 text-[11px] text-mut">
+            온보딩+일기로 만든 내 성향을 저장하고, 이 이직 예측에 반영한 서사를 생성해요.
+          </p>
+        )
+      )}
     </div>
   );
 }

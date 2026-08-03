@@ -2,8 +2,8 @@ import { LineChart, Line, YAxis, XAxis, Tooltip, ResponsiveContainer } from "rec
 import { Card, Caption } from "./ui.jsx";
 import { useDiary, moodEmoji } from "../data/DiaryContext.jsx";
 
-// 최근 2주 감정 흐름 (짧게). '내 주관적 기록'이지 실측 데이터 아님.
-export default function MoodTrend({ days = 14 }) {
+// 최근 1주 감정 흐름 (짧게). '내 주관적 기록'이지 실측 데이터 아님.
+export default function MoodTrend({ days = 7 }) {
   const { entries } = useDiary();
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - days);
@@ -26,7 +26,7 @@ export default function MoodTrend({ days = 14 }) {
   return (
     <Card>
       <div className="mb-1 flex items-center justify-between">
-        <div className="text-xs font-bold text-mut">최근 2주 감정 흐름</div>
+        <div className="text-xs font-bold text-mut">최근 1주 감정 흐름</div>
         <div className="text-[10px] text-mut">{data.length}개 기록</div>
       </div>
       <div className="h-[90px] w-full">
