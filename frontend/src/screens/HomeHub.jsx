@@ -5,6 +5,7 @@ import { MY_UNIVERSE, MASCOTS } from "../data/result.js";
 import { labelOf } from "../data/prediction.js";
 import DiaryToday from "../components/DiaryToday.jsx";
 import MoodTrend from "../components/MoodTrend.jsx";
+import Mascot from "../components/Mascot.jsx";
 import { universeSummary } from "../data/myUniverse.js";
 
 // 홈 = 진입 허브. 인사 + 마스코트 + 새 시뮬 CTA + 최근 결과 요약 + 미니 통계.
@@ -25,6 +26,14 @@ export default function HomeHub() {
         <br />
         비춰볼까요?
       </h1>
+
+      <Card highlight className="flex items-center gap-3">
+        <Mascot which={guide.key} size={48} />
+        <div className="min-w-0">
+          <div className="text-[11px] font-bold" style={{ color: guide.color }}>{guide.name} · {guide.tag}</div>
+          <p className="mt-0.5 text-[12px] leading-relaxed text-sub">데이터에서 비슷한 사람들의 경로를 찾아 차분히 비춰드릴게요.</p>
+        </div>
+      </Card>
 
       {/* 오늘 기록(일기) + 최근 감정 흐름 */}
       <div className="mt-3">
