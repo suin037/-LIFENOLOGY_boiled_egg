@@ -28,7 +28,8 @@ function SideRisk({ result }) {
           <LineChart data={data} margin={{ top: 8, right: 12, left: -14, bottom: 0 }}>
             <CartesianGrid stroke="#1E2740" vertical={false} />
             <XAxis dataKey="year" tick={{ fill: "#7E8DAB", fontSize: 11 }} axisLine={{ stroke: "#2A3550" }} tickLine={false} />
-            <YAxis domain={[0, 80]} tickFormatter={(v) => `${v}%`} tick={{ fill: "#7E8DAB", fontSize: 11 }} axisLine={false} tickLine={false} />
+            {/* 실데이터는 10년차 이탈확률이 80%를 넘는다(KLIPS 기준 84.7%) → 0~100 고정 */}
+            <YAxis domain={[0, 100]} tickFormatter={(v) => `${v}%`} tick={{ fill: "#7E8DAB", fontSize: 11 }} axisLine={false} tickLine={false} />
             <Tooltip contentStyle={{ background: "#141B2E", border: "1px solid #28324D", borderRadius: 10, fontSize: 12, color: "#EAF0FB" }} formatter={(v) => [`${v}%`, result.risk_label]} />
             <Line type="monotone" dataKey="pct" stroke="#EE8888" strokeWidth={2} dot={{ r: 3, fill: "#EE8888" }} />
           </LineChart>
