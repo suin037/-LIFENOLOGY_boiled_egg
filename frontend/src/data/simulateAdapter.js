@@ -114,9 +114,10 @@ export function mapSimulateToPair(sim, { choiceA, choiceB, detailA = "", detailB
   if (!A || !B) return null;
 
   const profile = cmp.profile || {};
-  const ev = sim.evidence_levels || {};
-  const dc = sim.domain_coverage || {};
-  const ds = sim.domain_stats || {};
+  // 근거수준·영역지표·가드는 이제 /compare 응답(cmp)에 실려온다. (구 /simulate 최상위도 폴백 지원)
+  const ev = cmp.evidence_levels || sim.evidence_levels || {};
+  const dc = cmp.domain_coverage || sim.domain_coverage || {};
+  const ds = cmp.domain_stats || sim.domain_stats || {};
   const a = buildSide(A, choiceA, detailA, profile, ev.A, dc.A, ds.A);
   const b = buildSide(B, choiceB, detailB, profile, ev.B, dc.B, ds.B);
 

@@ -210,9 +210,21 @@ def predict(req: PredictRequest) -> PredictResponse:
     return run_prediction(req)
 
 
-@app.post("/compare", response_model=CompareResponse)
-def compare(req: CompareRequest) -> CompareResponse:
-    return build_comparison(req)
+@app.post("/compare")
+def compare(req: CompareRequest) -> dict:
+    # 발표 카드용 수치 + 영역 라우팅/근거수준(항목3·4)을 함께 반환.
+    # 프론트가 화면 수치를 /compare 에서 읽으므로 여기에도 실어야 표시된다.
+    cmp = build_comparison(req).model_dump()
+    routed_a = route_domains(getattr(req, "choice_a_domains", None), cmp["profile"])
+    routed_b = route_domains(getattr(req, "choice_b_domains", None), cmp["profile"])
+    cmp["domain_stats"] = {"A": routed_a, "B": routed_b}
+    cmp["domain_coverage"] = {"A": _coverage_from_routes(routed_a),
+                              "B": _coverage_from_routes(routed_b)}
+    cmp["evidence_levels"] = {
+        "A": _scenario_evidence(cmp["scenarios"]["A"], has_rag=False),
+        "B": _scenario_evidence(cmp["scenarios"]["B"], has_rag=False),
+    }
+    return cmp
 
 
 @app.post("/simulate")
