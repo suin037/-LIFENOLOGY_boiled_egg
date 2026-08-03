@@ -223,7 +223,7 @@ export function classifyChoice(text) {
   if (KW.진학.some((k) => text.includes(k))) return "진학";
   if (KW.창업.some((k) => text.includes(k))) return "창업";
   if (KW.유지.some((k) => text.includes(k))) return "유지";
-  return "이직"; // 목적지만 있고 동사 없으면 '이동'으로 간주
+  return null; // 판단 근거가 없으면 자동으로 이직을 만들지 않는다.
 }
 
 // ── 자유서술 → 감정 신호어 감지 → 심리 이론카드 매칭 (RAG 트리거 미리보기) ──

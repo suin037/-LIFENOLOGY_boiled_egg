@@ -44,6 +44,7 @@ export default function Result() {
         b={b}
         visuals={result.visuals}
         narrative={result.narrative}
+        loading={result.imageLoading}
         error={result.visualError || result.narrativeError}
       />
 

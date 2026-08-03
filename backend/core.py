@@ -17,13 +17,17 @@ from utils.claude_api import generate_narrative
 
 
 def choice_kind(choice: str) -> str:
-    """자유입력 choice 를 이직/창업/진학 3분류로 정규화."""
-    c = str(choice)
+    """자유입력을 근거가 있는 유형으로만 정규화한다."""
+    c = str(choice).strip().lower()
     if any(k in c for k in ("창업", "사업", "자영", "startup")):
         return "창업"
     if any(k in c for k in ("진학", "대학원", "유학", "학업", "석사", "박사")):
         return "진학"
-    return "이직"
+    if any(k in c for k in ("이직", "전직", "옮기", "다른 회사", "갈아타")):
+        return "이직"
+    if any(k in c for k in ("유지", "현상 유지", "현직", "잔류", "그대로", "계속 다니", "남기")):
+        return "유지"
+    return "기타"
 
 
 def run_prediction(req: PredictRequest, with_narrative: bool = True) -> PredictResponse:
@@ -92,9 +96,13 @@ def run_prediction(req: PredictRequest, with_narrative: bool = True) -> PredictR
         timeline = startup_closure_timeline(features)      # 폐업 누적확률
         coverage = ("창업: 생활지표(L1) + 창업 생존/폐업 통계. "
                     "개인단위 인과·매칭은 창업 추적 데이터 부재로 미제공")
-    else:  # 진학
+    elif kind == "진학":
         coverage = ("진학: 생활지표(L1) + 계열별 취업률·진학률(KEDI). "
                     "개인단위 인과·매칭은 진학 추적 데이터 부재로 미제공")
+    elif kind == "유지":
+        coverage = "현상 유지: 생활지표(L1) + 관측 기준 궤적. 이직 인과효과는 적용하지 않음"
+    else:
+        coverage = "기타 선택: 생활지표(L1)만 제공. 해당 선택의 전용 예측모델은 없음"
 
     # narrative 는 3번 팀원 RAG/Claude API 담당. 키 미설정·호출 실패 시에도
     # 예측(L1~L4)은 정상 반환되도록 방어.

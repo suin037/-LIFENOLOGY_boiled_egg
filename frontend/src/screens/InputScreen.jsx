@@ -26,11 +26,11 @@ export default function InputScreen() {
   function onText(side, val) {
     if (side === "A") {
       setScenarioTexts((p) => ({ ...p, a: val }));
-      if (autoA) { const c = classifyChoice(val); if (c) setChoices((p) => ({ ...p, a: c })); }
+      if (autoA) { const c = classifyChoice(val); setChoices((p) => ({ ...p, a: c || "" })); }
       if (domainAuto.a) setScenarioDomains((p) => ({ ...p, a: detectLifeDomains(val) }));
     } else {
       setScenarioTexts((p) => ({ ...p, b: val }));
-      if (autoB) { const c = classifyChoice(val); if (c) setChoices((p) => ({ ...p, b: c })); }
+      if (autoB) { const c = classifyChoice(val); setChoices((p) => ({ ...p, b: c || "" })); }
       if (domainAuto.b) setScenarioDomains((p) => ({ ...p, b: detectLifeDomains(val) }));
     }
   }
@@ -61,7 +61,8 @@ export default function InputScreen() {
   const normalizedB = textB.trim().replace(/\s+/g, " ");
   const duplicate = sameCategory && (!normalizedA || !normalizedB || normalizedA === normalizedB);
   const missingDomains = normalizedA && normalizedB && (!scenarioDomains.a.length || !scenarioDomains.b.length);
-  const blocked = duplicate || missingDomains;
+  const missingChoice = (normalizedA && !choices.a) || (normalizedB && !choices.b);
+  const blocked = duplicate || missingDomains || missingChoice;
 
   return (
     <div>
@@ -103,6 +104,9 @@ export default function InputScreen() {
       )}
       {missingDomains && (
         <Caption className="text-danger">A/B 각각에 해당하는 삶의 영역을 하나 이상 선택해주세요.</Caption>
+      )}
+      {missingChoice && (
+        <Caption className="text-danger">자동 감지가 어려운 문장입니다. 해당하는 예측 엔진 유형을 직접 선택해주세요.</Caption>
       )}
 
       {needMajor && (
@@ -213,7 +217,9 @@ function SlotInput({ tag, accent, text, choice, auto, onText, onPick, placeholde
           );
         })}
       </div>
-      <div className="mt-1.5 text-[10px] text-mut">{choice} → {COVERAGE_HINT[choice]}</div>
+      <div className="mt-1.5 text-[10px] text-mut">
+        {choice ? `${choice} → ${COVERAGE_HINT[choice]}` : "자동 감지 불확실 · 유형을 직접 선택해주세요"}
+      </div>
     </div>
   );
 }

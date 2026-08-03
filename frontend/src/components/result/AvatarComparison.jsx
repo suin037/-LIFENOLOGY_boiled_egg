@@ -2,7 +2,7 @@ import { useState } from "react";
 import Avatar from "../Avatar.jsx";
 import { labelOf } from "../../data/prediction.js";
 
-export default function AvatarComparison({ avatar, a, b, visuals, narrative, error }) {
+export default function AvatarComparison({ avatar, a, b, visuals, narrative, loading, error }) {
   const [expanded, setExpanded] = useState(null);
   return (
     <section className="mt-4" aria-labelledby="visual-story-title">
@@ -31,6 +31,9 @@ export default function AvatarComparison({ avatar, a, b, visuals, narrative, err
         <p className="mt-2 rounded-lg border border-danger/30 bg-danger/10 px-2.5 py-2 text-[10px] leading-relaxed text-danger">
           일부 AI 결과를 표시하지 못했어요. 가능한 내용만 보여드립니다: {error}
         </p>
+      )}
+      {loading && !visuals && (
+        <p className="mt-2 text-[10px] text-mut">이미지는 백그라운드에서 생성 중이에요. 서사와 결과는 먼저 확인할 수 있습니다.</p>
       )}
       <p className="mt-2 text-[10px] leading-relaxed text-mut">
         통계·심리 근거로 작성된 서사를 시각화한 상상도이며, 실제 미래를 예측한 이미지는 아닙니다.

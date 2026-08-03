@@ -177,7 +177,7 @@ export async function runSimulate(args) {
   return mapSimulateToResult(await runSimulateRaw(args));
 }
 
-export async function generateSceneImages({ avatarBlob, choiceA, choiceB, narrative }) {
+export async function generateSceneImages({ avatarBlob, choiceA, choiceB, narrative, timeoutMs = 35000 }) {
   const storyText = (story) => {
     if (typeof story === "string") return story;
     const detail = story?.detail || {};
@@ -194,7 +194,21 @@ export async function generateSceneImages({ avatarBlob, choiceA, choiceB, narrat
   form.append("visual_a", JSON.stringify(narrative.visual_a || {}));
   form.append("visual_b", JSON.stringify(narrative.visual_b || {}));
 
-  const res = await fetch(`${API_BASE}/visualize`, { method: "POST", body: form });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  let res;
+  try {
+    res = await fetch(`${API_BASE}/visualize`, {
+      method: "POST",
+      body: form,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") throw new Error("이미지 생성 시간이 길어 기본 아바타로 전환했습니다.");
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
   if (!res.ok) {
     let detail = `visualize ${res.status}`;
     try { detail = (await res.json()).detail || detail; } catch { /* no-op */ }

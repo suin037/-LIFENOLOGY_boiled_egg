@@ -47,5 +47,6 @@ export function classifyChoice(text) {
   if (KW.진학.some((k) => text.includes(k))) return "진학";
   if (KW.창업.some((k) => text.includes(k))) return "창업";
   if (KW.유지.some((k) => text.includes(k))) return "유지";
-  return "이직";
+  // 근거 키워드가 없으면 오분류하지 않고 사용자가 직접 고르게 한다.
+  return null;
 }

@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState } from "react";
+import { createContext, useContext, useMemo, useRef, useState } from "react";
 import { getPredictionPair } from "./prediction.js";
 import { DEFAULT_AVATAR } from "./avatarOptions.js";
 import { generateSceneImages, runSimulateRaw } from "../api.js";
@@ -38,9 +38,11 @@ export function ResultProvider({ children }) {
     ({ ...getPredictionPair({ profile: DEFAULT_PROFILE, choiceA: "이직", choiceB: "유지" }), dataMode: "demo" }),
   );
   const [onboarded, setOnboarded] = useState(false);
+  const simulationRunRef = useRef(0);
 
   // 선택(choices)+심정(diary) → 결과 쌍 {a,b} 생성. (지금은 목업)
   async function runSimulation(opts = {}) {
+    const runId = ++simulationRunRef.current;
     const choiceA = opts.choiceA || choices.a;
     const choiceB = opts.choiceB || choices.b;
     const currentDiary = opts.diary ?? diary;
@@ -77,20 +79,23 @@ export function ResultProvider({ children }) {
         domains: { a: scenarioDomains.a, b: scenarioDomains.b },
         narrative,
         evidence: simulation.evidence,
+        imageLoading: true,
     };
     // Claude 글은 이미지 생성과 무관하게 먼저 보존한다.
     setResult(storyResult);
-    try {
-      const avatarBlob = await avatarToPngBlob(profile.avatarConfig);
-      const visual = await generateSceneImages({ avatarBlob, choiceA, choiceB, narrative });
-      const enriched = { ...storyResult, visuals: visual.images, visualModel: visual.model };
-      setResult(enriched);
-      return enriched;
-    } catch (error) {
-      const fallback = { ...storyResult, visualError: error.message };
-      setResult(fallback);
-      return fallback;
-    }
+    // 이미지는 결과 이동을 막지 않고 백그라운드에서 생성한다.
+    void (async () => {
+      try {
+        const avatarBlob = await avatarToPngBlob(profile.avatarConfig);
+        const visual = await generateSceneImages({ avatarBlob, choiceA, choiceB, narrative });
+        if (simulationRunRef.current !== runId) return;
+        setResult({ ...storyResult, visuals: visual.images, visualModel: visual.model, imageLoading: false });
+      } catch (error) {
+        if (simulationRunRef.current !== runId) return;
+        setResult({ ...storyResult, imageLoading: false, visualError: error.message });
+      }
+    })();
+    return storyResult;
   }
 
   const value = useMemo(
