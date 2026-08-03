@@ -16,7 +16,11 @@ class Settings(BaseSettings):
     )
 
     anthropic_api_key: str = ""
-    goms_clean_path: str = "data/goms_clean.csv"
+    cloudflare_account_id: str = ""
+    cloudflare_api_token: str = ""
+    cloudflare_reference_model: str = "@cf/black-forest-labs/flux-2-klein-4b"
+    # preprocess/preprocess_goms.py의 실제 출력 위치와 통일한다.
+    goms_clean_path: str = "data/clean/goms_clean.csv"
     artifacts_dir: str = "backend/models/artifacts"
 
     # Claude 모델 — 서사 생성용. 저렴+적당 기본값(Haiku).

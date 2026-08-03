@@ -23,7 +23,8 @@ except ImportError:
 class DiaryAnalyzer:
     def __init__(self, ckpt="./ckpt_e6/best.pt", taxonomy="emotion_taxonomy.json"):
         self.tax = json.load(open(taxonomy, encoding="utf-8"))
-        ck = torch.load(ckpt, map_location=DEV)
+        # weights_only=False: 자체 학습 체크포인트(신뢰됨). torch>=2.6 기본값 대응.
+        ck = torch.load(ckpt, map_location=DEV, weights_only=False)
         self.maps = ck["maps"]
         self.c_codes = sorted(self.maps["coarse"])
         self.f_codes = sorted(self.maps["fine"])

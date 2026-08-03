@@ -57,7 +57,7 @@ export default function Simulate() {
       </div>
 
       <h2 className="mb-1 text-base font-semibold">두 개의 미래를 계산하는 중</h2>
-      <p className="text-[11px] text-mut">실제 한국 패널 데이터 306명 조회</p>
+      <p className="text-[11px] text-mut">결과와 RAG 서사를 먼저 준비해요. 이미지는 결과 화면에서 이어서 생성됩니다.</p>
 
       <div className="mt-3 w-[220px] text-left">
         {STEPS.map((s, i) => {

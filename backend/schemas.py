@@ -27,6 +27,8 @@ class Profile(BaseModel):
     firm_size: Optional[int] = Field(None, ge=1, le=9, description="기업규모 코드 1~9")
     edu_level: Optional[int] = Field(None, ge=2, le=9,
         description="교육수준(KLIPS 학력코드: 5=고졸 6=전문대 7=대졸 8=석사 9=박사) — 궤적 매칭 정교화용(선택)")
+    persona_block: Optional[str] = Field(None,
+        description="qmode 성향 재료(이직 서사 개인화). 없으면 기존과 동일 — 예측 수치엔 미반영, 서사 톤·순서만 조정")
 
     # --- 가치 성향 (선택) — 개인화 레이어용. 모델 매칭 피처 아님(강조·초점·서사에만) ---
     value_weights: Optional[dict[str, float]] = Field(
@@ -61,6 +63,12 @@ class SimulateRequest(CompareRequest):
 
     diary: Optional[str] = Field(
         None, description="사용자 일기 텍스트(선택). 있으면 감정신호로 개인화 + 서사 반영"
+    )
+    choice_a_detail: Optional[str] = Field(
+        None, max_length=500, description="같은 선택 유형을 구분하는 A의 구체적 상황"
+    )
+    choice_b_detail: Optional[str] = Field(
+        None, max_length=500, description="같은 선택 유형을 구분하는 B의 구체적 상황"
     )
     emotions: Optional[list[str]] = Field(
         None, description="감정 키워드(선택). 심리카드 검색·안전분기에 사용"
