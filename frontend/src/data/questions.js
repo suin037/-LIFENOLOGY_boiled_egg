@@ -11,6 +11,7 @@ const TASTE = [
   { id: "T1", layer: "taste", text: "최근 꽂힌 영화·책·영상 하나. 어떤 장면이나 인물이 남았나요?" },
   { id: "T4", layer: "taste", text: "요즘 시간이 가장 잘 녹아 없어지는 활동은? 하고 난 뒤 어떤 기분이 남나요?" },
   { id: "T2", layer: "taste", text: "요즘 반복해서 듣는 노래나 플레이리스트 있나요? 주로 언제 손이 가나요?" },
+  { id: "T7", layer: "taste", text: "오늘 에너지를 가장 크게 받은 일이 있다면 무엇인가요? 그게 왜 힘이 됐을까요?" },
 ];
 
 const RELATION = [
