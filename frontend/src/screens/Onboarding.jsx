@@ -166,7 +166,6 @@ export default function Onboarding() {
                 <span className={`text-[13px] font-semibold ${on ? "text-cyan" : "text-ink"}`}>
                   {c.label}
                 </span>
-                <span className="block text-[10px] text-mut">{c.desc}</span>
               </span>
             </button>
           );

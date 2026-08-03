@@ -245,7 +245,6 @@ export default function MyUniverse() {
                     </span>
                   )}
                 </span>
-                <span className={`text-[10px] ${on ? "text-ink" : "text-mut"}`}>{p.label}</span>
               </button>
             );
           })}

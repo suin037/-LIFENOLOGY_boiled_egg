@@ -15,18 +15,19 @@ export default function TabBar() {
         <NavLink
           key={to}
           to={to}
+          aria-label={label}
+          title={label}
           className={({ isActive }) =>
-            `tap flex flex-1 flex-col items-center justify-center gap-1 py-2 text-[10px] font-medium transition-colors ${
+            `tap flex flex-1 items-center justify-center py-1.5 transition-colors ${
               isActive ? "text-cyan" : "text-mut"
             }`
           }
         >
           {({ isActive }) => (
             <>
-              <span className={`flex h-8 w-10 items-center justify-center rounded-xl ${isActive ? "bg-cyan/10" : ""}`}>
+              <span className={`flex h-9 w-12 items-center justify-center rounded-xl ${isActive ? "bg-cyan/10" : ""}`}>
                 <Icon size={20} strokeWidth={isActive ? 2.3 : 1.8} />
               </span>
-              {label}
             </>
           )}
         </NavLink>

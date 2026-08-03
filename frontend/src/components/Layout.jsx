@@ -14,12 +14,14 @@ export default function Layout() {
   const showProfile = !NO_PROFILE.includes(pathname);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#0b0c0f] p-0 sm:px-6">
+    <div className="flex min-h-screen items-center justify-center bg-[#0b0c0f] p-0 sm:p-6">
       <div
-        className="relative flex h-screen w-full max-w-phone flex-col overflow-hidden bg-bg sm:border-x sm:border-line/50"
+        className="relative flex h-screen w-full max-w-phone flex-col overflow-hidden bg-bg
+                   sm:h-[820px] sm:max-h-[92vh] sm:rounded-[28px] sm:border sm:border-line/60
+                   sm:shadow-[0_24px_70px_rgba(0,0,0,.45)]"
       >
         {/* 서비스 헤더 */}
-        <header className="z-20 flex h-16 items-center justify-between px-5">
+        <header className="z-20 flex h-14 shrink-0 items-center justify-between px-5">
           <button onClick={() => navigate("/home")} className="text-[15px] font-bold tracking-[-.03em] text-ink">
             Parallel Me
           </button>
@@ -42,7 +44,7 @@ export default function Layout() {
         {/* 화면 본문 (스크롤) */}
         <main
           key={pathname}
-          className="no-scrollbar relative z-10 flex-1 animate-fade overflow-y-auto px-5 pb-10 pt-2"
+          className="no-scrollbar relative z-10 flex-1 animate-fade overflow-y-auto px-5 pb-7 pt-1"
         >
           <Outlet />
         </main>
