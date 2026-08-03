@@ -44,6 +44,17 @@ export default function TrajectoryView({ a, b }) {
 
 function IncomeBand({ result, color }) {
   const traj = result.trajectory || [];
+  const hasChoiceSpecificTrajectory = !result.trajectory_is_baseline || ["유지", "현상 유지"].includes(result.choice);
+  if (!hasChoiceSpecificTrajectory) {
+    return (
+      <Card>
+        <h2 className="text-base font-semibold">{labelOf(result.choice)} · 소득 흐름</h2>
+        <p className="mt-2 text-[12px] leading-relaxed text-sub">
+          이 선택에 맞는 장기 소득 흐름은 아직 제공하지 않아요.
+        </p>
+      </Card>
+    );
+  }
   const data = traj.map((p) => ({
     year: `${p.year}년`,
     lower: p.income_p25,
