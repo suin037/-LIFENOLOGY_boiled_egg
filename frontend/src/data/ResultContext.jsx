@@ -3,12 +3,16 @@ import { getPredictionPair } from "./prediction.js";
 import { DEFAULT_AVATAR } from "./avatarOptions.js";
 import { generateSceneImages, runSimulateRaw } from "../api.js";
 import { avatarToPngBlob } from "./avatarImage.js";
+import { initDemoFromUrl, noteSimulationRun } from "./myUniverse.js";
 
 // 결과 데이터 + 온보딩 프로필을 한 곳에 모으는 컨텍스트.
 // runSimulation() 이 선택(choices)+심정(diary)으로 결과 쌍{a,b}을 만든다.
 // ※ 지금은 목업(getPredictionPair). 백엔드 실연결은 api.js(runSimulate)를
 //   내 결과 형태로 확장해 여기서 호출하면 됨(파일은 보존해둠).
 const ResultContext = createContext(null);
+
+// 발표/체험 링크의 ?demo=1 요청이 있을 때만 나의 우주 예시 기록을 준비한다.
+initDemoFromUrl();
 
 const DEFAULT_PROFILE = {
   age: 29,
@@ -40,6 +44,7 @@ export function ResultProvider({ children }) {
     const choiceA = opts.choiceA || choices.a;
     const choiceB = opts.choiceB || choices.b;
     const currentDiary = opts.diary ?? diary;
+    noteSimulationRun();
     const pair = { ...getPredictionPair({ profile, choiceA, choiceB, detail: currentDiary }), dataMode: "demo" };
     setResult(pair);
     let simulation;

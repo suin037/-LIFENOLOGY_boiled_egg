@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { addCheckin } from "./myUniverse.js";
 
 // ─────────────────────────────────────────────────────────────
 // 일기(오늘 기록) — 매일 한 줄 + 기분(1~5). localStorage로 영속.
@@ -117,6 +118,16 @@ export function DiaryProvider({ children }) {
   // answers: {qid: 답변} — 질문형 일기(자세히 쓰기). 없으면 빠른 체크인만.
   function saveToday(mood, text, answers = null, extra = {}) {
     const today = iso(new Date());
+    // 일기 저장과 나의 우주 별 저장을 같은 사용자 행동으로 동기화한다.
+    addCheckin({
+      date: today,
+      mood,
+      energy: extra.energy,
+      skill: extra.competency,
+      keyword: extra.emotion,
+      note: text,
+      diaryId: `e-${today}`,
+    });
     setEntries((prev) => {
       const rest = prev.filter((e) => e.date !== today);
       const entry = { id: `e-${today}`, date: today, mood, text, ...extra }; // extra: energy·competency·emotion

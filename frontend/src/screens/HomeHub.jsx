@@ -5,6 +5,7 @@ import { MY_UNIVERSE, MASCOTS } from "../data/result.js";
 import { labelOf } from "../data/prediction.js";
 import DiaryToday from "../components/DiaryToday.jsx";
 import MoodTrend from "../components/MoodTrend.jsx";
+import { universeSummary } from "../data/myUniverse.js";
 
 // 홈 = 진입 허브. 인사 + 마스코트 + 새 시뮬 CTA + 최근 결과 요약 + 미니 통계.
 export default function HomeHub() {
@@ -12,6 +13,7 @@ export default function HomeHub() {
   const { profile, result } = useResult();
   const { a, b } = result;
   const guide = MASCOTS.cosmo;
+  const universe = universeSummary();
 
   return (
     <div>
@@ -80,9 +82,9 @@ export default function HomeHub() {
 
       {/* 미니 통계 */}
       <div className="mt-4 grid grid-cols-3 gap-2.5">
-        <Stat label="시뮬레이션" value={MY_UNIVERSE.stats.simulations} />
-        <Stat label="수집한 별" value={MY_UNIVERSE.stats.stars} />
-        <Stat label="탐험한 우주" value={MY_UNIVERSE.stats.universes} />
+        <Stat label="시뮬레이션" value={universe.stats.simulations} />
+        <Stat label="수집한 별" value={universe.stats.stars} />
+        <Stat label="탐험한 우주" value={universe.stats.universes} />
       </div>
       <button
         onClick={() => navigate("/my")}

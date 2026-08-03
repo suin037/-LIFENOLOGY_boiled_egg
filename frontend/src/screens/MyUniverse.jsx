@@ -10,12 +10,14 @@ import { WEEKLY_REPORTS } from "../data/weeklyReports.js";
 import { questionText } from "../data/questions.js";
 import { useResult } from "../data/ResultContext.jsx";
 import { analyzeDisposition } from "../data/api.js";
+import { setPlanet as persistPlanet, universeSummary } from "../data/myUniverse.js";
 
 // 나의 우주 = 개인화 대시보드. 레벨/XP · 별자리 · 행성 · 평행우주 저장 · 통계.
 export default function MyUniverse() {
   const navigate = useNavigate();
   const u = MY_UNIVERSE;
-  const [planet, setPlanet] = useState("career");
+  const activity = universeSummary();
+  const [planet, setPlanet] = useState(activity.state.planet || "career");
   const [slot, setSlot] = useState("A");
 
   // 별자리 = 일기로 생성(주별). 각 일기 = 별, 주마다 모양 변화.
@@ -59,8 +61,12 @@ export default function MyUniverse() {
     setApiErr(null);
   }
 
-  const xpPct = Math.min(100, (u.xp / u.xpMax) * 100);
   const selectedPlanet = PLANETS.find((p) => p.key === planet);
+
+  function choosePlanet(key) {
+    setPlanet(key);
+    persistPlanet(key);
+  }
 
   return (
     <div>
@@ -75,14 +81,16 @@ export default function MyUniverse() {
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between">
             <span className="text-sm font-bold">
-              {u.title} · Lv. {u.level}
+              {activity.title} · Lv. {activity.level}
             </span>
-            <span className="text-[11px] text-mut">{u.xp.toLocaleString()} XP</span>
+            <span className="text-[11px] text-mut">
+              {activity.xpInLevel.toLocaleString()} / {activity.xpMax.toLocaleString()} XP
+            </span>
           </div>
           <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[#1E2740]">
             <div
               className="h-full rounded-full bg-gradient-to-r from-cyan to-[#8B5CF6]"
-              style={{ width: `${xpPct}%` }}
+              style={{ width: `${activity.xpPct}%` }}
             />
           </div>
         </div>
@@ -220,7 +228,7 @@ export default function MyUniverse() {
             return (
               <button
                 key={p.key}
-                onClick={() => setPlanet(p.key)}
+                onClick={() => choosePlanet(p.key)}
                 className="tap flex flex-1 flex-col items-center gap-1.5"
               >
                 <span
@@ -288,9 +296,9 @@ export default function MyUniverse() {
       <Card>
         <div className="mb-3 flex items-center gap-1.5 text-base font-semibold">🌌 은하수 아카이브</div>
         <div className="grid grid-cols-3 gap-2.5">
-          <MiniStat label="시뮬레이션" value={u.stats.simulations} center />
-          <MiniStat label="수집한 별" value={u.stats.stars} center />
-          <MiniStat label="탐험한 우주" value={u.stats.universes} center />
+          <MiniStat label="시뮬레이션" value={activity.stats.simulations} center />
+          <MiniStat label="수집한 별" value={activity.stats.stars} center />
+          <MiniStat label="탐험한 우주" value={activity.stats.universes} center />
         </div>
         <button
           onClick={() => navigate("/archive")}
