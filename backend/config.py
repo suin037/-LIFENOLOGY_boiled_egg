@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     #  존재하지 않는 경로가 계산돼 궤적이 통째로 비어 나오던 버그를 막는다.)
     data_dir: str = "data"
 
+    # 기동 시 무거운 것(패널·아티팩트·심리RAG 임베딩 모델)을 미리 올릴지.
+    # 끄면 첫 요청이 30초 넘게 걸린다 — 테스트·CLI 처럼 한 번만 쓰는 경우에만 끈다.
+    warmup_on_startup: bool = True
+
     # Claude 모델 — 서사 생성용. 저렴+적당 기본값(Haiku).
     # 환경변수 CLAUDE_MODEL 로 덮어쓸 수 있음(예: claude-sonnet-5 / claude-opus-4-8).
     claude_model: str = "claude-haiku-4-5"

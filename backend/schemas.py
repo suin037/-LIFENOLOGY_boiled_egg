@@ -27,6 +27,11 @@ class Profile(BaseModel):
     firm_size: Optional[int] = Field(None, ge=1, le=9, description="기업규모 코드 1~9")
     edu_level: Optional[int] = Field(None, ge=2, le=9,
         description="교육수준(KLIPS 학력코드: 5=고졸 6=전문대 7=대졸 8=석사 9=박사) — 궤적 매칭 정교화용(선택)")
+    tenure_years: Optional[float] = Field(None, ge=0, le=60,
+        description="현 직장 근속연수 — 궤적 매칭용(선택). KLIPS 기준 임금 분산의 21.5% 설명")
+    job_category: Optional[int] = Field(None, ge=100, le=999,
+        description="직종 코드(KSCO 3자리, 예: 312=경영·회계 사무원) — 궤적 매칭용(선택). "
+                    "임금 분산의 36.8%를 설명하는 가장 강한 축. 없으면 그 축은 매칭에서 제외")
     persona_block: Optional[str] = Field(None,
         description="qmode 성향 재료(이직 서사 개인화). 없으면 기존과 동일 — 예측 수치엔 미반영, 서사 톤·순서만 조정")
 
@@ -136,6 +141,10 @@ class TrajectoryPoint(BaseModel):
     income_p50: float = Field(..., description="월소득 중앙값(만원)")
     income_p75: float = Field(..., description="월소득 상위 25%(만원)")
     job_change_cum: Optional[float] = Field(None, description="시작 이후 누적 이직 경험 비율")
+    effect_applied: Optional[float] = Field(None,
+        description="이 연차에 더해진 L3 인과효과(만원). 시나리오 경로에만 존재")
+    effect_extrapolated: Optional[bool] = Field(None,
+        description="true 면 그 연차는 동적효과 관측범위 밖이라 마지막 관측값을 끌고 온 것")
 
 
 class WellbeingPoint(BaseModel):
@@ -160,11 +169,22 @@ class PredictResponse(BaseModel):
     """
 
     choice: str = Field(..., description="적용된 선택지 (이직/창업/진학)")
+    kind: str = Field("", description="정규화된 선택 유형(이직/창업/진학/유지/기타)")
+    choice_confidence: float = Field(0.0,
+        description="선택 유형 분류 확신도 0~1. 낮으면 유형 오분류를 의심할 것")
     coverage: str = Field("", description="이 선택지에 어떤 레이어가 적용됐는지 설명")
+    matched_on: list[str] = Field(default_factory=list,
+        description="L5 궤적 매칭에 실제로 쓰인 항목. 요청에 없는 항목은 중앙값으로 채우지 "
+                    "않고 거리 계산에서 제외되므로, 이 목록이 곧 개인화의 깊이다")
 
     expected_wage: Optional[float] = Field(None, description="유사집단 기대 월소득(L2, 이직만)")
-    causal_effect: Optional[float] = Field(None, description="선택이 임금에 미친 인과효과(L3 EconML, 이직만)")
-    survival_months: Optional[float] = Field(None, description="평균 재직기간(L4 lifelines, 이직만)")
+    causal_effect: Optional[float] = Field(None,
+        description="선택이 소득에 미친 인과효과(L3 EconML). 이직·창업에서 제공")
+    causal_effect_profile: Optional[dict] = Field(None,
+        description="연차별 인과효과 프로파일 {by_year:{h:{ate,ci_low,ci_high,n_treated}}} — "
+                    "효과의 시간 변화와 불확실성 근거(동적 처치효과)")
+    survival_months: Optional[float] = Field(None,
+        description="상태 지속기간 중앙값(L4 lifelines). 이직=재직, 창업=자영 유지")
     neighbors: list[NeighborCase] = []
     neighbor_changed_ratio: Optional[float] = Field(None, description="유사집단 중 실제 이직 비율(이직만)")
     risk_timeline: dict[int, float] = Field(default_factory=dict,
@@ -175,6 +195,9 @@ class PredictResponse(BaseModel):
         description="종단 궤적 — 비슷한 사람들의 향후 N년 소득·이직 실제 분포(데이터 기반 미래 예측)")
     wellbeing_trajectory: list[WellbeingPoint] = Field(default_factory=list,
         description="만족도 궤적 — 종합 만족도(1~5)의 시간 변화(청년·YP). 소득 궤적과 짝지어 해석")
+    wellbeing_branch: dict = Field(default_factory=dict,
+        description="만족도 궤적이 선택별로 분기됐는지 {branched, label, matched_n, branch_n, reason} — "
+                    "branched=true 면 '실제로 그 선택을 한 유사인'만 추적한 경로(관측이지 인과 아님)")
     satisfaction_facets: dict[str, list[dict]] = Field(default_factory=dict,
         description="만족도 세부 facet별 궤적 {facet_key: [{year,age,sample_n,p50}]} — 직무·자기발전·소득·고용안정·장래성")
     scenario_trajectories: dict[str, list[TrajectoryPoint]] = Field(default_factory=dict,

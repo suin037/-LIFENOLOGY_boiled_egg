@@ -21,6 +21,10 @@ data/clean/
 data/raw/
 *.pkl
 *.sas7bdat
+# 위 두 디렉터리 밖에 떨어져 있는 KLIPS 개인단위 산출물 — 어떤 패턴에도 안 걸려서
+# `git add .` 한 번이면 공개 레포로 올라간다. 파일명으로 직접 막는다.
+data/klips_clean.csv
+data/klips_survival.csv
 
 # Node / frontend
 node_modules/

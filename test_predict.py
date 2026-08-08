@@ -13,9 +13,12 @@ from pathlib import Path
 BACKEND = Path(__file__).resolve().parent / "backend"
 sys.path.insert(0, str(BACKEND))
 
-# narrative(Claude API) 스텁 — 실제 API 호출 없이 테스트
+# narrative(Claude API) 스텁 — 실제 API 호출 없이 테스트.
+# main.py 가 import 하는 심볼을 **전부** 갖춰야 한다. generate_scenarios 가 빠져 있어
+# `import main` 이 ImportError 로 죽고 있었다(엔진 문제가 아니라 스텁 누락).
 _stub = types.ModuleType("utils.claude_api")
 _stub.generate_narrative = lambda *a, **k: "(narrative 생략 — 테스트 모드)"
+_stub.generate_scenarios = lambda *a, **k: {"_skipped": True}
 sys.modules["utils.claude_api"] = _stub
 
 from schemas import PredictRequest   # noqa: E402
@@ -59,11 +62,22 @@ def run(case: dict) -> None:
         wb = " → ".join(f"{p.satis_p50:.1f}" for p in r.wellbeing_trajectory)
         print(f"  만족도 궤적(종합 1~5, 청년): {wb}")
     if r.scenario_trajectories:
+        # 선택 경로의 키는 선택 유형이다(이직·창업 …). 예전엔 '이직' 뿐이라
+        # 하드코딩돼 있었는데, 인과가 붙는 treatment 가 늘면서 일반화됐다.
+        picked = next(k for k in r.scenario_trajectories if k != "유지")
         stay = {p.year: p for p in r.scenario_trajectories["유지"]}
-        move = {p.year: p for p in r.scenario_trajectories["이직"]}
-        print("  평행우주(유지 vs 이직 중앙소득, 격차=L3 인과효과):")
+        move = {p.year: p for p in r.scenario_trajectories[picked]}
+        print(f"  평행우주(유지 vs {picked} 중앙소득, 격차=연차별 L3 인과효과):")
         for y in sorted(stay):
-            print(f"     {y}년차: 유지 {stay[y].income_p50:.0f}만  /  이직 {move[y].income_p50:.0f}만")
+            m = move.get(y)
+            if m is None:
+                continue
+            # 0년차(현재)는 아직 효과가 없어 effect_applied 가 비어 있다
+            eff = ("현재" if m.effect_applied is None
+                   else f"효과 {m.effect_applied:+.1f}만"
+                        + (", 관측범위 밖 추정" if m.effect_extrapolated else ""))
+            print(f"     {y}년차: 유지 {stay[y].income_p50:.0f}만  /  "
+                  f"{picked} {m.income_p50:.0f}만  ({eff})")
 
 
 if __name__ == "__main__":
