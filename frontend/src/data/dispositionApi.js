@@ -54,6 +54,23 @@ export async function chatTurn(messages, persona = "lumi") {
   }
 }
 
+// 일기 텍스트 → 내가 만든 감정모델 추론 { ok, emotion, mood, crisis_level }. 감정 미선택 시 폴백용.
+// 체크포인트 없으면 { ok:false } → 호출부가 LLM 폴백으로 강등.
+export async function analyzeEmotion(text) {
+  try {
+    const res = await fetch(`${BASE}/emotion`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+    if (!res.ok) return null;
+    const j = await res.json();
+    return j && j.ok ? j : null;
+  } catch {
+    return null;
+  }
+}
+
 // 대화 전체 → 1인칭 일기 { text, mood, emotion, domains }. 체크인 저장용.
 export async function composeDiary(messages) {
   try {

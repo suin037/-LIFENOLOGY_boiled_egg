@@ -410,6 +410,47 @@ def chat_opener(persona: str = "lumi"):
     return {"opener": CB.opener(persona), "persona": persona}
 
 
+# ── 감정 모델(로컬 파인튜닝 klue/roberta) — 감정 미선택 시 일기에서 추론 ──
+_EMO = None
+_MOOD_BY_EMO = {"기쁨": 5, "당황": 3, "분노": 2, "불안": 2, "슬픔": 2, "상처": 2}
+
+
+def _emotion_analyzer():
+    global _EMO
+    if _EMO is None:
+        try:
+            import infer  # diary_module/infer.py (sys.path 우선)
+            _EMO = infer.DiaryAnalyzer(
+                ckpt=str(ROOT / "model_v3_e6.pt"),
+                taxonomy=str(DIARY / "emotion_taxonomy.json"))
+        except Exception:
+            _EMO = False   # 체크포인트/deps 없음 → 폴백 신호
+    return _EMO or None
+
+
+class EmotionReq(BaseModel):
+    text: str
+
+
+@app.post("/emotion")
+def emotion_infer(req: EmotionReq):
+    """일기 텍스트 → 감정모델 추론(감정·기분·위기). 감정 미선택 시 폴백용.
+    체크포인트/deps 없으면 {ok:False} → 프론트가 LLM 폴백으로 강등."""
+    an = _emotion_analyzer()
+    if an is None or not (req.text or "").strip():
+        return {"ok": False}
+    try:
+        r = an.analyze(req.text)
+        dom = r.get("dominant") or {}
+        return {"ok": True, "emotion": dom.get("display") or dom.get("coarse"),
+                "fine": dom.get("fine"),
+                "mood": _MOOD_BY_EMO.get(dom.get("coarse"), 3),
+                "crisis_level": r.get("crisis_level", 0),
+                "block": bool(r.get("block_report"))}
+    except Exception:
+        return {"ok": False}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000)

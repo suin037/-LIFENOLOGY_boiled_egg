@@ -3,7 +3,7 @@ import { Card, Caption } from "./ui.jsx";
 import { useDiary, MOODS } from "../data/DiaryContext.jsx";
 import { todayQuestions, CHECKIN } from "../data/questions.js";
 import ChatDiary from "./ChatDiary.jsx";
-import { composeDiary } from "../data/dispositionApi.js";
+import { composeDiary, analyzeEmotion } from "../data/dispositionApi.js";
 
 // 홈 "체크인" 카드 — 2층 일기.
 //  · 30초 데일리: 기분 5단계(→ 그날 별 밝기) + 에너지·역량·감정키워드 칩
@@ -38,9 +38,17 @@ export default function DiaryToday() {
     }
     const line = text.trim();
     const bodyText = [line, ...qaLines].filter(Boolean).join("\n");
-    // 기분을 안 골랐어도 챗봇 답변이 있으면 대화에서 기분·감정 자동 추론(별 밝히기).
+    // 감정/기분을 안 골랐으면 → 내가 만든 감정모델로 일기에서 추론(우선).
     let finalMood = mood;
     let finalEmotion = emotion;
+    if ((finalMood == null || !finalEmotion) && bodyText) {
+      const em = await analyzeEmotion(bodyText);
+      if (em) {
+        if (!finalEmotion) finalEmotion = em.emotion || finalEmotion;
+        if (finalMood == null && em.mood != null) finalMood = em.mood;
+      }
+    }
+    // 감정모델 불가(체크포인트 없음 등)로 기분이 여전히 비었으면 → LLM compose 폴백.
     if (finalMood == null && chatHasUser) {
       try {
         const c = await composeDiary(chatMsgs);
