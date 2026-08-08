@@ -34,20 +34,6 @@ export default function Constellation({ stars = [], onSelect, selectedDate = nul
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img"
       aria-label={`이번 주 ${pts.filter((p) => p.filled).length}일의 기록으로 그린 별자리${complete ? " (완성)" : ""}`}
       style={{ maxHeight: 210, display: "block" }}>
-      {complete && (
-        <>
-          <defs>
-            <radialGradient id="cglow" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor="#7FD4FF" stopOpacity="0.34" />
-              <stop offset="65%" stopColor="#7FD4FF" stopOpacity="0.08" />
-              <stop offset="100%" stopColor="#7FD4FF" stopOpacity="0" />
-            </radialGradient>
-          </defs>
-          <circle cx={CX} cy={CY} r={R_MIN + R_SPREAD + 12} fill="url(#cglow)">
-            <animate attributeName="opacity" values="0.55;1;0.55" dur="3.2s" repeatCount="indefinite" />
-          </circle>
-        </>
-      )}
       {/* 중심점 */}
       <circle cx={CX} cy={CY} r={2} fill="#5A6B8C" opacity={0.5} />
       {/* 중심→별 살(spoke) */}
@@ -87,6 +73,23 @@ export default function Constellation({ stars = [], onSelect, selectedDate = nul
           </g>
         );
       })}
+      {/* 완성 시 작은 반짝이 별들이 빤짝거린다 */}
+      {complete &&
+        pts.map((p, i) => (
+          <Sparkle key={`spk${i}`} x={p.x} y={p.y - 6} size={2.6} delay={(i * 0.32).toFixed(2)} />
+        ))}
     </svg>
+  );
+}
+
+// 작은 4갈래 반짝이 별 — 완성 별자리에서 빤짝거린다.
+function Sparkle({ x, y, size = 3, delay = "0" }) {
+  const r = size,
+    s = size * 0.32;
+  const d = `M${x},${y - r} L${x + s},${y - s} L${x + r},${y} L${x + s},${y + s} L${x},${y + r} L${x - s},${y + s} L${x - r},${y} L${x - s},${y - s} Z`;
+  return (
+    <path d={d} fill="#EAF2FF">
+      <animate attributeName="opacity" values="0;1;0.3;1;0" dur="1.8s" begin={`${delay}s`} repeatCount="indefinite" />
+    </path>
   );
 }
