@@ -42,6 +42,9 @@ export default function Onboarding() {
   const { profile, setProfile, setOnboarded } = useResult();
 
   const [visibleThrough, setVisibleThrough] = useState(0);
+  const [incomeInput, setIncomeInput] = useState(() =>
+    Number(profile.income) > 0 ? String(profile.income) : "",
+  );
   const agePct = ((profile.age - 18) / 52) * 100;
   const ranked = profile.values; // 라벨 배열, 앞이 1순위
   const steps = ["이름", "나이", "직종", "소득", "가치", "성격유형", "아바타"];
@@ -60,6 +63,17 @@ export default function Onboarding() {
     if (event.key !== "Enter" || event.nativeEvent?.isComposing) return;
     event.preventDefault();
     reveal(index);
+  }
+
+  function updateIncome(value) {
+    const normalized = value.replace(/^0+(?=\d)/, "");
+    setIncomeInput(normalized);
+    setProfile((p) => ({ ...p, income: normalized === "" ? 0 : Number(normalized) }));
+  }
+
+  function confirmIncome() {
+    if (incomeInput === "") return;
+    reveal(4);
   }
 
   // 탭한 순서 = 우선순위. 다시 누르면 해제(뒤 순위 자동 당겨짐). 부분순위 허용.
@@ -127,14 +141,16 @@ export default function Onboarding() {
     <div key="income">
       <label className="mb-2 block text-xs text-sub">현재 월소득</label>
       <div className="flex items-center gap-2">
-        <input type="number" min="0" value={profile.income}
-          onChange={(e) => {
-            setProfile((p) => ({ ...p, income: Number(e.target.value) }));
-            if (e.target.value !== "") reveal(4);
-          }}
+        <input type="number" min="0" step="1" value={incomeInput}
+          placeholder="예: 300"
+          onChange={(e) => updateIncome(e.target.value)}
+          onKeyDown={(e) => incomeInput !== "" && revealOnEnter(e, 4)}
           className="w-full rounded-xl border border-line bg-[#0E1424] px-3.5 py-3 text-sm text-ink outline-none focus:border-cyan" />
         <span className="whitespace-nowrap text-[11px] text-mut">만원 / 월</span>
       </div>
+      {incomeInput !== "" && visibleThrough < 4 && (
+        <Button className="mt-3" onClick={confirmIncome}>다음</Button>
+      )}
     </div>,
     <div key="values">
       <div className="flex items-center justify-between gap-3">

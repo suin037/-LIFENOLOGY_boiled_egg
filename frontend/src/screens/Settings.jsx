@@ -11,6 +11,18 @@ import Avatar from "../components/Avatar.jsx";
 import AvatarBuilder from "../components/AvatarBuilder.jsx";
 import Mascot from "../components/Mascot.jsx";
 
+const OCCUPATIONS = [
+  "연구·공학기술",
+  "경영·사무·금융·보험",
+  "교육·법률·복지·공공",
+  "보건·의료",
+  "예술·디자인·방송",
+  "영업·판매·서비스",
+  "건설·생산·운송",
+  "학생·취업준비",
+  "기타",
+];
+
 // 작은 on/off 토글 (track h-6/w-11 · thumb h-4/w-4 · translate 로 이동 — 크기 균형)
 function Toggle({ on, onClick }) {
   return (
@@ -103,6 +115,31 @@ export default function Settings() {
   const { profile, setProfile, setOnboarded } = useResult();
   const [prefs, setPrefs] = useState(loadPrefs);
   const [editingAvatar, setEditingAvatar] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [profileDraft, setProfileDraft] = useState(null);
+
+  function startProfileEdit() {
+    setProfileDraft({
+      name: profile.name || "",
+      age: profile.age ?? 29,
+      occupation: profile.occupation || "",
+      income: Number(profile.income) > 0 ? String(profile.income) : "",
+    });
+    setEditingProfile(true);
+  }
+
+  function saveProfileEdit() {
+    if (!profileDraft) return;
+    setProfile((current) => ({
+      ...current,
+      name: profileDraft.name.trim(),
+      age: Number(profileDraft.age),
+      occupation: profileDraft.occupation,
+      income: profileDraft.income === "" ? 0 : Number(profileDraft.income),
+    }));
+    setEditingProfile(false);
+    setProfileDraft(null);
+  }
 
   function update(patch) {
     setPrefs((p) => {
@@ -155,7 +192,7 @@ export default function Settings() {
             <ProfileItem label="중요 가치" value={topAxes(profile.value_ranking, 2).join(" · ") || "—"} />
             <button
               type="button"
-              onClick={() => navigate("/onboarding")}
+              onClick={startProfileEdit}
               className="tap w-full pt-2 text-right text-[10px] font-semibold text-sub"
             >
               기본 정보 수정
@@ -163,6 +200,88 @@ export default function Settings() {
           </div>
         </div>
       </Card>
+
+      {editingProfile && profileDraft && (
+        <Card className="animate-fade">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <div className="text-[13px] font-semibold text-ink">기본 정보 수정</div>
+              <div className="mt-0.5 text-[10px] text-mut">바꾸고 싶은 항목만 수정하세요.</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => { setEditingProfile(false); setProfileDraft(null); }}
+              className="tap text-[11px] text-sub"
+            >
+              취소
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            <label className="block text-[11px] text-sub">
+              이름 또는 닉네임
+              <input
+                type="text"
+                maxLength={20}
+                value={profileDraft.name}
+                onChange={(e) => setProfileDraft((p) => ({ ...p, name: e.target.value }))}
+                className="mt-1 w-full rounded-xl border border-line bg-[#0E1424] px-3.5 py-3 text-sm text-ink outline-none focus:border-cyan"
+              />
+            </label>
+
+            <label className="block text-[11px] text-sub">
+              나이 <span className="float-right font-semibold text-cyan">{profileDraft.age}세</span>
+              <input
+                type="range"
+                min="18"
+                max="70"
+                value={profileDraft.age}
+                onChange={(e) => setProfileDraft((p) => ({ ...p, age: Number(e.target.value) }))}
+                className="mt-3 h-1 w-full cursor-pointer accent-cyan"
+              />
+            </label>
+
+            <label className="block text-[11px] text-sub">
+              직종
+              <select
+                value={profileDraft.occupation}
+                onChange={(e) => setProfileDraft((p) => ({ ...p, occupation: e.target.value }))}
+                className="mt-1 w-full rounded-xl border border-line bg-[#0E1424] px-3.5 py-3 text-sm text-ink outline-none focus:border-cyan"
+              >
+                <option value="">직종을 골라주세요</option>
+                {OCCUPATIONS.map((occupation) => <option key={occupation}>{occupation}</option>)}
+              </select>
+            </label>
+
+            <label className="block text-[11px] text-sub">
+              월소득
+              <div className="mt-1 flex items-center gap-2">
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="예: 300"
+                  value={profileDraft.income}
+                  onChange={(e) => {
+                    const income = e.target.value.replace(/^0+(?=\d)/, "");
+                    setProfileDraft((p) => ({ ...p, income }));
+                  }}
+                  className="w-full rounded-xl border border-line bg-[#0E1424] px-3.5 py-3 text-sm text-ink outline-none focus:border-cyan"
+                />
+                <span className="whitespace-nowrap text-[11px] text-mut">만원 / 월</span>
+              </div>
+            </label>
+          </div>
+
+          <button
+            type="button"
+            onClick={saveProfileEdit}
+            className="tap mt-4 w-full rounded-2xl bg-cyan py-3 text-sm font-bold text-[#08111f]"
+          >
+            변경사항 저장
+          </button>
+        </Card>
+      )}
 
       {/* 내 아바타 — 사람 빌더 + 우주 프레임 */}
       {editingAvatar && (
