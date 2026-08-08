@@ -10,6 +10,7 @@ import ChangeView from "../components/result/ChangeView.jsx";
 import EvidenceView from "../components/result/EvidenceView.jsx";
 import ActionView from "../components/result/ActionView.jsx";
 import AvatarComparison from "../components/result/AvatarComparison.jsx";
+import DiarySignalCard from "../components/result/DiarySignalCard.jsx";
 
 export default function Result() {
   const navigate = useNavigate();
@@ -50,6 +51,8 @@ export default function Result() {
         onRetry={result.visualError ? retryVisuals : null}
       />
 
+      {/* 3층: ① 통계(아래 탭) · ② 내 기록 기반 상태 · ③ 개인화 해석 */}
+      <DiarySignalCard />
       <PersonaScenario a={a} b={b} />
 
       {/* 서브뷰 칩 */}

@@ -1,16 +1,20 @@
 import { useMemo, useState } from "react";
 import { Card, Caption } from "../ui.jsx";
 import { actionsFor, clearActiveGoal, loadActiveGoal, saveActiveGoal } from "../../data/actionBridge.js";
+import { computeDiarySignals } from "../../data/diarySignals.js";
 import { domainLabel, labelOf } from "../../data/choices.js";
 
 export default function ActionView({ a, b, domains = { a: [], b: [] } }) {
   const [goal, setGoal] = useState(loadActiveGoal);
+  const sig = useMemo(() => computeDiarySignals({ windowDays: 28 }), []);
   const selected = goal?.side === "A" && goal.choice === a.choice ? { side: "A", result: a, domains: domains.a || [] }
     : goal?.side === "B" && goal.choice === b.choice ? { side: "B", result: b, domains: domains.b || [] } : null;
   const actions = useMemo(
-    () => selected ? actionsFor(selected.result.choice, selected.domains) : [],
-    [selected?.result.choice, selected?.domains.join("|")],
+    () => selected ? actionsFor(selected.result.choice, selected.domains, sig) : [],
+    [selected?.result.choice, selected?.domains.join("|"), sig],
   );
+  // 다음 단계에 반영된 일기 신호(로컬 계산) — "화면용 아님"을 보여주는 근거.
+  const reflected = actions.filter((x) => x.domain === "signal");
 
   function choose(side, result, selectedDomains) {
     setGoal(saveActiveGoal({ side, choice: result.choice, domains: selectedDomains || [] }));
@@ -41,10 +45,18 @@ export default function ActionView({ a, b, domains = { a: [], b: [] } }) {
       {selected.domains.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">{selected.domains.map((d) => <span key={d} className="rounded-full border border-line px-2 py-1 text-[10px] text-mut">{domainLabel(d)}</span>)}</div>
       )}
+      {reflected.length > 0 && (
+        <p className="mt-2 rounded-lg border border-cyan/25 bg-[#12203a] px-2.5 py-1.5 text-[10px] leading-relaxed text-sub">
+          🗒 최근 일기 반영: {reflected.map((r) => `${r.signal} ${r.days}일`).join(" · ")} — 이 상태에 맞춰 아래 실험을 골랐어요.
+        </p>
+      )}
       <div className="mt-3 space-y-2.5">
         {actions.map((action, index) => (
           <Card key={action.id}>
-            <div className="text-[10px] font-bold text-cyan">작은 실험 {index + 1}</div>
+            <div className="text-[10px] font-bold text-cyan">
+              작은 실험 {index + 1}
+              {action.domain === "signal" && <span className="ml-1.5 rounded-full bg-cyan/15 px-1.5 py-0.5 text-[9px] text-cyan">내 기록 기반</span>}
+            </div>
             <p className="mt-1 text-[13px] font-semibold leading-relaxed text-ink">{action.text}</p>
             <p className="mt-2 text-[11px] leading-relaxed text-sub"><b>추천 이유</b> · {action.purpose}</p>
             <details className="mt-2 text-[10px] leading-relaxed text-mut">
