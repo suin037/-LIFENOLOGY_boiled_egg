@@ -34,7 +34,7 @@ function coord(i, s, filled) {
   return [CX + r * Math.cos(a), CY + r * Math.sin(a)];
 }
 
-export default function Constellation({ stars = [], onSelect, selectedDate = null, todayDate = null }) {
+export default function Constellation({ stars = [], onSelect, selectedDate = null, todayDate = null, size = 210 }) {
   const [hovered, setHovered] = useState(null);
   if (!stars.length) return null;
   const pts = stars.map((s, i) => {
@@ -47,7 +47,7 @@ export default function Constellation({ stars = [], onSelect, selectedDate = nul
     <div className="relative">
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img"
       aria-label={`이번 주 ${pts.filter((p) => p.filled).length}일의 기록으로 그린 별자리`}
-      style={{ maxHeight: 210, display: "block" }}>
+      style={{ maxHeight: size, height: size, display: "block" }}>
       {/* 중심점 */}
       <circle cx={CX} cy={CY} r={2} fill="#5A6B8C" opacity={0.5} />
       {/* 중심→별 살(spoke) */}

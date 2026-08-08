@@ -242,9 +242,26 @@ export function setDomains(date, domains) {
 // 행성(도메인) 렌즈 — 그 영역에 태깅된 체크인만으로 주별 별자리를 만든다. 없으면 전체.
 export function groupsByPlanet(planetKey, s = loadUniverse()) {
   if (!planetKey) return constellationGroups(s);
+  const legacyKeys = ["career", "life", "relation", "health", "growth"];
+  const domainsOf = (checkin) => {
+    if (Array.isArray(checkin.domains) && checkin.domains.length) return checkin.domains;
+    const text = `${checkin.text || ""} ${checkin.note || ""}`;
+    const inferred = [];
+    if (/회사|직장|이직|취업|진로|업무|면접|돈|소득|연봉/.test(text)) inferred.push("career");
+    if (/건강|수면|잠|운동|병원|스트레스|불안|체력/.test(text)) inferred.push("health");
+    if (/가족|친구|연인|동료|관계|사람/.test(text)) inferred.push("relation");
+    if (/공부|배움|성장|자격증|시험|목표/.test(text)) inferred.push("growth");
+    if (inferred.length) return [...new Set(inferred)];
+    // 예시 기록은 과거 버전에 영역 값이 없었으므로 날짜 기준으로 고르게 복구한다.
+    if (s.demo) {
+      const hash = String(checkin.date || "").split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
+      return [legacyKeys[hash % legacyKeys.length]];
+    }
+    return ["life"];
+  };
   const filtered = {
     ...s,
-    checkins: s.checkins.filter((c) => Array.isArray(c.domains) && c.domains.includes(planetKey)),
+    checkins: s.checkins.filter((c) => domainsOf(c).includes(planetKey)),
   };
   return constellationGroups(filtered);
 }

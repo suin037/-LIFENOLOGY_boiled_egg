@@ -54,6 +54,7 @@ export default function MyUniverse() {
   const [picked, setPicked] = useState(null); // 탭한 별
   const [weekBack, setWeekBack] = useState(0); // 0 = 이번 주, 1 = 지난주 …
   const [showReport, setShowReport] = useState(false); // 주간 리포트 펼침
+  const [constellationSheetOpen, setConstellationSheetOpen] = useState(false);
   const [reportCache, setReportCache] = useState({}); // weekKey → { report, actions }
   const [reportBusy, setReportBusy] = useState(false);
   const [reportErr, setReportErr] = useState(null);
@@ -73,6 +74,14 @@ export default function MyUniverse() {
   function choosePlanet(key) {
     persistPlanet(key);
     refresh();
+  }
+
+  function openPlanetConstellation(selectedGroup) {
+    const targetIndex = groups.findIndex((item) => item.weekStart === selectedGroup?.weekStart);
+    if (targetIndex >= 0) setWeekBack(Math.max(0, groups.length - 1 - targetIndex));
+    setPicked(null);
+    setShowReport(false);
+    setConstellationSheetOpen(true);
   }
 
   // 완성된 주의 리포트를 가져온다.
@@ -197,7 +206,7 @@ export default function MyUniverse() {
       </Card> */}
 
       {/* 별자리 만들기 */}
-      <Card>
+      <Card className="hidden">
         <div className="mb-1 flex items-center gap-1.5 text-base font-semibold">✦ 별자리 만들기</div>
 
         {u.stars === 0 ? (
@@ -343,6 +352,7 @@ export default function MyUniverse() {
             br: s.br,
           }))}
           onOpen={() => navigate("/input")}
+          onConstellationOpen={openPlanetConstellation}
         />
         <p className="mt-2 rounded-xl border border-line bg-[#0E1424] px-3 py-2.5 text-[12px] text-sub">
           선택된 행성: <span className="font-bold text-ink">{selectedPlanet.label}</span> — 일기를
@@ -366,6 +376,60 @@ export default function MyUniverse() {
           </div>
         </div>
       </Card>
+
+      {constellationSheetOpen && group && (
+        <div className="fixed inset-0 z-[70] flex animate-backdrop-in items-end justify-center bg-[#02050C]/70 backdrop-blur-[4px]" onClick={() => setConstellationSheetOpen(false)}>
+          <div className="mb-[68px] flex max-h-[calc(100dvh-88px)] w-full max-w-phone animate-sheet-up flex-col overflow-hidden rounded-t-[34px] border border-white/10 bg-[#0D1727] shadow-[0_-24px_70px_rgba(0,0,0,.55)]" onClick={(event) => event.stopPropagation()}>
+            <div className="shrink-0 px-5 pb-3 pt-3">
+              <div className="mx-auto mb-3 h-1 w-11 rounded-full bg-white/25" />
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-[11px] font-bold text-cyan">{selectedPlanet.label} 행성의 별자리</div>
+                  <h2 className="mt-1 text-[20px] font-bold">{weekBack === 0 ? "이번 주 기록" : `${weekBack}주 전 기록`}</h2>
+                </div>
+                <button type="button" onClick={() => setConstellationSheetOpen(false)} className="tap flex h-10 w-10 items-center justify-center rounded-full bg-white/[.07] text-[22px] text-sub" aria-label="별자리 상세 닫기">×</button>
+              </div>
+              {groups.length > 1 && (
+                <div className="mt-3 flex items-center justify-between rounded-full border border-white/10 bg-black/10 px-2 py-1.5">
+                  <PagerBtn disabled={idx <= 0} onClick={() => { setWeekBack((value) => value + 1); setPicked(null); setShowReport(false); }}>‹</PagerBtn>
+                  <span className="text-[11px] text-sub">{group.weekStart} · {group.filled}/{STARS_PER_CONSTELLATION}일 기록</span>
+                  <PagerBtn disabled={weekBack <= 0} onClick={() => { setWeekBack((value) => Math.max(0, value - 1)); setPicked(null); setShowReport(false); }}>›</PagerBtn>
+                </div>
+              )}
+            </div>
+
+            <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-10">
+              <div className="rounded-[24px] border border-white/10 bg-[#091321] p-3">
+                <Constellation size={292} stars={group.stars} todayDate={todayKey()} selectedDate={picked?.date} onSelect={(star) => star.future ? null : setPicked((current) => current?.date === star.date ? null : star)} />
+                <p className="mt-1 text-center text-[11px] text-mut">별을 누르면 그날의 일기와 체크인 상태를 볼 수 있어요.</p>
+              </div>
+
+              {picked && <StarDetail star={picked} />}
+
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <MiniStat label="기록한 날" value={`${group.filled}일`} center />
+                <MiniStat label="연속 기록" value={`${u.streak}일`} center />
+              </div>
+
+              {group.complete ? (
+                <>
+                  <button type="button" onClick={() => { const next = !showReport; setShowReport(next); if (next) loadWeekReport(); }} className="tap mt-3 w-full rounded-2xl border border-cyan/60 bg-[#122440] py-3 text-[12px] font-bold text-cyan">
+                    {showReport ? "주간 리포트 접기" : "주간 리포트 한 번에 보기"}
+                  </button>
+                  {showReport && (
+                    <div className="mt-2 space-y-2">
+                      <WeeklyReport group={group} constellation={constellation} />
+                      <NarrativeBlock data={reportCache[group.weekStart]} busy={reportBusy} err={reportErr} onRetry={loadWeekReport} />
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="mt-3 rounded-2xl border border-dashed border-white/10 px-3 py-3 text-center text-[11px] text-mut">이번 주가 끝나면 주간 리포트가 만들어져요. {group.remaining ? `${group.remaining}일 남았어요.` : ""}</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <p className="mb-2 mt-1 text-center text-[10px] leading-relaxed text-mut">
         레벨·별·XP는 앱 참여 지표이며, 실측 데이터 결과가 아닙니다.

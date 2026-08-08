@@ -36,7 +36,7 @@ function level(s) {
   return 3;
 }
 
-export default function PlanetGlobe({ planet, groups, scenarios = [], onOpen }) {
+export default function PlanetGlobe({ planet, groups, scenarios = [], onOpen, onConstellationOpen }) {
   const cvRef = useRef(null);
   const dataRef = useRef({});
   const [sel, setSel] = useState(null);
@@ -49,14 +49,14 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], onOpen }) 
   scenarios.forEach((s) => (scByDate[s.date] = s));
   const tone = planet ? hexToHsl(planet.from) : { h: 262, s: 46 };
 
-  dataRef.current = { disp, scByDate, tone, label: planet?.label || "관계" };
+  dataRef.current = { disp, scByDate, tone, label: planet?.label || "관계", onConstellationOpen };
 
   useEffect(() => {
     const cv = cvRef.current;
     if (!cv) return;
     const ctx = cv.getContext("2d");
     let raf;
-    const st = { rot: 0, tilt: 0, auto: true, dragging: false, lastX: 0, lastY: 0, moved: 0, pinned: null, hit: [] };
+    const st = { rot: 0, tilt: 0, auto: true, dragging: false, lastX: 0, lastY: 0, moved: 0, pinned: null, hit: [], groupHit: [] };
 
     function resize() {
       const w = cv.clientWidth,
@@ -174,6 +174,7 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], onOpen }) 
         h = cv.clientHeight;
       ctx.clearRect(0, 0, w, h);
       st.hit = [];
+      st.groupHit = [];
       const cx = w / 2,
         cy = h / 2,
         Rsky = Math.min(w, h) * 0.35,
@@ -267,6 +268,12 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], onOpen }) 
             ctx.stroke();
           }
         }
+        const visibleStars = grp.stars.filter((star) => star.lv);
+        if (visibleStars.length && grp.z > -0.35) {
+          const gx = visibleStars.reduce((sum, star) => sum + star.sx, 0) / visibleStars.length;
+          const gy = visibleStars.reduce((sum, star) => sum + star.sy, 0) / visibleStars.length;
+          st.groupHit.push({ x: gx, y: gy, group: disp[grp.c] });
+        }
       }
       for (let i = 0; i < cl.length; i++) if (cl[i].z < 0) paint(cl[i]);
       planetOrb(cx, cy, pr);
@@ -312,9 +319,15 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], onOpen }) 
         for (let i = 0; i < st.hit.length; i++) {
           if (Math.hypot(st.hit[i].x - mx, st.hit[i].y - my) < 14) {
             setSel(st.hit[i].sc);
-            break;
+            return;
           }
         }
+        let nearest = null;
+        for (const hit of st.groupHit) {
+          const distance = Math.hypot(hit.x - mx, hit.y - my);
+          if (distance < 52 && (!nearest || distance < nearest.distance)) nearest = { ...hit, distance };
+        }
+        if (nearest?.group) dataRef.current.onConstellationOpen?.(nearest.group);
       }
     };
     cv.addEventListener("pointerdown", onDown);
