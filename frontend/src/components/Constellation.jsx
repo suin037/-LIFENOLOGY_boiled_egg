@@ -73,11 +73,17 @@ export default function Constellation({ stars = [], onSelect, selectedDate = nul
           </g>
         );
       })}
-      {/* 완성 시 작은 반짝이 별들이 빤짝거린다 */}
+      {/* 완성 시 별자리 전체 영역에 작은 반짝이가 흩뿌려져 빤짝빤짝 */}
       {complete &&
-        pts.map((p, i) => (
-          <Sparkle key={`spk${i}`} x={p.x} y={p.y - 6} size={2.6} delay={(i * 0.32).toFixed(2)} />
-        ))}
+        Array.from({ length: 16 }).map((_, i) => {
+          const a = i * 2.399963; // 황금각 → 고르게 흩뿌림
+          const rr = 8 + (i / 16) * (R_SPREAD + 6);
+          const x = CX + rr * Math.cos(a);
+          const y = CY + rr * Math.sin(a) * 0.92;
+          return (
+            <Sparkle key={`spk${i}`} x={x} y={y} size={1.4 + (i % 3) * 0.7} delay={((i * 0.19) % 1.8).toFixed(2)} />
+          );
+        })}
     </svg>
   );
 }
