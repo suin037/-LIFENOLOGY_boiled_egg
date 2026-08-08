@@ -1,12 +1,15 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, Caption } from "../components/ui.jsx";
 import Constellation from "../components/Constellation.jsx";
+import PlanetGlobe from "../components/PlanetGlobe.jsx";
 import { useResult } from "../data/ResultContext.jsx";
 import { PLANETS, SAVED_UNIVERSES } from "../data/result.js";
 import {
   universeSummary,
   constellationGroups,
+  groupsByPlanet,
+  scenariosByPlanet,
   setPlanet as persistPlanet,
   seedDemoCheckins,
   resetUniverse,
@@ -39,6 +42,12 @@ export default function MyUniverse() {
   const refresh = () => setTick((t) => t + 1);
 
   const u = useMemo(() => universeSummary(), [tick]);
+  // 저장/태깅으로 데이터가 바뀌면(같은 탭) 즉시 다시 읽는다 — 별이 바로 뜨게.
+  useEffect(() => {
+    const h = () => refresh();
+    window.addEventListener("pm:universe", h);
+    return () => window.removeEventListener("pm:universe", h);
+  }, []);
   const ownedRewards = unlockedRewards(u.highestLevel);
   const upcomingReward = nextReward(u.highestLevel);
   const [slot, setSlot] = useState("A");
@@ -338,41 +347,37 @@ export default function MyUniverse() {
         )}
       </Card>
 
-      {/* 행성 선택 */}
+      {/* 행성 우주 — 도메인별 지구본(옛 행성 선택 대체). 칩이 곧 행성 선택. */}
       <Card>
-        <div className="mb-1 text-base font-semibold">🪐 행성 선택</div>
-        <p className="mb-3 text-[11px] text-mut">행성은 당신의 삶의 영역을 나타냅니다</p>
-        <div className="flex justify-between gap-2">
-          {PLANETS.map((p) => {
-            const on = p.key === planet;
-            return (
-              <button
-                key={p.key}
-                onClick={() => choosePlanet(p.key)}
-                className="tap flex flex-1 flex-col items-center gap-1.5"
-              >
-                <span
-                  className="relative h-11 w-11 rounded-full transition-transform"
-                  style={{
-                    background: `radial-gradient(circle at 35% 30%, ${p.to}, ${p.from})`,
-                    boxShadow: on ? `0 0 0 2px ${p.to}, 0 0 12px ${p.from}` : "none",
-                    transform: on ? "scale(1.06)" : "scale(1)",
-                  }}
-                >
-                  {on && (
-                    <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-cyan text-[9px] text-[#04203a]">
-                      ✓
-                    </span>
-                  )}
-                </span>
-                <span className={`text-[10px] ${on ? "text-ink" : "text-mut"}`}>{p.label}</span>
-              </button>
-            );
-          })}
+        <div className="mb-1 text-base font-semibold">🪐 행성 우주</div>
+        <p className="mb-2 text-[11px] text-mut">행성은 당신의 삶의 영역입니다 · 눌러서 그 영역을 봐요</p>
+        <div className="mb-1 flex flex-wrap gap-1.5">
+          {PLANETS.map((p) => (
+            <button
+              key={p.key}
+              onClick={() => choosePlanet(p.key)}
+              className={`tap rounded-full border px-2.5 py-1 text-[11px] ${
+                planet === p.key ? "border-cyan text-cyan" : "border-line text-mut"
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
         </div>
-        <p className="mt-3 rounded-xl border border-line bg-[#0E1424] px-3 py-2.5 text-[12px] text-sub">
-          선택된 행성: <span className="font-bold text-ink">{selectedPlanet.label}</span> — 이 영역의
-          갈림길을 시뮬레이션합니다.
+        <PlanetGlobe
+          planet={selectedPlanet}
+          groups={groupsByPlanet(planet)}
+          scenarios={scenariosByPlanet(planet).map((s) => ({
+            date: s.date,
+            title: s.title,
+            dateLabel: s.date,
+            br: s.br,
+          }))}
+          onOpen={() => navigate("/input")}
+        />
+        <p className="mt-2 rounded-xl border border-line bg-[#0E1424] px-3 py-2.5 text-[12px] text-sub">
+          선택된 행성: <span className="font-bold text-ink">{selectedPlanet.label}</span> — 일기를
+          저장하면 이 영역으로 자동 분류돼 별로 쌓이고, 갈림길을 시뮬레이션합니다.
         </p>
       </Card>
 

@@ -365,6 +365,92 @@ def scenario(req: ScenarioReq):
         return {"narrative": f"(서사 생성 오류: {e})", "persona_used": bool(pb)}
 
 
+# ── 도메인(행성) 자동 태깅 — 일기 저장 시 영역 분류 ────────────────────
+class TagReq(BaseModel):
+    text: str
+
+
+@app.post("/tag")
+def tag_domain(req: TagReq):
+    """일기 텍스트 → 인생 영역(관계/경제/건강/성장/일상). 행성 렌즈가 이 태그로 필터."""
+    from qmode import domain_tag as DT
+    return DT.tag(req.text)
+
+
+# ── 마스코트 대화형 일기 ────────────────────────────────────────────────
+class ChatMsg(BaseModel):
+    role: str            # "user" | "bot"
+    text: str
+
+
+class ChatReq(BaseModel):
+    messages: list[ChatMsg] = []
+    persona: Optional[str] = "lumi"   # lumi(공감)/cosmo(분석)/nova(재미)
+
+
+@app.post("/chat")
+def chat_turn(req: ChatReq):
+    """대화 한 턴 → 마스코트 답변."""
+    from qmode import chatbot as CB
+    msgs = [m.model_dump() for m in req.messages]
+    return {"reply": CB.chat(msgs, persona=req.persona or "lumi")}
+
+
+@app.post("/diary/compose")
+def diary_compose(req: ChatReq):
+    """대화 전체 → 1인칭 일기 + 기분 + 감정 + 영역(domains). 체크인 저장용."""
+    from qmode import chatbot as CB
+    msgs = [m.model_dump() for m in req.messages]
+    return CB.compose(msgs)
+
+
+@app.get("/chat/opener")
+def chat_opener(persona: str = "lumi"):
+    from qmode import chatbot as CB
+    return {"opener": CB.opener(persona), "persona": persona}
+
+
+# ── 감정 모델(로컬 파인튜닝 klue/roberta) — 감정 미선택 시 일기에서 추론 ──
+_EMO = None
+_MOOD_BY_EMO = {"기쁨": 5, "당황": 3, "분노": 2, "불안": 2, "슬픔": 2, "상처": 2}
+
+
+def _emotion_analyzer():
+    global _EMO
+    if _EMO is None:
+        try:
+            import infer  # diary_module/infer.py (sys.path 우선)
+            _EMO = infer.DiaryAnalyzer(
+                ckpt=str(ROOT / "model_v3_e6.pt"),
+                taxonomy=str(DIARY / "emotion_taxonomy.json"))
+        except Exception:
+            _EMO = False   # 체크포인트/deps 없음 → 폴백 신호
+    return _EMO or None
+
+
+class EmotionReq(BaseModel):
+    text: str
+
+
+@app.post("/emotion")
+def emotion_infer(req: EmotionReq):
+    """일기 텍스트 → 감정모델 추론(감정·기분·위기). 감정 미선택 시 폴백용.
+    체크포인트/deps 없으면 {ok:False} → 프론트가 LLM 폴백으로 강등."""
+    an = _emotion_analyzer()
+    if an is None or not (req.text or "").strip():
+        return {"ok": False}
+    try:
+        r = an.analyze(req.text)
+        dom = r.get("dominant") or {}
+        return {"ok": True, "emotion": dom.get("display") or dom.get("coarse"),
+                "fine": dom.get("fine"),
+                "mood": _MOOD_BY_EMO.get(dom.get("coarse"), 3),
+                "crisis_level": r.get("crisis_level", 0),
+                "block": bool(r.get("block_report"))}
+    except Exception:
+        return {"ok": False}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000)

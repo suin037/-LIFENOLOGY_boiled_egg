@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Card, Caption } from "./ui.jsx";
 import { useDiary, MOODS } from "../data/DiaryContext.jsx";
 import { todayQuestions, CHECKIN } from "../data/questions.js";
+import ChatDiary from "./ChatDiary.jsx";
+import { composeDiary, analyzeEmotion } from "../data/dispositionApi.js";
 
 // 홈 "체크인" 카드 — 2층 일기.
 //  · 30초 데일리: 기분 5단계(→ 그날 별 밝기) + 에너지·역량·감정키워드 칩
@@ -16,13 +18,49 @@ export default function DiaryToday() {
   const [editing, setEditing] = useState(!todayEntry);
   const [openDetail, setOpenDetail] = useState(!!todayEntry?.answers);
   const [answers, setAnswers] = useState(todayEntry?.answers ?? {});
+  const [chatMsgs, setChatMsgs] = useState([]); // 챗봇 대화(오늘의 질문·상태) → 저장 시 흡수
 
   const questions = todayQuestions();
   const tag = `${lastSim.label} 이후 ${daysSince(lastSim.date)}일째`;
   const answeredCount = Object.values(answers).filter((v) => (v || "").trim()).length;
 
-  function save() {
-    saveToday(mood, text.trim(), answers, { energy, competency, emotion });
+  const chatHasUser = chatMsgs.some((m) => m.role === "user");
+
+  async function save() {
+    // 챗봇 답변을 '질문 → 답변' 그대로 정리해 일기 본문으로(오늘의질문·건강 대체).
+    const qaLines = [];
+    for (let i = 0; i < chatMsgs.length; i++) {
+      if (chatMsgs[i].role !== "user") continue;
+      const ans = (chatMsgs[i].text || "").trim();
+      if (!ans || ans === "기록 안 함") continue;
+      const q = i > 0 && chatMsgs[i - 1].role === "bot" ? chatMsgs[i - 1].text : null;
+      qaLines.push(q ? `· ${q} → ${ans}` : `· ${ans}`);
+    }
+    const line = text.trim();
+    const bodyText = [line, ...qaLines].filter(Boolean).join("\n");
+    // 감정/기분을 안 골랐으면 → 내가 만든 감정모델로 일기에서 추론(우선).
+    let finalMood = mood;
+    let finalEmotion = emotion;
+    if ((finalMood == null || !finalEmotion) && bodyText) {
+      const em = await analyzeEmotion(bodyText);
+      if (em) {
+        if (!finalEmotion) finalEmotion = em.emotion || finalEmotion;
+        if (finalMood == null && em.mood != null) finalMood = em.mood;
+      }
+    }
+    // 감정모델 불가(체크포인트 없음 등)로 기분이 여전히 비었으면 → LLM compose 폴백.
+    if (finalMood == null && chatHasUser) {
+      try {
+        const c = await composeDiary(chatMsgs);
+        if (c) {
+          finalMood = c.mood ?? 3;
+          if (!finalEmotion) finalEmotion = c.emotion || null;
+        }
+      } catch {
+        finalMood = 3;
+      }
+    }
+    saveToday(finalMood, bodyText, null, { energy, competency, emotion: finalEmotion });
     setEditing(false);
   }
 
@@ -38,12 +76,13 @@ export default function DiaryToday() {
         </div>
         <div className="mt-2 flex items-center gap-2">
           <span className="text-2xl">{MOODS.find((m) => m.v === todayEntry.mood)?.emoji || "✦"}</span>
-          <p className="text-[13px] text-sub">{todayEntry.text || "(한 줄 없음)"}</p>
+          <span className="text-[13px] text-sub">
+            {todayEntry.emotion ? `오늘은 ‘${todayEntry.emotion}’으로 기록됐어요.` : "오늘 하루가 기록됐어요."}
+          </span>
         </div>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {todayEntry.emotion && <Tag>{todayEntry.emotion}</Tag>}
           {todayEntry.competency && <Tag>{todayEntry.competency}</Tag>}
-          {nAns > 0 && <Tag>질문 {nAns}개 ✍️</Tag>}
         </div>
         <Caption>{tag}</Caption>
       </Card>
@@ -117,53 +156,17 @@ export default function DiaryToday() {
         className="mt-1 w-full rounded-xl border border-line bg-[#0E1424] px-3.5 py-2.5 text-sm text-ink outline-none focus:border-cyan"
       />
 
-      {!openDetail && (
-        <button
-          onClick={() => setOpenDetail(true)}
-          className="tap mt-3 flex w-full items-center justify-center gap-1.5 rounded-2xl border border-cyan bg-[#12203a] py-3 text-[13px] font-bold text-cyan"
-        >
-          ✍️ 오늘의 질문에 자세히 답하기
-          <span className="text-[11px] font-normal text-sub">· 4문항</span>
-        </button>
-      )}
-
-      {openDetail && (
-        <div className="mt-3 border-t border-line pt-3">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-[12px] font-bold text-cyan">
-              ✍️ 자세히 남기기 <span className="font-normal text-mut">· 오늘의 질문 (선택)</span>
-            </span>
-            <button onClick={() => setOpenDetail(false)} className="tap text-[11px] text-mut">접기</button>
-          </div>
-          <div className="flex flex-col gap-2.5">
-            {questions.map((q, i) => (
-              <div key={q.id}>
-                <p className="mb-1 text-[12px] leading-snug text-sub">
-                  <b className="mr-1 text-cyan">{i + 1}.</b>
-                  {q.text}
-                </p>
-                <textarea
-                  value={answers[q.id] || ""}
-                  onChange={(e) => setAnswers((a) => ({ ...a, [q.id]: e.target.value }))}
-                  rows={2}
-                  placeholder="편하게 적어보세요"
-                  className="w-full resize-none rounded-xl border border-line bg-[#0E1424] px-3 py-2 text-[13px] text-ink outline-none focus:border-cyan"
-                />
-              </div>
-            ))}
-          </div>
-          <Caption>답한 질문일수록 성향을 더 정확히 읽어요.</Caption>
-        </div>
-      )}
+      {/* 오늘의 질문(성향·랜덤) + 몸·마음 상태 → 마스코트와 대화로. 저장은 아래 '기록 저장'으로 통합. */}
+      <ChatDiary embedded onMessagesChange={setChatMsgs} />
 
       <button
-        disabled={!mood}
+        disabled={!mood && !chatHasUser}
         onClick={save}
         className={`tap mt-3 w-full rounded-2xl py-2.5 text-[13px] font-bold transition-colors ${
-          mood ? "bg-gradient-to-r from-cyan to-cyan-deep text-[#04203a]" : "bg-[#1E2740] text-mut"
+          mood || chatHasUser ? "bg-gradient-to-r from-cyan to-cyan-deep text-[#04203a]" : "bg-[#1E2740] text-mut"
         }`}
       >
-        기록 저장{answeredCount > 0 ? ` · 질문 ${answeredCount}개` : ""}
+        기록 저장
       </button>
       <Caption>{tag}로 자동 기록됩니다.</Caption>
     </Card>

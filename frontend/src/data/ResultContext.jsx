@@ -4,7 +4,7 @@ import { DEFAULT_AVATAR } from "./avatarOptions.js";
 import { generateSceneImages, runCompareRaw, runSimulateRaw } from "../api.js";
 import { mapSimulateToPair } from "./simulateAdapter.js";
 import { avatarToPngBlob } from "./avatarImage.js";
-import { initDemoFromUrl, noteSimulationRun } from "./myUniverse.js";
+import { initDemoFromUrl, noteSimulationRun, recordScenario, loadUniverse } from "./myUniverse.js";
 
 // 결과 데이터 + 온보딩 프로필을 한 곳에 모으는 컨텍스트.
 // runSimulation() 이 선택(choices)+심정(diary)으로 결과 쌍{a,b}을 만든다.
@@ -49,6 +49,15 @@ export function ResultProvider({ children }) {
     const choiceB = opts.choiceB || choices.b;
     const currentDiary = opts.diary ?? diary;
     noteSimulationRun();
+    // 그 날 그 영역(현재 행성)에서 시나리오를 만들었음을 기록 → 지구본에 ◆ 로 표시.
+    try {
+      recordScenario({
+        domain: loadUniverse().planet,
+        title: choiceB ? `${choiceA} vs ${choiceB}` : `${choiceA} 시나리오`,
+      });
+    } catch {
+      /* 시나리오 기록 실패 무시 */
+    }
     const pair = { ...getPredictionPair({ profile, choiceA, choiceB, detail: currentDiary }), dataMode: "demo" };
     setResult(pair);
     const requestArgs = {
