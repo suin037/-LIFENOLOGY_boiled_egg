@@ -170,23 +170,9 @@ export default function Settings() {
           onChange={(value) => setProfile((p) => ({ ...p, mbti: value }))}
         />
 
-        <p className="mb-1 mt-4 text-[11px] text-sub">
-          성향 질문 <span className="text-mut"></span>
+        <p className="mt-4 text-[11px] text-mut">
+          성향 질문은 이제 홈 ‘오늘 기록’의 대화(성향 탭)에서 자연스럽게 물어봐요.
         </p>
-        <div className="space-y-3">
-          {PSYCH_QUESTIONS.map((q) => (
-            <div key={q.id}>
-              <div className="mb-1 text-[12px] leading-snug text-ink">{q.prompt}</div>
-              <textarea
-                rows={2}
-                value={(profile.psych_answers || {})[q.id] || ""}
-                onChange={(e) => setAnswer(q.id, e.target.value)}
-                placeholder="자유롭게…"
-                className="w-full resize-none rounded-lg border border-line bg-[#0E1424] px-2.5 py-2 text-[13px] text-ink outline-none focus:border-cyan"
-              />
-            </div>
-          ))}
-        </div>
       </Card>
 
       {/* 알림 설정 */}

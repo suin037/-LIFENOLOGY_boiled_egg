@@ -365,6 +365,51 @@ def scenario(req: ScenarioReq):
         return {"narrative": f"(서사 생성 오류: {e})", "persona_used": bool(pb)}
 
 
+# ── 도메인(행성) 자동 태깅 — 일기 저장 시 영역 분류 ────────────────────
+class TagReq(BaseModel):
+    text: str
+
+
+@app.post("/tag")
+def tag_domain(req: TagReq):
+    """일기 텍스트 → 인생 영역(관계/경제/건강/성장/일상). 행성 렌즈가 이 태그로 필터."""
+    from qmode import domain_tag as DT
+    return DT.tag(req.text)
+
+
+# ── 마스코트 대화형 일기 ────────────────────────────────────────────────
+class ChatMsg(BaseModel):
+    role: str            # "user" | "bot"
+    text: str
+
+
+class ChatReq(BaseModel):
+    messages: list[ChatMsg] = []
+    persona: Optional[str] = "lumi"   # lumi(공감)/cosmo(분석)/nova(재미)
+
+
+@app.post("/chat")
+def chat_turn(req: ChatReq):
+    """대화 한 턴 → 마스코트 답변."""
+    from qmode import chatbot as CB
+    msgs = [m.model_dump() for m in req.messages]
+    return {"reply": CB.chat(msgs, persona=req.persona or "lumi")}
+
+
+@app.post("/diary/compose")
+def diary_compose(req: ChatReq):
+    """대화 전체 → 1인칭 일기 + 기분 + 감정 + 영역(domains). 체크인 저장용."""
+    from qmode import chatbot as CB
+    msgs = [m.model_dump() for m in req.messages]
+    return CB.compose(msgs)
+
+
+@app.get("/chat/opener")
+def chat_opener(persona: str = "lumi"):
+    from qmode import chatbot as CB
+    return {"opener": CB.opener(persona), "persona": persona}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000)

@@ -23,6 +23,7 @@ const DEFAULTS = {
   planet: "career",
   simRuns: 0, // 시뮬레이션 실행 횟수 (다른 저장소에 카운터가 없어 여기서 센다)
   demo: false, // 예시 기록으로 채워진 상태인가 (화면에 배지로 항상 표시)
+  scenarios: [], // [{ date, domain, title, br }] 그 날 그 영역에서 만든 평행우주 시나리오 → 지구본 ◆
 };
 
 // ── 저장/로드 ────────────────────────────────────────────────
@@ -33,6 +34,7 @@ export function loadUniverse() {
       ...DEFAULTS,
       ...raw,
       checkins: Array.isArray(raw.checkins) ? raw.checkins : [],
+      scenarios: Array.isArray(raw.scenarios) ? raw.scenarios : [],
       pinnedSlots: { ...DEFAULTS.pinnedSlots, ...(raw.pinnedSlots || {}) },
     };
   } catch {
@@ -46,6 +48,8 @@ function persist(state) {
   } catch {
     /* localStorage 불가 환경(사파리 프라이빗 등) — 메모리로만 동작 */
   }
+  // 같은 탭에선 storage 이벤트가 안 뜨므로 직접 알린다 → 화면 즉시 갱신(자동 태깅 반영 등).
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("pm:universe"));
   return state;
 }
 
@@ -105,6 +109,7 @@ export function addCheckin(entry = {}) {
     note: entry.note ?? "", // 한 줄 기록
     text: entry.text ?? "", // 일기 본문
     answers: entry.answers ?? null, // 질문별 답 [{ q, a }]
+    domains: entry.domains ?? null, // 자동 분류 영역(행성) key 배열 — /tag 결과
     diaryId: entry.diaryId ?? null,
     hasDiary: Boolean(
       entry.text?.trim() || entry.note?.trim() || entry.answers?.length || entry.diaryId,
@@ -223,6 +228,40 @@ export function currentConstellation(s = loadUniverse()) {
 
 export function completedCount(s = loadUniverse()) {
   return constellationGroups(s).filter((g) => g.complete && g.filled > 0).length;
+}
+
+// 특정 날 체크인에 자동분류 영역(행성 key 배열)을 나중에 채운다(/tag 응답 도착 시).
+export function setDomains(date, domains) {
+  return patch((s) => {
+    const c = s.checkins.find((x) => x.date === date);
+    if (c) c.domains = domains;
+    return s;
+  });
+}
+
+// 행성(도메인) 렌즈 — 그 영역에 태깅된 체크인만으로 주별 별자리를 만든다. 없으면 전체.
+export function groupsByPlanet(planetKey, s = loadUniverse()) {
+  if (!planetKey) return constellationGroups(s);
+  const filtered = {
+    ...s,
+    checkins: s.checkins.filter((c) => Array.isArray(c.domains) && c.domains.includes(planetKey)),
+  };
+  return constellationGroups(filtered);
+}
+
+// 그 날 그 영역에서 평행우주 시나리오를 만들었음을 기록 → 지구본 ◆. (date,domain) upsert.
+export function recordScenario({ domain, title, br = [], date } = {}) {
+  const d = date || todayKey();
+  return patch((s) => {
+    const rest = (s.scenarios || []).filter((x) => !(x.date === d && x.domain === domain));
+    s.scenarios = [...rest, { date: d, domain, title: title || "평행우주 시나리오", br }];
+    return s;
+  });
+}
+
+// 그 행성(영역)에서 만든 시나리오들 — PlanetGlobe scenarios prop 용.
+export function scenariosByPlanet(planetKey, s = loadUniverse()) {
+  return (s.scenarios || []).filter((x) => x.domain === planetKey);
 }
 
 // ── XP / 레벨 ────────────────────────────────────────────────
