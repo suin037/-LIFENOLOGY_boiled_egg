@@ -3,6 +3,7 @@ import { Card, Caption } from "./ui.jsx";
 import { useDiary, MOODS } from "../data/DiaryContext.jsx";
 import { todayQuestions, CHECKIN } from "../data/questions.js";
 import ChatDiary from "./ChatDiary.jsx";
+import { composeDiary } from "../data/dispositionApi.js";
 
 // 홈 "체크인" 카드 — 2층 일기.
 //  · 30초 데일리: 기분 5단계(→ 그날 별 밝기) + 에너지·역량·감정키워드 칩
@@ -23,7 +24,9 @@ export default function DiaryToday() {
   const tag = `${lastSim.label} 이후 ${daysSince(lastSim.date)}일째`;
   const answeredCount = Object.values(answers).filter((v) => (v || "").trim()).length;
 
-  function save() {
+  const chatHasUser = chatMsgs.some((m) => m.role === "user");
+
+  async function save() {
     // 챗봇 답변을 '질문 → 답변' 그대로 정리해 일기 본문으로(오늘의질문·건강 대체).
     const qaLines = [];
     for (let i = 0; i < chatMsgs.length; i++) {
@@ -35,7 +38,21 @@ export default function DiaryToday() {
     }
     const line = text.trim();
     const bodyText = [line, ...qaLines].filter(Boolean).join("\n");
-    saveToday(mood, bodyText, null, { energy, competency, emotion });
+    // 기분을 안 골랐어도 챗봇 답변이 있으면 대화에서 기분·감정 자동 추론(별 밝히기).
+    let finalMood = mood;
+    let finalEmotion = emotion;
+    if (finalMood == null && chatHasUser) {
+      try {
+        const c = await composeDiary(chatMsgs);
+        if (c) {
+          finalMood = c.mood ?? 3;
+          if (!finalEmotion) finalEmotion = c.emotion || null;
+        }
+      } catch {
+        finalMood = 3;
+      }
+    }
+    saveToday(finalMood, bodyText, null, { energy, competency, emotion: finalEmotion });
     setEditing(false);
   }
 
@@ -135,13 +152,13 @@ export default function DiaryToday() {
       <ChatDiary embedded onMessagesChange={setChatMsgs} />
 
       <button
-        disabled={!mood}
+        disabled={!mood && !chatHasUser}
         onClick={save}
         className={`tap mt-3 w-full rounded-2xl py-2.5 text-[13px] font-bold transition-colors ${
-          mood ? "bg-gradient-to-r from-cyan to-cyan-deep text-[#04203a]" : "bg-[#1E2740] text-mut"
+          mood || chatHasUser ? "bg-gradient-to-r from-cyan to-cyan-deep text-[#04203a]" : "bg-[#1E2740] text-mut"
         }`}
       >
-        기록 저장{answeredCount > 0 ? ` · 질문 ${answeredCount}개` : ""}
+        기록 저장
       </button>
       <Caption>{tag}로 자동 기록됩니다.</Caption>
     </Card>

@@ -3,6 +3,7 @@ import { Card, Caption } from "./ui.jsx";
 import { addCheckin, setDomains, todayKey } from "../data/myUniverse.js";
 import { composeDiary } from "../data/dispositionApi.js";
 import { todayQuestions } from "../data/questions.js";
+import { useResult } from "../data/ResultContext.jsx";
 import Mascot from "./Mascot.jsx";
 
 // 질문 영역별 대화형 일기(jy). 데일리 체크인 아래 '오늘의 질문 + 몸·마음 상태'를 대신한다.
@@ -33,7 +34,7 @@ const HEALTH_Q = [
 function areaQuestions(key) {
   if (key === "disposition") {
     try {
-      const qs = todayQuestions().map((q) => ({ text: q.text })).filter((q) => q.text);
+      const qs = todayQuestions().map((q) => ({ text: q.text, id: q.id })).filter((q) => q.text);
       if (qs.length) return qs;
     } catch {
       /* 로드 실패 시 기본 */
@@ -45,6 +46,7 @@ function areaQuestions(key) {
 }
 
 export default function ChatDiary({ onSaved, embedded = false, onMessagesChange }) {
+  const { setProfile } = useResult(); // 성향 답변을 프로필에 반영(모든 시나리오 개인화 재료)
   const [area, setArea] = useState("daily");
   const [qs, setQs] = useState(() => areaQuestions("daily"));
   const [qi, setQi] = useState(0);
@@ -75,6 +77,12 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange 
   function answer(raw) {
     const v = (raw ?? input).trim();
     if (!v) return;
+    // 성향 질문(D2/D1/D4 등 id 있는 것)에 답하면 프로필 psych_answers에 저장
+    // → buildDisposition → 모든 시뮬 시나리오 개인화에 반영.
+    const cur = qs[qi];
+    if (cur?.id && setProfile) {
+      setProfile((p) => ({ ...p, psych_answers: { ...(p.psych_answers || {}), [cur.id]: v } }));
+    }
     const next = qi + 1;
     const add = [{ role: "user", text: v }];
     if (next < qs.length) add.push({ role: "bot", text: qs[next].text });
