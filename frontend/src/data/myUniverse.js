@@ -239,14 +239,28 @@ export function setDomains(date, domains) {
   });
 }
 
-// 행성(도메인) 렌즈 — 그 영역에 태깅된 체크인만으로 주별 별자리를 만든다. 없으면 전체.
+// 행성(도메인) 렌즈 — 그 영역 기록을 '독립 축적'해 별자리를 만든다.
+// 달력 주와 무관하게, 그 영역 기록 7개가 모이면 별자리 1개 완성(각 행성이 자기 별자리를 쌓음).
+// planetKey 없으면 기존 달력 주 기준(전체).
 export function groupsByPlanet(planetKey, s = loadUniverse()) {
   if (!planetKey) return constellationGroups(s);
-  const filtered = {
-    ...s,
-    checkins: s.checkins.filter((c) => Array.isArray(c.domains) && c.domains.includes(planetKey)),
-  };
-  return constellationGroups(filtered);
+  const stars = s.checkins
+    .filter((c) => !c.empty && Array.isArray(c.domains) && c.domains.includes(planetKey))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const groups = [];
+  for (let i = 0; i < stars.length; i += STARS_PER_CONSTELLATION) {
+    const chunk = stars.slice(i, i + STARS_PER_CONSTELLATION);
+    const padded = chunk.slice();
+    while (padded.length < STARS_PER_CONSTELLATION) padded.push({ empty: true });
+    groups.push({
+      index: groups.length,
+      stars: padded,
+      complete: chunk.length === STARS_PER_CONSTELLATION,
+      filled: chunk.length,
+      remaining: STARS_PER_CONSTELLATION - chunk.length,
+    });
+  }
+  return groups;
 }
 
 // 그 날 그 영역에서 평행우주 시나리오를 만들었음을 기록 → 지구본 ◆. (date,domain) upsert.

@@ -27,11 +27,27 @@ export default function Constellation({ stars = [], onSelect, selectedDate = nul
     const [x, y] = coord(i, s, filled);
     return { ...s, x, y, filled, lvl: level(s) };
   });
+  // 7일 다 기록해 별자리가 완성되면 은은하게 빛난다.
+  const complete = pts.length >= 7 && pts.every((p) => p.filled);
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img"
-      aria-label={`이번 주 ${pts.filter((p) => p.filled).length}일의 기록으로 그린 별자리`}
+      aria-label={`이번 주 ${pts.filter((p) => p.filled).length}일의 기록으로 그린 별자리${complete ? " (완성)" : ""}`}
       style={{ maxHeight: 210, display: "block" }}>
+      {complete && (
+        <>
+          <defs>
+            <radialGradient id="cglow" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="#7FD4FF" stopOpacity="0.34" />
+              <stop offset="65%" stopColor="#7FD4FF" stopOpacity="0.08" />
+              <stop offset="100%" stopColor="#7FD4FF" stopOpacity="0" />
+            </radialGradient>
+          </defs>
+          <circle cx={CX} cy={CY} r={R_MIN + R_SPREAD + 12} fill="url(#cglow)">
+            <animate attributeName="opacity" values="0.55;1;0.55" dur="3.2s" repeatCount="indefinite" />
+          </circle>
+        </>
+      )}
       {/* 중심점 */}
       <circle cx={CX} cy={CY} r={2} fill="#5A6B8C" opacity={0.5} />
       {/* 중심→별 살(spoke) */}
