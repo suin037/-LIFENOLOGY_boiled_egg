@@ -11,6 +11,7 @@
 KLIPS(18~27차, 10년) 사용. 원본이 없으면 빈 리스트 반환(엔진은 정상 동작).
 """
 
+import json
 from functools import lru_cache
 
 import numpy as np
@@ -18,14 +19,39 @@ import pandas as pd
 
 from config import settings
 
-KLIPS_PATH = settings.goms_clean_abspath.parent / "raw" / "klips" / "klips_base.pkl"
-YP_PATH = settings.goms_clean_abspath.parent / "clean" / "yp_clean.csv"
+KLIPS_PATH = settings.data_abspath / "raw" / "klips" / "klips_base.pkl"
+YP_PATH = settings.data_abspath / "clean" / "yp_clean.csv"
+BUILD_REPORT_PATH = KLIPS_PATH.parent / "klips_build_report.json"
+
+
+@lru_cache(maxsize=1)
+def wage_basis() -> dict:
+    """소득 궤적의 화폐 기준 — 전처리 빌드 리포트에서 읽는다.
+
+    `월임금_실질` 은 preprocess_klips.py 가 CPI 로 디플레이트한 값이다. 어느 연도
+    기준인지 응답에 같이 실어야 "5년 뒤 400만원" 을 명목으로 오독하지 않는다.
+    리포트가 없으면(구 빌드) 기준을 모른다고 정직하게 알린다.
+    """
+    if not BUILD_REPORT_PATH.exists():
+        return {"deflated": False, "base_year": None,
+                "label": "명목(기준연도 미상 — klips_build_report.json 없음)"}
+    try:
+        r = json.loads(BUILD_REPORT_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return {"deflated": False, "base_year": None, "label": "기준 불명"}
+    if not r.get("deflated"):
+        return {"deflated": False, "base_year": None, "label": "명목(디플레이트 안 됨)"}
+    y = r.get("cpi_base_year")
+    return {"deflated": True, "base_year": y, "years": r.get("years"),
+            "label": f"{y}년 기준 실질"}
+
+
 SATIS = ["satis_work", "satis_growth", "satis_income", "satis_stability", "satis_future"]
 YP_FEATS = ["age", "sex", "income_now", "edu_level"]
 # 매칭 피처: 나이·성별·소득 + 학력·고용형태(정규여부)
 #  ※ 전공/만족도는 KLIPS(노동패널)에 없어 궤적 매칭엔 사용 불가.
-#  ※ 정규여부는 '종사상지위' 가 있는 패널에서만 쓴다. klips_train.py 가 문서화한
-#    klips_base.pkl 계약에는 종사상지위가 없어, 없는 빌드도 정상 동작해야 한다.
+#  ※ 정규여부는 '종사상지위' 가 있는 빌드에서만 쓴다. 18~27차 빌드부터 포함되지만,
+#    구 빌드(종사상지위 없음)에서도 궤적이 죽지 않도록 optional 로 둔다.
 BASE_FEATS = ["나이", "성별", "월임금_실질", "학력"]
 REQUIRED_COLS = ["pid", "wave", "나이", "성별", "학력", "월임금_실질", "이직"]
 

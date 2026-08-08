@@ -9,6 +9,7 @@
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+import functools
 import httpx
 import json
 import logging
@@ -165,9 +166,38 @@ def _simulate_without_artifacts(req, diary, safety_level) -> dict:
     }
 
 
+@functools.lru_cache(maxsize=1)
+def _artifact_manifest() -> dict:
+    """서빙 중인 모델 아티팩트 명세(scripts/build_artifact_manifest.py 생성).
+
+    training_report.json 만 보면 실제 서빙 구성(연령대별 YP/KLIPS 라우팅)을 알 수 없어
+    실제로 두 파일이 어긋나 있었다 → 무엇이 서빙되는지 런타임에서 확인 가능하게 노출한다.
+    """
+    p = settings.artifacts_abspath / "manifest.json"
+    if not p.exists():
+        return {"available": False,
+                "note": "python scripts/build_artifact_manifest.py 로 생성"}
+    try:
+        m = json.loads(p.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return {"available": False, "error": f"{type(exc).__name__}"}
+    return {
+        "available": True,
+        "generated_at": m.get("generated_at"),
+        "git": m.get("git"),
+        "data_vintage": m.get("data_vintage"),
+        "missing": m.get("missing"),
+        # 파일별 한 줄 요약(용량·features 등 상세는 manifest.json 원본 참조)
+        "artifacts": {name: {k: e[k] for k in ("layer", "present", "source",
+                                               "causal", "survival") if k in e}
+                      for name, e in (m.get("artifacts") or {}).items()},
+    }
+
+
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "model": settings.claude_model}
+    return {"status": "ok", "model": settings.claude_model,
+            "artifacts": _artifact_manifest()}
 
 
 @app.post("/visualize")

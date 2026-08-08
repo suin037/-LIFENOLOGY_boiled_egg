@@ -1,0 +1,254 @@
+"""KLIPS 원본(.sav) → 종단 패널 + 직장 스펠. (L3/L4 학습 · L5 궤적의 입력)
+
+`klips_train.py` 와 `backend/trajectory.py` 가 요구하는 두 파일을 만든다.
+
+    data/raw/klips/klips_base.pkl        개인-연도 패널
+    data/raw/klips/klips_base_생존.csv    직장 스펠(생존분석용)
+    data/raw/klips/klips_build_report.json 빌드 메타(차수·연도·CPI·표본수)
+
+## 왜 다시 만드는가
+이전 빌드는 **1~10차(1998~2007)** 였고 `월임금_실질` 컬럼이 **이름만 실질인 명목값**이었다.
+그 결과 서비스가 보여주는 소득 궤적이 20년 전 임금 수준이었고, 성장률(%)에는
+물가상승분이 성장으로 섞여 들어갔다. 이 스크립트는
+
+  1. **18~27차(2015~2024)** 로 재빌드하고,
+  2. 명목 월임금을 CPI 로 **실제 디플레이트**해 `월임금_실질`(기준연도 표기)로 만든다.
+
+## 차수 ↔ 연도
+KLIPS 는 1차=1998 이므로 `연도 = 차수 + 1997` (18차=2015 … 27차=2024).
+
+## 원본 변수 (차수 w 는 2자리, 예: 18)
+| 컬럼 | 변수 | 비고 |
+|---|---|---|
+| pid | `pid` | 개인고유번호 |
+| 성별 | `p{w}0101` | 1=남 2=여 (GOMS/YP 와 동일 코딩) |
+| 나이 | `p{w}0107` | 만나이 |
+| 학력 | `p{w}0110` | 2=무학 … 5=고졸 6=전문대 7=대졸 8=석사 9=박사 |
+| 직종 | `p{w}0352` | 표준직업분류 7차(2017코드) |
+| 종업원규모 | `p{w}0403` | 전체종업원수(범주). 없으면 `p{w}0402`(명) 를 범주화 |
+| 종사상지위 | `p{w}0314` | 1=상용 2=임시 3=일용 4=자영 5=무급가족 |
+| 월임금_명목 | `p{w}1642` | 임금근로자 월평균임금(만원) |
+| 취업년/월 | `p{w}0301` / `p{w}0302` | 현 일자리 시작시점 → 근속·이직 파생 |
+
+KLIPS 는 무응답을 `-1` 로 코딩한다 → 전부 결측 처리한다.
+
+## 파생
+- `근속기간` (년) = 조사연도 − 취업년, 0 미만은 0 으로 절단
+- `이직` (0/1) = 직전 관측 차수 대비 **일자리 시작시점(년,월) 이 바뀌었으면 1**.
+  직전에 일자리가 없었으면(신규취업) 이직으로 세지 않는다.
+- 스펠 = (pid, 일자리 시작시점) 묶음. `duration` 은 그 일자리의 **최종 관측 근속연수**,
+  `event` 는 그 뒤에도 관측이 있으면 1(종료 확인), 마지막 관측이면 0(중도절단).
+
+사용법:
+    python preprocess/preprocess_klips.py
+    python preprocess/preprocess_klips.py --waves 18-27 --base-year 2024
+    python preprocess/preprocess_klips.py --klips-dir "../KLIPS" --out data/raw/klips
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+
+WAVE_YEAR_OFFSET = 1997          # 1차 = 1998
+DEFAULT_KLIPS_DIR = Path("../KLIPS")
+DEFAULT_OUT = Path("data/raw/klips")
+CPI_PATH = Path("data/reference/cpi_korea_2020base.csv")
+
+# 종업원수(명) → 범주 코드. p{w}0403 범주와 결이 같도록 계단식으로 자른다.
+FIRM_SIZE_BINS = [0, 4, 9, 29, 49, 99, 299, 499, 999, np.inf]
+
+
+def parse_waves(spec: str) -> list[int]:
+    """'18-27' 또는 '18,19,20' → [18, 19, ...]"""
+    out: list[int] = []
+    for part in spec.split(","):
+        part = part.strip()
+        if "-" in part:
+            lo, hi = (int(x) for x in part.split("-"))
+            out.extend(range(lo, hi + 1))
+        elif part:
+            out.append(int(part))
+    return sorted(set(out))
+
+
+def load_cpi(path: Path) -> dict[int, float]:
+    if not path.exists():
+        raise FileNotFoundError(
+            f"CPI 기준표가 없습니다: {path}\n"
+            "data/reference/README.md 참고 — 실질임금 환산 없이는 빌드하지 않는다."
+        )
+    df = pd.read_csv(path)
+    return {int(r["year"]): float(r["cpi"]) for _, r in df.iterrows()}
+
+
+def _blank_negatives(s: pd.Series) -> pd.Series:
+    """KLIPS 무응답 코드(-1 등 음수)와 직종 999(분류불능) 를 결측으로."""
+    return s.mask(s < 0)
+
+
+def read_wave(klips_dir: Path, w: int) -> pd.DataFrame:
+    """차수 w 의 개인파일 → 표준 스키마 1개 DataFrame."""
+    import pyreadstat
+
+    path = klips_dir / f"klips{w:02d}p.sav"
+    if not path.exists():
+        raise FileNotFoundError(f"{path} 없음")
+
+    src = {
+        "성별": f"p{w}0101",
+        "나이": f"p{w}0107",
+        "학력": f"p{w}0110",
+        "직종": f"p{w}0352",
+        "종업원규모_범주": f"p{w}0403",
+        "종업원규모_명": f"p{w}0402",
+        "종사상지위": f"p{w}0314",
+        "월임금_명목": f"p{w}1642",
+        "취업년": f"p{w}0301",
+        "취업월": f"p{w}0302",
+    }
+    raw, _ = pyreadstat.read_sav(str(path), usecols=["pid", *src.values()])
+
+    d = pd.DataFrame({"pid": raw["pid"]})
+    for name, col in src.items():
+        d[name] = _blank_negatives(pd.to_numeric(raw[col], errors="coerce"))
+
+    d["직종"] = d["직종"].mask(d["직종"] >= 999)          # 999 = 분류불능
+    d["월임금_명목"] = d["월임금_명목"].mask(d["월임금_명목"] <= 0)
+
+    # 종업원규모: 범주 응답 우선, 없으면 인원수 응답을 같은 결의 범주로 환산
+    binned = pd.cut(d.pop("종업원규모_명"), bins=FIRM_SIZE_BINS,
+                    labels=False, right=True).astype("float64") + 1
+    d["종업원규모"] = d.pop("종업원규모_범주").fillna(binned)
+
+    d["wave"] = w
+    d["year"] = w + WAVE_YEAR_OFFSET
+    return d
+
+
+def build_panel(klips_dir: Path, waves: list[int], cpi: dict[int, float],
+                base_year: int) -> pd.DataFrame:
+    frames = []
+    for w in waves:
+        d = read_wave(klips_dir, w)
+        frames.append(d)
+        print(f"  [wave {w} / {w + WAVE_YEAR_OFFSET}] {len(d):,}행  "
+              f"임금응답 {int(d['월임금_명목'].notna().sum()):,}")
+    b = pd.concat(frames, ignore_index=True)
+
+    # ── 실질임금 환산 (기준연도 base_year) ────────────────────────────────
+    missing = sorted({int(y) for y in b["year"].unique()} - cpi.keys())
+    if missing or base_year not in cpi:
+        raise KeyError(
+            f"CPI 기준표에 없는 연도: {missing or ''} {'' if base_year in cpi else base_year}\n"
+            f"{CPI_PATH} 에 해당 연도를 추가할 것(추정치로 대체하지 않는다)."
+        )
+    factor = b["year"].map(lambda y: cpi[base_year] / cpi[int(y)])
+    b["월임금_실질"] = (b["월임금_명목"] * factor).round(1)
+
+    # ── 근속기간(년) ──────────────────────────────────────────────────────
+    b["근속기간"] = (b["year"] - b["취업년"]).clip(lower=0)
+
+    # ── 이직: 직전 관측 대비 일자리 시작시점 변화 ──────────────────────────
+    b = b.sort_values(["pid", "wave"]).reset_index(drop=True)
+    # 시작시점을 하나의 키로 (월 결측은 0 으로 채워 년만으로도 비교되게)
+    b["_job_key"] = np.where(
+        b["취업년"].notna(),
+        b["취업년"].fillna(0) * 100 + b["취업월"].fillna(0),
+        np.nan,
+    )
+    g = b.groupby("pid", sort=False)
+    prev_key, prev_wave = g["_job_key"].shift(1), g["wave"].shift(1)
+    b["이직"] = (
+        prev_key.notna() & b["_job_key"].notna() & (b["_job_key"] != prev_key)
+        & prev_wave.notna()
+    ).astype(int)
+
+    cols = ["pid", "wave", "year", "성별", "나이", "학력", "직종", "종업원규모",
+            "종사상지위", "월임금_명목", "월임금_실질", "근속기간", "이직"]
+    return b[cols + ["_job_key"]]
+
+
+def build_spells(b: pd.DataFrame) -> pd.DataFrame:
+    """(pid, 일자리 시작시점) → 직장 스펠. duration=최종 관측 근속연수, event=종료확인 여부."""
+    emp = b[b["_job_key"].notna()].copy()
+    last_obs = b.groupby("pid")["wave"].max().rename("_last_obs_wave")
+
+    sp = (emp.groupby(["pid", "_job_key"], sort=False)
+             .agg(시작wave=("wave", "min"), _end_wave=("wave", "max"),
+                  duration=("근속기간", "max"))
+             .reset_index()
+             .merge(last_obs, on="pid", how="left"))
+
+    # 그 일자리의 마지막 관측 뒤에도 이 사람의 관측이 있으면 → 일자리가 끝난 걸 봤다(event=1)
+    sp["event"] = (sp["_end_wave"] < sp["_last_obs_wave"]).astype(int)
+    sp["duration"] = sp["duration"].clip(lower=0.5)
+    sp = sp.sort_values(["pid", "시작wave", "_job_key"])
+    sp["jobseq"] = sp.groupby("pid").cumcount() + 1
+    # 좌측절단 보정용(현 klips_train 은 미사용, 향후 lifelines entry 인자에 연결):
+    # 패널에서 처음 관측될 때 이미 지난 근속연수
+    first_seen = (emp.sort_values("wave").groupby(["pid", "_job_key"])["근속기간"]
+                     .first().rename("entry_years").reset_index())
+    sp = sp.merge(first_seen, on=["pid", "_job_key"], how="left")
+    return sp[["pid", "jobseq", "시작wave", "duration", "event", "entry_years"]]
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description="KLIPS 원본 → 종단 패널/스펠")
+    ap.add_argument("--klips-dir", type=Path, default=DEFAULT_KLIPS_DIR)
+    ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    ap.add_argument("--waves", default="18-27", help="예: 18-27 또는 18,19,20")
+    ap.add_argument("--base-year", type=int, default=2024,
+                    help="실질임금 기준연도(기본 2024 = 최신 차수)")
+    ap.add_argument("--cpi", type=Path, default=CPI_PATH)
+    args = ap.parse_args()
+
+    waves = parse_waves(args.waves)
+    cpi = load_cpi(args.cpi)
+    print(f"[klips] 차수 {waves[0]}~{waves[-1]} "
+          f"({waves[0] + WAVE_YEAR_OFFSET}~{waves[-1] + WAVE_YEAR_OFFSET}) "
+          f"· 실질임금 기준연도 {args.base_year}")
+
+    b = build_panel(args.klips_dir, waves, cpi, args.base_year)
+    sp = build_spells(b)
+    b = b.drop(columns=["_job_key"])
+
+    args.out.mkdir(parents=True, exist_ok=True)
+    b.to_pickle(args.out / "klips_base.pkl")
+    sp.to_csv(args.out / "klips_base_생존.csv", index=False, encoding="utf-8-sig")
+
+    wage = b["월임금_실질"].dropna()
+    by_wave = b.groupby("year")["월임금_실질"].median().round(1)
+    report = {
+        "built_at": datetime.now(timezone.utc).isoformat(),
+        "waves": waves,
+        "years": [waves[0] + WAVE_YEAR_OFFSET, waves[-1] + WAVE_YEAR_OFFSET],
+        "deflated": True,
+        "cpi_base_year": args.base_year,
+        "cpi_source": str(args.cpi),
+        "rows": int(len(b)),
+        "persons": int(b["pid"].nunique()),
+        "wage_rows": int(len(wage)),
+        "wage_median_real": float(wage.median()),
+        "wage_median_real_by_year": {int(k): float(v) for k, v in by_wave.dropna().items()},
+        "job_change_rate": float(b["이직"].mean()),
+        "spells": int(len(sp)),
+        "spell_events": int(sp["event"].sum()),
+    }
+    (args.out / "klips_build_report.json").write_text(
+        json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    print(f"[done] 패널 {len(b):,}행 / {b['pid'].nunique():,}명 · 스펠 {len(sp):,}개")
+    print(f"       실질임금(기준 {args.base_year}년) 중앙값 {wage.median():.0f}만원 · "
+          f"이직률 {b['이직'].mean():.1%}")
+    print(f"       연도별 실질임금 중앙값: {by_wave.dropna().to_dict()}")
+    print(f"       → {args.out}/klips_base.pkl, klips_base_생존.csv, klips_build_report.json")
+
+
+if __name__ == "__main__":
+    main()
