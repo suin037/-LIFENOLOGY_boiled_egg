@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useResult } from "../data/ResultContext.jsx";
-import { Eyebrow, Card, Row } from "../components/ui.jsx";
+import { Eyebrow, Card } from "../components/ui.jsx";
 import { MASCOTS } from "../data/result.js";
 import ValueRankingInput from "../components/ValueRankingInput.jsx";
 import { topAxes } from "../data/valueCards.js";
@@ -10,7 +10,6 @@ import { PSYCH_QUESTIONS } from "../data/psychQuestions.js";
 import Avatar from "../components/Avatar.jsx";
 import AvatarBuilder from "../components/AvatarBuilder.jsx";
 import Mascot from "../components/Mascot.jsx";
-import { universeSummary } from "../data/myUniverse.js";
 
 // 작은 on/off 토글 (track h-6/w-11 · thumb h-4/w-4 · translate 로 이동 — 크기 균형)
 function Toggle({ on, onClick }) {
@@ -18,16 +17,26 @@ function Toggle({ on, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className={`tap relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-        on ? "bg-cyan" : "bg-[#28324D]"
-      }`}
+      aria-pressed={on}
+      className="tap inline-flex w-11 shrink-0 items-center justify-center"
     >
-      <span
-        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-          on ? "translate-x-6" : "translate-x-1"
-        }`}
-      />
+      <span className={`relative block h-5 w-9 rounded-full transition-colors ${on ? "bg-cyan" : "bg-[#28324D]"}`}>
+        <span
+          className={`absolute left-[3px] top-[3px] h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform ${
+            on ? "translate-x-4" : "translate-x-0"
+          }`}
+        />
+      </span>
     </button>
+  );
+}
+
+function ProfileItem({ label, value }) {
+  return (
+    <div className="grid grid-cols-[54px_1fr] items-center gap-1 py-1 text-[11px]">
+      <span className="shrink-0 text-mut">{label}</span>
+      <span className="min-w-0 truncate text-right font-medium text-ink" title={String(value)}>{value}</span>
+    </div>
   );
 }
 
@@ -93,7 +102,7 @@ export default function Settings() {
   const navigate = useNavigate();
   const { profile, setProfile, setOnboarded } = useResult();
   const [prefs, setPrefs] = useState(loadPrefs);
-  const unlockLevel = universeSummary().highestLevel;
+  const [editingAvatar, setEditingAvatar] = useState(false);
 
   function update(patch) {
     setPrefs((p) => {
@@ -125,31 +134,54 @@ export default function Settings() {
 
       {/* 프로필 */}
       <Card>
-        <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-mut">
-          <Avatar config={profile.avatarConfig} size={24} ring={false} /> 내 프로필
+        <div className="mb-3 text-xs font-semibold text-mut">내 프로필</div>
+        <div className="grid grid-cols-[96px_minmax(0,1fr)] items-start gap-6">
+          <div className="flex flex-col items-center">
+            <Avatar config={profile.avatarConfig} size={100} />
+            <button
+              type="button"
+              onClick={() => setEditingAvatar((open) => !open)}
+              className="tap mt-2 w-full rounded-xl border border-line bg-[#0E1424] px-2 text-[10px] font-semibold text-cyan"
+            >
+              {editingAvatar ? "수정 닫기" : "아바타 수정"}
+            </button>
+          </div>
+
+          <div className="min-w-0 divide-y divide-line/70">
+            <ProfileItem label="나이" value={`${profile.age}세`} />
+            <ProfileItem label="직종" value={profile.occupation || "—"} />
+            <ProfileItem label="월소득" value={`${profile.income}만원`} />
+            <ProfileItem label="MBTI" value={profile.mbti && profile.mbti !== "모름" ? profile.mbti : "—"} />
+            <ProfileItem label="중요 가치" value={topAxes(profile.value_ranking, 2).join(" · ") || "—"} />
+            <button
+              type="button"
+              onClick={() => navigate("/onboarding")}
+              className="tap w-full pt-2 text-right text-[10px] font-semibold text-sub"
+            >
+              기본 정보 수정
+            </button>
+          </div>
         </div>
-        <Row label="나이">{profile.age}세</Row>
-        <Row label="직종">{profile.occupation}</Row>
-        <Row label="현재 월소득">{profile.income}만원</Row>
-        <Row label="MBTI">{profile.mbti && profile.mbti !== "모름" ? profile.mbti : "—"}</Row>
-        <Row label="중요 가치">{topAxes(profile.value_ranking, 3).join(" · ") || "—"}</Row>
-        <button
-          onClick={() => navigate("/onboarding")}
-          className="tap mt-3 w-full rounded-2xl border border-line bg-[#0E1424] py-2.5 text-[13px] text-cyan"
-        >
-          프로필 수정 (온보딩 다시하기)
-        </button>
       </Card>
 
       {/* 내 아바타 — 사람 빌더 + 우주 프레임 */}
-      <Card>
-        <div className="mb-3 text-xs font-semibold text-mut">내 아바타 만들기</div>
-        <AvatarBuilder
-          config={profile.avatarConfig}
-          onChange={(cfg) => setProfile((p) => ({ ...p, avatarConfig: cfg }))}
-          unlockLevel={unlockLevel}
-        />
-      </Card>
+      {editingAvatar && (
+        <Card className="animate-fade">
+          <div className="mb-1 flex items-center justify-between">
+            <div>
+              <div className="text-[13px] font-semibold text-ink">아바타 수정</div>
+              <p className="mt-0.5 text-[10px] text-mut">화살표로 원하는 모습을 선택하세요.</p>
+            </div>
+            <button type="button" onClick={() => setEditingAvatar(false)} className="tap text-[11px] text-sub">
+              완료
+            </button>
+          </div>
+          <AvatarBuilder
+            config={profile.avatarConfig}
+            onChange={(cfg) => setProfile((p) => ({ ...p, avatarConfig: cfg }))}
+          />
+        </Card>
+      )}
 
       {/* 가치 우선순위 — 성향 개인화 입력 (백엔드 personalize 로 전달) */}
       <Card>
