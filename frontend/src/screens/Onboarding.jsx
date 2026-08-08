@@ -154,8 +154,8 @@ export default function Onboarding() {
     </div>,
     <div key="values">
       <div className="flex items-center justify-between gap-3">
-        <label className="text-xs text-sub">지금 내 삶에서 중요한 <b className="text-cyan">순서대로</b> 골라주세요</label>
-        <span className="shrink-0 text-[11px] text-mut">{ranked.length}개 선택</span>
+        <label className="text-xs text-sub">지금 내 삶에서 중요한 <b className="text-cyan">순서대로</b> 골라주세요 </label>
+        <span className="shrink-0 text-[11px] text-mut">3순위 선택 권장  ({ranked.length}개 선택)</span>
       </div>
       <div className="mt-2 flex flex-col gap-1.5">
         {VALUE_CARDS.map((c) => {
@@ -194,7 +194,6 @@ export default function Onboarding() {
     </div>,
     <div key="mbti">
       <label className="mb-1 block text-xs text-sub">성격유형 (MBTI) <span className="text-[10px] text-mut">· 선택</span></label>
-      <p className="mb-2 text-[10px] text-mut">모르거나 원하지 않으면 선택하지 않아도 돼요.</p>
       <div className="flex flex-col gap-1.5">
         {MBTI_AXES.map((ax) => (
           <div key={ax.i} className="flex gap-1.5">

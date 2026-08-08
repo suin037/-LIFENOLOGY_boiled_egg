@@ -124,52 +124,21 @@ export default function MyUniverse() {
   }
 
   return (
-    <div>
+    <div
+      className="universe-scene relative min-h-full overflow-hidden rounded-[28px] border border-white/10 px-4 pb-8 shadow-[0_20px_55px_rgba(0,0,0,.3)] [&>.bg-card]:my-0 [&>.bg-card]:rounded-none [&>.bg-card]:border-t [&>.bg-card]:border-white/[.07] [&>.bg-card]:bg-transparent [&>.bg-card]:px-0 [&>.bg-card]:py-6"
+      style={{
+        backgroundColor: "#0A1322",
+        backgroundImage: "radial-gradient(circle at 18% 12%, rgba(94,143,255,.2), transparent 25%), radial-gradient(circle at 82% 38%, rgba(143,92,246,.14), transparent 28%), radial-gradient(circle, rgba(255,255,255,.42) 0 1px, transparent 1.3px), linear-gradient(180deg,#0D1728 0%,#091321 58%,#0C1626 100%)",
+        backgroundSize: "auto, auto, 73px 73px, auto",
+      }}
+    >
       <h1 className="mb-1 mt-2 text-[24px] font-bold leading-[1.2]">나의 우주</h1>
       <p className="mb-3 text-[13px] text-sub">
         하루에 별 하나. {STARS_PER_CONSTELLATION}개가 모이면 별자리가 됩니다.
       </p>
 
-      {/* 데모 확인용 — 예시 6주 데이터로 즉시 채우기(옛 리포트도 함께 정리). */}
-      <button
-        onClick={() => {
-          clearSavedReports(REPORT_UID);
-          resetUniverse();
-          seedDemoCheckins();
-          setReportCache({});
-          setPicked(null);
-          setWeekBack(0);
-          refresh();
-        }}
-        className="tap mb-3 w-full rounded-2xl border border-dashed border-gold/50 bg-[#241d10] py-2.5 text-[12px] font-bold text-gold"
-      >
-        🧪 예시 6주 데이터로 채우기
-      </button>
-
-      {/* 예시 기록이 들어있는 동안은 항상 밝힌다 — 남의 기록을 내 기록처럼 보여주지 않는다. */}
-      {isDemo(u.state) && (
-        <div className="flex items-center justify-between rounded-xl border border-gold/40 bg-[#241d10] px-3 py-2">
-          <span className="text-[11px] text-gold">
-            예시 데이터로 둘러보는 중 — 내 기록이 아닙니다
-          </span>
-          <button
-            onClick={() => {
-              resetUniverse();
-              clearSavedReports(REPORT_UID); // 저장된 주간 리포트도 함께 비움
-              setReportCache({});
-              setWeekBack(0);
-              setPicked(null);
-              refresh();
-            }}
-            className="tap shrink-0 rounded-lg border border-line px-2 py-1 text-[10px] text-sub"
-          >
-            비우기
-          </button>
-        </div>
-      )}
-
       {/* 레벨 / XP */}
-      <Card className="flex items-center gap-3">
+      <Card className="universe-level !my-3 flex items-center gap-3 !rounded-[20px] !border !border-white/10 !bg-[#101A2A]/75 !p-3.5 shadow-[0_18px_50px_rgba(0,0,0,.24)] backdrop-blur-xl">
         <div className="h-11 w-11 shrink-0 rounded-full bg-gradient-to-br from-cyan to-[#8B5CF6]" />
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between">
@@ -189,7 +158,7 @@ export default function MyUniverse() {
         </div>
       </Card>
 
-      <Card>
+      {/* <Card>
         <div className="flex items-center justify-between">
           <div>
             <div className="text-[13px] font-bold text-ink">탐험 보상</div>
@@ -225,7 +194,7 @@ export default function MyUniverse() {
             ))}
           </div>
         )}
-      </Card>
+      </Card> */}
 
       {/* 별자리 만들기 */}
       <Card>
@@ -379,60 +348,23 @@ export default function MyUniverse() {
           선택된 행성: <span className="font-bold text-ink">{selectedPlanet.label}</span> — 일기를
           저장하면 이 영역으로 자동 분류돼 별로 쌓이고, 갈림길을 시뮬레이션합니다.
         </p>
-      </Card>
 
-      {/* 내 평행우주 저장 — TODO(T8): 보관함(savedUniverses)의 id 를 슬롯에 핀 고정.
-          myUniverse.js 의 pinSlot/unpinSlot 이 이미 준비되어 있고, 역할 분리(D5)를
-          수인님과 합의한 뒤 연결한다. 지금은 시안 그대로의 정적 UI. */}
-      <Card>
-        <div className="mb-1 text-base font-semibold">💾 내 평행우주 저장</div>
-        <p className="mb-3 text-[11px] text-mut">완성한 우주를 저장하고, 언제든 다시 탐험하세요</p>
-        <div className="flex gap-2.5">
-          {SAVED_UNIVERSES.map((s) => {
-            const on = s.id === slot;
-            return (
-              <button
-                key={s.id}
-                onClick={() => setSlot(s.id)}
-                className="tap relative flex-1 overflow-hidden rounded-xl p-3 text-left"
-                style={{
-                  background: `linear-gradient(135deg, ${s.from}, ${s.to})`,
-                  outline: on ? "2px solid #7FD4FF" : "1px solid #28324D",
-                }}
-              >
-                {s.current && (
-                  <span className="absolute right-1.5 top-1.5 rounded-md bg-[#5B6CE0] px-1.5 py-0.5 text-[9px] font-bold text-white">
-                    현재
-                  </span>
-                )}
-                <div className="text-[13px] font-bold text-white">{s.label}</div>
-                <div className="text-[10px] text-white/70">{s.sub}</div>
-              </button>
-            );
-          })}
+        <div className="mt-4 border-t border-white/[.07] pt-4">
+          <div className="mb-2 flex items-center justify-between">
+            <div>
+              <div className="text-[12px] font-semibold text-ink">나의 우주 기록</div>
+              <p className="mt-0.5 text-[10px] text-mut">지금까지 발견한 별과 탐험 기록이에요.</p>
+            </div>
+            <button onClick={() => navigate("/archive")} className="tap text-[11px] font-semibold text-cyan">
+              전체 기록 →
+            </button>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <MiniStat label="시뮬레이션" value={u.stats.simulations} center />
+            <MiniStat label="수집한 별" value={u.stats.stars} center />
+            <MiniStat label="완성한 별자리" value={u.completed} center />
+          </div>
         </div>
-        <button
-          onClick={() => navigate("/archive")}
-          className="tap mt-3 w-full rounded-[26px] bg-gradient-to-r from-[#5B6CE0] to-cyan py-3.5 text-sm font-bold text-[#04203a]"
-        >
-          🪐 내 평행우주 저장하기
-        </button>
-      </Card>
-
-      {/* 은하수 아카이브 통계 */}
-      <Card>
-        <div className="mb-3 flex items-center gap-1.5 text-base font-semibold">🌌 은하수 아카이브</div>
-        <div className="grid grid-cols-3 gap-2.5">
-          <MiniStat label="시뮬레이션" value={u.stats.simulations} center />
-          <MiniStat label="수집한 별" value={u.stats.stars} center />
-          <MiniStat label="탐험한 우주" value={u.stats.universes} center />
-        </div>
-        <button
-          onClick={() => navigate("/archive")}
-          className="tap mt-3 w-full rounded-2xl border border-line bg-[#0E1424] py-3 text-[13px] text-sub"
-        >
-          기록 아카이브 보기 →
-        </button>
       </Card>
 
       <p className="mb-2 mt-1 text-center text-[10px] leading-relaxed text-mut">

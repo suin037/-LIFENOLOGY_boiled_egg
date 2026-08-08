@@ -23,8 +23,8 @@ const DEFAULT_PROFILE = {
   occupation: "사회계열",
   income: 280, // 만원/월 → 백엔드 monthly_wage
   edu_level: 7, // 대졸
-  values: ["배움·성취", "건강·안정"], // qmode UI 표시용 가치 강제순위
-  value_ranking: ["growth", "stability"], // 가치 카드 id 중요한 순 → 개인화 입력(백엔드가 가중치로 변환)
+  values: [], // qmode UI 표시용 가치 강제순위 — 온보딩에서 사용자가 직접 선택
+  value_ranking: [], // 가치 카드 id 중요한 순 → 개인화 입력(백엔드가 가중치로 변환)
   mbti: "", // 심리 성향 input
   psych_answers: {}, // { D2:"…", D1:"…", D4:"…" } 서술형 답변 → disposition_block 로 전송
   avatarConfig: DEFAULT_AVATAR, // 아바타 빌더 선택(피부·머리·안경·배경)

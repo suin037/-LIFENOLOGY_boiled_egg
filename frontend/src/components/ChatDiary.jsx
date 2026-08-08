@@ -45,12 +45,12 @@ function areaQuestions(key) {
   return DAILY_Q;
 }
 
-export default function ChatDiary({ onSaved, embedded = false, onMessagesChange }) {
+export default function ChatDiary({ onSaved, embedded = false, onMessagesChange, initialArea = "daily", showAreas = true }) {
   const { setProfile } = useResult(); // 성향 답변을 프로필에 반영(모든 시나리오 개인화 재료)
-  const [area, setArea] = useState("daily");
-  const [qs, setQs] = useState(() => areaQuestions("daily"));
+  const [area, setArea] = useState(initialArea);
+  const [qs, setQs] = useState(() => areaQuestions(initialArea));
   const [qi, setQi] = useState(0);
-  const [msgs, setMsgs] = useState(() => [{ role: "bot", text: areaQuestions("daily")[0].text }]);
+  const [msgs, setMsgs] = useState(() => [{ role: "bot", text: areaQuestions(initialArea)[0].text }]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(null);
@@ -112,7 +112,7 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange 
     <>
       <div className="mb-2 flex items-center justify-between">
         <div className="flex items-center gap-1.5 text-[13px] font-semibold text-cyan">💬 질문에 답하며 기록</div>
-        <div className="flex gap-1">
+        {showAreas && <div className="flex gap-1">
           {AREAS.map((a) => (
             <button
               key={a.key}
@@ -125,7 +125,7 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange 
               {a.name}
             </button>
           ))}
-        </div>
+        </div>}
       </div>
 
       <div ref={threadRef} className="flex flex-col gap-2 overflow-y-auto" style={{ maxHeight: 220 }}>

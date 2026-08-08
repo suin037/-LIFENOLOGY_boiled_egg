@@ -36,23 +36,12 @@ function level(s) {
   return 3;
 }
 
-const DEMO = [
-  [2, 2, 1, 2, 1, 1, 2],
-  [3, 1, 4, 2, 4, 1, 3],
-  [3, 3, 4, 3, 4, 4, 3],
-  [4, 5, 4, 5, 4, 5, 5],
-].map((wk, gi) => ({
-  index: gi,
-  weekStart: "demo" + gi,
-  stars: wk.map((m, d) => ({ date: "d" + gi + "-" + d, mood: m })),
-}));
-
 export default function PlanetGlobe({ planet, groups, scenarios = [], onOpen }) {
   const cvRef = useRef(null);
   const dataRef = useRef({});
   const [sel, setSel] = useState(null);
 
-  const src = (groups && groups.length ? groups : DEMO).filter((g) =>
+  const src = (groups || []).filter((g) =>
     g.stars.some((s) => !s.empty),
   );
   const disp = src.slice(-5);
@@ -67,7 +56,7 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], onOpen }) 
     if (!cv) return;
     const ctx = cv.getContext("2d");
     let raf;
-    const st = { rot: 0, auto: true, dragging: false, lastX: 0, moved: 0, pinned: null, hit: [] };
+    const st = { rot: 0, tilt: 0, auto: true, dragging: false, lastX: 0, lastY: 0, moved: 0, pinned: null, hit: [] };
 
     function resize() {
       const w = cv.clientWidth,
@@ -86,6 +75,10 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], onOpen }) 
       a[2] * b[0] - a[0] * b[2],
       a[0] * b[1] - a[1] * b[0],
     ];
+    const rotateX = (p, angle) => {
+      const c = Math.cos(angle), s = Math.sin(angle);
+      return [p[0], p[1] * c - p[2] * s, p[1] * s + p[2] * c];
+    };
     function diamond(x, y, s) {
       ctx.save();
       ctx.translate(x, y);
@@ -186,7 +179,7 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], onOpen }) 
         Rsky = Math.min(w, h) * 0.35,
         scale = Math.min(w, h) * 0.12,
         pr = Math.min(w, h) * 0.086;
-      const C = Math.max(1, disp.length);
+      const C = disp.length;
       const PH = [0.3, -0.22, 0.24, -0.32, 0.16];
       ctx.beginPath();
       ctx.arc(cx, cy, Rsky + scale * 0.75, 0, Math.PI * 2);
@@ -199,7 +192,7 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], onOpen }) 
       for (let g = 0; g < C; g++) {
         const th = (g / C) * Math.PI * 2 + st.rot,
           ph = PH[g % PH.length];
-        const A = [Math.cos(ph) * Math.sin(th), Math.sin(ph), Math.cos(ph) * Math.cos(th)];
+        const A = rotateX([Math.cos(ph) * Math.sin(th), Math.sin(ph), Math.cos(ph) * Math.cos(th)], st.tilt);
         const up = Math.abs(A[1]) > 0.95 ? [1, 0, 0] : [0, 1, 0];
         const u = nrm(crs(up, A)),
           v = crs(A, u),
@@ -221,7 +214,7 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], onOpen }) 
         cl.push({ c: g, z: A[2], stars });
       }
       cl.sort((a, b) => a.z - b.z);
-      const focus = st.pinned != null ? st.pinned : cl[cl.length - 1].c;
+      const focus = st.pinned != null ? st.pinned : (cl.length ? cl[cl.length - 1].c : null);
       function paint(grp) {
         const dep = (grp.z + 1) / 2,
           foc = grp.c === focus;
@@ -281,22 +274,33 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], onOpen }) 
     }
     function loop() {
       if (st.auto && !st.dragging && st.pinned == null) st.rot += 0.005;
-      draw();
+      // Canvas animation errors must not escape into Vite's full-screen runtime overlay.
+      // The rest of My Universe remains usable even if a malformed legacy record is found.
+      try {
+        draw();
+      } catch (error) {
+        console.warn("PlanetGlobe draw skipped", error);
+        dataRef.current = { ...dataRef.current, disp: [] };
+      }
       raf = requestAnimationFrame(loop);
     }
     const onDown = (e) => {
       st.dragging = true;
       st.auto = false; // 사용자가 건들면 자동 회전 정지 — 이후 드래그로만 움직인다
       st.lastX = e.clientX;
+      st.lastY = e.clientY;
       st.moved = 0;
       cv.setPointerCapture(e.pointerId);
     };
     const onMove = (e) => {
       if (!st.dragging) return;
       const dx = e.clientX - st.lastX;
-      st.moved += Math.abs(dx);
+      const dy = e.clientY - st.lastY;
+      st.moved += Math.hypot(dx, dy);
       st.rot += dx * 0.01;
+      st.tilt += dy * 0.01;
       st.lastX = e.clientX;
+      st.lastY = e.clientY;
       st.pinned = null;
     };
     const onUp = (e) => {
@@ -334,6 +338,12 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], onOpen }) 
         ref={cvRef}
         style={{ width: "100%", height: "320px", display: "block", touchAction: "none", cursor: "grab" }}
       />
+      {disp.length === 0 && (
+        <div className="pointer-events-none -mt-[178px] mb-[128px] text-center">
+          <p className="text-[12px] font-semibold text-sub">아직 이 행성에서 발견한 별이 없어요</p>
+          <p className="mt-1 text-[10px] text-mut">관련 기록이나 시뮬레이션이 생기면 궤도에 표시돼요.</p>
+        </div>
+      )}
       {sel ? (
         <div style={{ marginTop: 8, fontSize: 13 }}>
           <div style={{ fontWeight: 500 }}>

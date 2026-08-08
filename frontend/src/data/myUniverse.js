@@ -309,7 +309,7 @@ function rememberHighestLevel(level) {
   return highest;
 }
 
-const TITLES = [
+export const LEVEL_TITLES = [
   [1, "첫 별 관측자"],
   [3, "성운 여행자"],
   [6, "별자리 수집가"],
@@ -319,8 +319,8 @@ const TITLES = [
 ];
 
 export function titleFor(level) {
-  let t = TITLES[0][1];
-  for (const [min, name] of TITLES) if (level >= min) t = name;
+  let t = LEVEL_TITLES[0][1];
+  for (const [min, name] of LEVEL_TITLES) if (level >= min) t = name;
   return t;
 }
 

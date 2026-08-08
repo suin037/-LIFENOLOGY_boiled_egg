@@ -33,6 +33,14 @@ export default {
           from: { opacity: "0", transform: "translateY(8px)" },
           to: { opacity: "1", transform: "none" },
         },
+        sheetUp: {
+          from: { opacity: "0", transform: "translateY(100%)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        backdropIn: {
+          from: { opacity: "0" },
+          to: { opacity: "1" },
+        },
         spin: { to: { transform: "rotate(360deg)" } },
         driftA: { "50%": { transform: "translateX(-18px)" } },
         driftB: { "50%": { transform: "translateX(18px)" } },
@@ -40,6 +48,8 @@ export default {
       },
       animation: {
         fade: "fade .35s ease",
+        "sheet-up": "sheetUp .28s cubic-bezier(.22,.8,.25,1)",
+        "backdrop-in": "backdropIn .2s ease-out",
         "spin-slow": "spin 3s linear infinite",
         driftA: "driftA 3s ease-in-out infinite",
         driftB: "driftB 3s ease-in-out infinite",

@@ -52,7 +52,7 @@ export default function Layout() {
         {/* 화면 본문 (스크롤) */}
         <main
           key={pathname}
-          className="no-scrollbar relative z-10 flex-1 animate-fade overflow-y-auto px-5 pb-7 pt-1"
+          className="no-scrollbar relative z-10 flex-1 overflow-y-auto px-5 pb-7 pt-1"
         >
           <Outlet />
         </main>

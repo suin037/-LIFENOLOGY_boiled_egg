@@ -10,6 +10,8 @@ import { PSYCH_QUESTIONS } from "../data/psychQuestions.js";
 import Avatar from "../components/Avatar.jsx";
 import AvatarBuilder from "../components/AvatarBuilder.jsx";
 import Mascot from "../components/Mascot.jsx";
+import { LEVEL_TITLES, XP_RULES, universeSummary } from "../data/myUniverse.js";
+import { LEVEL_REWARDS } from "../data/unlocks.js";
 
 const OCCUPATIONS = [
   "연구·공학기술",
@@ -110,6 +112,15 @@ const NOTIF_LABELS = {
   weekly: "주간 리포트",
 };
 
+function LevelRule({ label, xp }) {
+  return (
+    <div className="flex items-center justify-between rounded-xl border border-line bg-[#0B1423] px-3 py-2">
+      <span>{label}</span>
+      <span className="font-semibold text-cyan">+{xp} XP</span>
+    </div>
+  );
+}
+
 export default function Settings() {
   const navigate = useNavigate();
   const { profile, setProfile, setOnboarded } = useResult();
@@ -117,6 +128,7 @@ export default function Settings() {
   const [editingAvatar, setEditingAvatar] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileDraft, setProfileDraft] = useState(null);
+  const universe = universeSummary();
 
   function startProfileEdit() {
     setProfileDraft({
@@ -199,6 +211,52 @@ export default function Settings() {
             </button>
           </div>
         </div>
+      </Card>
+
+      {/* 레벨의 의미와 적립 규칙은 설정에서 확인한다. 나의 우주에는 현재 진행률만 표시. */}
+      <Card>
+        <details className="group">
+          <summary className="tap flex cursor-pointer list-none items-center justify-between">
+            <div>
+              <div className="text-xs font-semibold text-mut">레벨 · 탐험 보상 안내</div>
+              <div className="mt-1 text-[13px] font-bold text-ink">
+                {universe.title} · Lv. {universe.level}
+              </div>
+            </div>
+            <span className="text-[11px] text-cyan group-open:rotate-180">⌄</span>
+          </summary>
+
+          <div className="mt-4 border-t border-line pt-4">
+            <div className="text-[11px] font-semibold text-sub">XP 적립 기준</div>
+            <div className="mt-2 grid grid-cols-2 gap-2 text-[10px] text-mut">
+              <LevelRule label="30초 체크인" xp={XP_RULES.checkin} />
+              <LevelRule label="한 줄 기록" xp={XP_RULES.diary} />
+              <LevelRule label="시뮬레이션" xp={XP_RULES.simulation} />
+              <LevelRule label="평행우주 저장" xp={XP_RULES.universeSaved} />
+              <LevelRule label="회고 작성" xp={XP_RULES.reflection} />
+            </div>
+
+            <div className="mt-4 text-[11px] font-semibold text-sub">레벨별 칭호</div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {LEVEL_TITLES.map(([level, title]) => (
+                <span key={level} className={`rounded-full border px-2.5 py-1 text-[10px] ${universe.level >= level ? "border-cyan/30 bg-cyan/10 text-cyan" : "border-line text-mut"}`}>
+                  Lv.{level} {title}
+                </span>
+              ))}
+            </div>
+
+            <div className="mt-4 text-[11px] font-semibold text-sub">탐험 보상</div>
+            <div className="mt-2 space-y-2">
+              {LEVEL_REWARDS.map((reward) => (
+                <div key={reward.id} className="flex items-center justify-between rounded-xl bg-[#0B1423] px-3 py-2.5">
+                  <span className={universe.highestLevel >= reward.level ? "text-[11px] text-ink" : "text-[11px] text-mut"}>{reward.name}</span>
+                  <span className="text-[10px] text-mut">Lv.{reward.level}</span>
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-[10px] leading-relaxed text-mut">레벨과 XP는 앱 활동 지표이며 예측 결과나 정확도에는 영향을 주지 않아요.</p>
+          </div>
+        </details>
       </Card>
 
       {editingProfile && profileDraft && (

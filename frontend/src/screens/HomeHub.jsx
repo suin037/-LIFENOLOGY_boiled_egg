@@ -1,18 +1,14 @@
 import { useNavigate } from "react-router-dom";
 import { Orbit, ChevronRight, Sparkles } from "lucide-react";
 import { useResult } from "../data/ResultContext.jsx";
-import { Card, Button } from "../components/ui.jsx";
-import { MASCOTS } from "../data/result.js";
+import { Button } from "../components/ui.jsx";
 import DiaryToday from "../components/DiaryToday.jsx";
-import MoodTrend from "../components/MoodTrend.jsx";
-import Mascot from "../components/Mascot.jsx";
 import { universeSummary } from "../data/myUniverse.js";
 
 // 홈 = 진입 허브. 인사 + 마스코트 + 오늘 기록 + 새 시뮬 + 나의 우주 요약.
 export default function HomeHub() {
   const navigate = useNavigate();
   const { profile } = useResult();
-  const guide = MASCOTS.cosmo;
   const universe = universeSummary();
 
   return (
@@ -27,22 +23,8 @@ export default function HomeHub() {
         비춰볼까요?
       </h1>
 
-      {/* 마스코트 한마디 */}
-      <Card highlight className="mt-4 flex items-center gap-3">
-        <Mascot which={guide.key} size={44} />
-        <div className="min-w-0">
-          <div className="text-[11px] font-bold" style={{ color: guide.color }}>
-            {guide.name} · {guide.tag}
-          </div>
-          <p className="mt-0.5 text-[12px] leading-relaxed text-sub">
-            데이터에서 비슷한 사람들의 경로를 찾아 차분히 비춰드릴게요.
-          </p>
-        </div>
-      </Card>
-
-      {/* 오늘 기록(일기) + 최근 감정 흐름 */}
+      {/* 가이드 캐러셀 + 이번 주 기록 + 오늘 체크인 */}
       <DiaryToday />
-      <MoodTrend />
 
       {/* 새 시뮬 CTA */}
       <Button className="mt-4 flex items-center justify-center gap-1.5" onClick={() => navigate("/input")}>
