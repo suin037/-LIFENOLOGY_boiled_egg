@@ -1,23 +1,53 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, Caption } from "../ui.jsx";
-import { actionsFor, clearActiveGoal, loadActiveGoal, saveActiveGoal } from "../../data/actionBridge.js";
+import { actionsFor, clearActiveGoal, loadActiveGoal, saveActionResponse, saveActiveGoal } from "../../data/actionBridge.js";
 import { computeDiarySignals } from "../../data/diarySignals.js";
+import { logExperiment } from "../../data/myUniverse.js";
 import { domainLabel, labelOf } from "../../data/choices.js";
 
 export default function ActionView({ a, b, domains = { a: [], b: [] } }) {
   const [goal, setGoal] = useState(loadActiveGoal);
+  const [resp, setResp] = useState({}); // actionId → 적는 중인 텍스트
+  const [savedIds, setSavedIds] = useState(() => new Set());
   const sig = useMemo(() => computeDiarySignals({ windowDays: 28 }), []);
   const selected = goal?.side === "A" && goal.choice === a.choice ? { side: "A", result: a, domains: domains.a || [] }
     : goal?.side === "B" && goal.choice === b.choice ? { side: "B", result: b, domains: domains.b || [] } : null;
+  // 이직 신호(직무불만·이직고민 등)는 '진로' 방향일 때만 주입한다. 관계·건강 목표에
+  // 이직 실험이 끼면 엉뚱하므로 도메인으로 게이팅.
+  const isJobGoal = !!selected && (
+    ["career", "finance", "business"].some((k) => selected.domains.includes(k)) ||
+    /이직|퇴사|유지|창업|진학|직장|커리어/.test(selected.result.choice || "")
+  );
   const actions = useMemo(
-    () => selected ? actionsFor(selected.result.choice, selected.domains, sig) : [],
-    [selected?.result.choice, selected?.domains.join("|"), sig],
+    () => selected ? actionsFor(selected.result.choice, selected.domains, isJobGoal ? sig : null) : [],
+    [selected?.result.choice, selected?.domains.join("|"), sig, isJobGoal],
   );
   // 다음 단계에 반영된 일기 신호(로컬 계산) — "화면용 아님"을 보여주는 근거.
   const reflected = actions.filter((x) => x.domain === "signal");
 
+  // 이미 적어둔 답이 있으면 입력칸에 채운다(목표의 completedActions).
+  useEffect(() => {
+    const done = goal?.completedActions || [];
+    setResp(Object.fromEntries(done.map((d) => [d.id, d.text])));
+    setSavedIds(new Set(done.map((d) => d.id)));
+  }, [goal?.side, goal?.choice]);
+
   function choose(side, result, selectedDomains) {
     setGoal(saveActiveGoal({ side, choice: result.choice, domains: selectedDomains || [] }));
+  }
+
+  // 적은 답 저장 — 둘 다: 목표 완료 기록 + 그날 일기에 반영(다음 신호 분석에 들어감).
+  function saveResp(action) {
+    const text = (resp[action.id] || "").trim();
+    const g = saveActionResponse(action.id, text);
+    if (g) setGoal(g);
+    logExperiment({ actionId: action.id, prompt: action.text, text });
+    setSavedIds((prev) => {
+      const n = new Set(prev);
+      if (text) n.add(action.id);
+      else n.delete(action.id);
+      return n;
+    });
   }
 
   if (!selected) {
@@ -59,6 +89,30 @@ export default function ActionView({ a, b, domains = { a: [], b: [] } }) {
             </div>
             <p className="mt-1 text-[13px] font-semibold leading-relaxed text-ink">{action.text}</p>
             <p className="mt-2 text-[11px] leading-relaxed text-sub"><b>추천 이유</b> · {action.purpose}</p>
+
+            {/* 여기 적으면 → 완료 기록 + 그날 일기에 반영되어 다음 분석에 들어감 */}
+            <div className="mt-2.5">
+              <textarea
+                value={resp[action.id] || ""}
+                onChange={(e) => setResp((r) => ({ ...r, [action.id]: e.target.value }))}
+                rows={2}
+                placeholder="여기에 적어보세요 — 적으면 오늘 기록에 반영돼요"
+                className="w-full resize-none rounded-xl border border-line bg-[#0E1424] px-3 py-2 text-[12px] leading-relaxed text-ink outline-none focus:border-cyan"
+              />
+              <div className="mt-1.5 flex items-center gap-2">
+                <button
+                  onClick={() => saveResp(action)}
+                  disabled={!(resp[action.id] || "").trim() && !savedIds.has(action.id)}
+                  className="tap rounded-lg bg-cyan px-3 py-1 text-[11px] font-bold text-[#04203a] disabled:opacity-50"
+                >
+                  {savedIds.has(action.id) ? "다시 저장" : "저장"}
+                </button>
+                {savedIds.has(action.id) && (
+                  <span className="text-[10px] text-[#5DCAA5]">✓ 완료 · 오늘 일기에 반영됨</span>
+                )}
+              </div>
+            </div>
+
             <details className="mt-2 text-[10px] leading-relaxed text-mut">
               <summary className="cursor-pointer text-sub">행동설계 근거 보기</summary>
               <p className="mt-1">{action.basis}</p><p className="mt-1">출처: {action.source}</p>

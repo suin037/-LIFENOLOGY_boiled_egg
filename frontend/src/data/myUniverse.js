@@ -278,6 +278,25 @@ export function scenariosByPlanet(planetKey, s = loadUniverse()) {
   return (s.scenarios || []).filter((x) => x.domain === planetKey);
 }
 
+// 결과 화면 '작은 실험'에 적은 답을 그날 기록에 덧붙인다.
+// 별(mood)을 덮어쓰지 않고 experiments[] 에 누적 → 다음 diarySignals 분석에 반영된다.
+// (actionId 당 1개 upsert. 같은 실험을 다시 적으면 덮어씀.)
+export function logExperiment({ actionId, prompt, text, date } = {}) {
+  const v = (text || "").trim();
+  const d = date || todayKey();
+  return patch((s) => {
+    let c = s.checkins.find((x) => x.date === d);
+    if (!c) {
+      c = { date: d, mood: null, valence: null, energy: null, skill: null, keyword: null, note: "", text: "", answers: null, domains: null, diaryId: null, experiments: [], hasDiary: true };
+      s.checkins = [...s.checkins, c].sort((a, b) => a.date.localeCompare(b.date));
+    }
+    const rest = (c.experiments || []).filter((e) => e.actionId !== actionId);
+    c.experiments = v ? [...rest, { actionId, prompt: prompt || "", text: v }] : rest;
+    if (v) c.hasDiary = true;
+    return s;
+  });
+}
+
 // ── XP / 레벨 ────────────────────────────────────────────────
 // 참여 지표다. 실측 데이터와 무관하며 값은 팀 재량으로 정한 것.
 export const XP_RULES = {
@@ -495,6 +514,16 @@ const DEMO_DIARY = {
   },
 };
 
+// 예시 기록의 영역(행성) 태그 — 데모에서도 행성별 그래프·리포트가 보이도록.
+// 일기 있는 날은 내용에 맞는 영역, 나머지(기분만 남긴 날)는 '삶의 만족(life)'.
+const DEMO_DOMAINS = {
+  "0-0": ["career"], "0-3": ["career", "health"],
+  "1-2": ["health", "career"], "1-6": ["relation"],
+  "2-3": ["career", "growth"],
+  "3-2": ["career"], "3-4": ["health"],
+  "4-3": ["career", "growth"], "4-6": ["career", "growth"],
+};
+
 /** 예시 기록 3주치를 넣는다. 달력 주(월~일)에 맞춰 넣어 요일과 무관하게 같은 모양이 나온다. */
 export function seedDemoCheckins() {
   const today = todayKey();
@@ -514,6 +543,7 @@ export function seedDemoCheckins() {
         note: diary?.note ?? ((w * 7 + d) % 4 === 1 ? DEMO_NOTES[noteAt++ % DEMO_NOTES.length] : ""),
         text: diary?.text ?? "",
         answers: diary?.answers ?? null,
+        domains: DEMO_DOMAINS[`${w}-${d}`] ?? ["life"],
       });
     });
   });

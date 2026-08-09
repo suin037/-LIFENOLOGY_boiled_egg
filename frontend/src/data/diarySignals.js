@@ -42,6 +42,8 @@ function textOf(c) {
   const parts = [c.text, c.note];
   if (Array.isArray(c.answers)) for (const qa of c.answers) parts.push(qa?.a);
   else if (c.answers && typeof c.answers === "object") parts.push(...Object.values(c.answers));
+  // '작은 실험'에 사용자가 적은 답만 포함(질문 프롬프트는 키워드 오탐 유발 → 제외).
+  if (Array.isArray(c.experiments)) for (const e of c.experiments) parts.push(e?.text);
   return parts.filter(Boolean).join(" ");
 }
 
@@ -129,6 +131,133 @@ export function valueGap(profile, sig) {
     revealedLabel: revealedAxis, // 축 이름(성장/안정 …)을 그대로 라벨로
     aligned: selectedAxis && revealedAxis ? selectedAxis === revealedAxis : null,
   };
+}
+
+// 신호 → 개인화 해석(③층)을 로컬로 생성한다. LLM 없음.
+// "현재 준비 상태" + "우선 확인할 조건" — 예측 숫자는 건드리지 않고 읽는 법만 제시.
+export function interpretSignals(sig, gap) {
+  if (!sig?.ok) return null;
+  const top = (sig.signals || []).filter((s) => s.days > 0);
+  const has = (k) => top.some((s) => s.key === k);
+  const down = sig.moodTrend != null && sig.moodTrend < -0.1;
+  const up = sig.moodTrend != null && sig.moodTrend > 0.1;
+
+  let readiness;
+  if (has("burnout") || down) {
+    readiness = { tone: "caution", text: "지쳐 있는 신호가 보여요. 큰 결정보다 회복을 먼저 확보하고, 판단은 컨디션이 올라온 뒤로 미뤄도 괜찮아요." };
+  } else if (sig.jobChangeDays >= 3 && up) {
+    readiness = { tone: "go", text: "고민이 반복되고 기분도 회복세예요. 막연히 미루기보다 실제로 조건을 알아보기 좋은 시점이에요." };
+  } else if (sig.jobChangeDays >= 3) {
+    readiness = { tone: "mid", text: "이직 고민이 자주 올라와요. 서두르기보다 아래 조건부터 하나씩 확인해 불확실성을 줄여보세요." };
+  } else {
+    readiness = { tone: "mid", text: "아직 한 방향으로 강하게 기운 신호는 적어요. 기록이 더 쌓이면 해석이 또렷해져요." };
+  }
+
+  const conditions = [];
+  if (has("stabilityPreference")) conditions.push("이직 시 최소 확보돼야 할 안전 조건(급여 하한·고용형태)");
+  if (has("jobDissatisfaction")) conditions.push("지금 불만이 '회사' 때문인지 '직무' 때문인지 구분");
+  if (has("growthStagnation")) conditions.push("다음 자리에서 실제로 배우고 싶은 것 3가지");
+  if (!conditions.length) conditions.push("가장 마음이 걸리는 조건 하나를 문장으로 적어보기");
+
+  const valueNote =
+    gap?.aligned === false
+      ? `고른 가치(${gap.selectedAxis})와 기록의 무게중심(${gap.revealedAxis})이 달라요 — 무엇을 더 중요히 여기는지 짚어볼 지점.`
+      : gap?.aligned === true
+        ? `고른 가치와 기록이 같은 방향(${gap.selectedAxis})이라 그 기준으로 밀어도 될 신호예요.`
+        : null;
+
+  return { readiness, conditions: conditions.slice(0, 3), valueNote };
+}
+
+// 영역(행성)별 분석 — 그 영역으로 분류된 기록만 모아 그래프·요약 재료를 만든다.
+// 각 행성의 별자리가 "그 삶의 영역의 흐름"을 보여주게 하는 용도. 로컬, LLM 없음.
+const _val = (c) => (c.valence != null ? c.valence : c.mood != null ? (c.mood - 3) / 2 : null);
+const _mv = (c) => c.mood ?? Math.round(_val(c) * 2 + 3);
+
+// 별 목록(그 영역·그 기간의 기록) → 분석 결과. domainAnalysis/domainMonths 공용.
+function analyzeStars(stars, extra = {}) {
+  if (!stars.length) return { ok: false, n: 0, ...extra };
+  const series = stars.map((c) => ({ date: c.date, v: +_val(c).toFixed(2), mood: _mv(c) }));
+  const moodAvg = +(series.reduce((a, x) => a + x.mood, 0) / series.length).toFixed(1);
+  let trend = null;
+  if (series.length >= 4) {
+    const mid = Math.floor(series.length / 2);
+    const avg = (arr) => arr.reduce((s2, x) => s2 + x.v, 0) / arr.length;
+    trend = +(avg(series.slice(mid)) - avg(series.slice(0, mid))).toFixed(2);
+  }
+  const freq = {};
+  for (const c of stars) {
+    const e = c.keyword || c.emotion;
+    if (e) freq[e] = (freq[e] || 0) + 1;
+  }
+  const topEmotions = Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([e]) => e);
+  const snip = (c) => {
+    const first = Array.isArray(c.answers) ? c.answers[0]?.a : c.answers && typeof c.answers === "object" ? Object.values(c.answers)[0] : "";
+    const t = (c.text || c.note || first || "").trim();
+    return t.length > 54 ? t.slice(0, 54) + "…" : t;
+  };
+  const best = stars.reduce((a, b) => (_mv(b) >= _mv(a) ? b : a));
+  const worst = stars.reduce((a, b) => (_mv(b) <= _mv(a) ? b : a));
+  return { ok: true, n: stars.length, series, moodAvg, trend, topEmotions,
+    best: { date: best.date, mood: _mv(best), text: snip(best) },
+    worst: { date: worst.date, mood: _mv(worst), text: snip(worst) }, ...extra };
+}
+
+function _domainStars(planetKey, s) {
+  return s.checkins
+    .filter((c) => !c.empty && Array.isArray(c.domains) && c.domains.includes(planetKey) && _val(c) != null)
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+// 그 영역 전체(모든 기간) 분석.
+export function domainAnalysis(planetKey, s = loadUniverse()) {
+  return analyzeStars(_domainStars(planetKey, s), { planetKey });
+}
+
+// 최근 windowDays 동안 가장 자주 기록된 영역(행성 key). 없으면 null.
+// "이직 신호가 없을 때 카드가 실제 기록 주제를 반영"하는 데 쓴다.
+export function dominantDomain({ windowDays = 28 } = {}, s = loadUniverse()) {
+  const today = todayKey();
+  const count = {};
+  for (const c of s.checkins) {
+    if (c.empty || !Array.isArray(c.domains)) continue;
+    const d = daysBetween(c.date, today);
+    if (d < 0 || d > windowDays) continue;
+    for (const k of c.domains) count[k] = (count[k] || 0) + 1;
+  }
+  const top = Object.entries(count).sort((a, b) => b[1] - a[1])[0];
+  return top ? top[0] : null;
+}
+
+// 그 영역을 '달(月)' 단위로 묶어 각 달의 분석을 낸다. 별자리 하나 = 한 달의 그 영역 내역.
+// 최신 달 먼저. label 은 "2026년 8월" 형태.
+export function domainMonths(planetKey, s = loadUniverse()) {
+  const byMonth = {};
+  for (const c of _domainStars(planetKey, s)) {
+    const m = c.date.slice(0, 7); // YYYY-MM
+    (byMonth[m] = byMonth[m] || []).push(c);
+  }
+  return Object.keys(byMonth)
+    .sort((a, b) => b.localeCompare(a))
+    .map((m) => {
+      const [y, mm] = m.split("-");
+      return { month: m, label: `${y}년 ${Number(mm)}월`, analysis: analyzeStars(byMonth[m], { planetKey, month: m }) };
+    });
+}
+
+// 영역 분석 → 짧은 로컬 리포트 문장. 정직: 성격진단·예측 아님, 기록 요약.
+export function domainReport(a, label) {
+  if (!a?.ok) return `${label} 영역엔 아직 기록이 없어요. 일기가 이 영역으로 분류되면 여기에 흐름과 요약이 생겨요.`;
+  const trendTxt =
+    a.trend == null
+      ? " 아직 흐름을 말하기엔 기록이 적어요."
+      : a.trend > 0.1
+        ? " 뒤로 갈수록 나아진 회복세예요."
+        : a.trend < -0.1
+          ? " 뒤로 갈수록 가라앉는 하강세예요."
+          : " 큰 기복 없이 비슷하게 흘렀어요.";
+  const emoTxt = a.topEmotions.length ? ` 이 영역에서 자주 남긴 감정은 ${a.topEmotions.join("·")}이에요.` : "";
+  return `${label} 영역엔 기록이 ${a.n}개 쌓였고 기분은 평균 ${a.moodAvg}점.${trendTxt}${emoTxt}`;
 }
 
 // 반복 고민 넛지에 쓸 판단 — 최근 windowDays 안에 이직 고민이 threshold일 이상 나타났나.

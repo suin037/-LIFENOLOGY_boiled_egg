@@ -19,6 +19,8 @@ const AREAS = [
 const DAILY_Q = [
   { text: "오늘 하루, 주로 뭘 하면서 보냈어요?" },
   { text: "오늘 누구와 함께한 시간이 있었나요?" },
+  // 고민을 직접 물어야 이직·관계 등 신호를 잡을 수 있다(diarySignals 입력원).
+  { text: "요즘 마음에 걸리는 고민 있어요? 일·관계·건강 뭐든 좋아요. (없으면 넘겨도 돼요)", skip: true },
   { text: "오늘 먹은 것 중에 맛있었던 게 있어요?" },
 ];
 // 건강 = 고정 질문(매일 안 바뀜). 선택형(옵션) + 정량 수치(number). 수치는 후에 삼성헬스 자동수신 자리.
@@ -189,7 +191,7 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange 
             />
           </div>
         ) : (
-          <div className="mt-2 flex gap-2">
+          <div className="mt-2 flex items-center gap-2">
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -200,6 +202,11 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange 
             <button onClick={() => answer()} disabled={!input.trim()} className="tap rounded-xl border border-line px-3 text-[13px] text-sub">
               답변
             </button>
+            {qs[qi]?.skip && (
+              <button onClick={() => answer("기록 안 함")} className="tap px-2 text-[12px] text-mut">
+                넘기기
+              </button>
+            )}
           </div>
         ))}
 

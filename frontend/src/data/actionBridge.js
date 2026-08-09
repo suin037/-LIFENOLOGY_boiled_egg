@@ -116,6 +116,18 @@ export function clearActiveGoal() {
   try { localStorage.removeItem(GOAL_KEY); } catch { /* 저장 불가 환경 */ }
 }
 
+// 작은 실험에 적은 답을 목표의 completedActions 에 upsert(완료 기록). 빈 값이면 삭제.
+export function saveActionResponse(actionId, text) {
+  const goal = loadActiveGoal();
+  if (!goal) return null;
+  const v = (text || "").trim();
+  const rest = (goal.completedActions || []).filter((a) => a.id !== actionId);
+  const completedActions = v ? [...rest, { id: actionId, text: v }] : rest;
+  const value = { ...goal, completedActions };
+  try { localStorage.setItem(GOAL_KEY, JSON.stringify(value)); } catch { /* 저장 불가 환경 */ }
+  return value;
+}
+
 // 저장된 우주의 결정(A/B) → 향해 가는 실제 선택. 보류면 null.
 export function chosenChoice(u) {
   if (u?.decision === "A") return u.choiceA;
