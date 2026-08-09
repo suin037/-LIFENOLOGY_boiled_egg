@@ -1,15 +1,24 @@
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Orbit, ChevronRight, Sparkles } from "lucide-react";
+import { Orbit, ChevronRight, Sparkles, GitCompareArrows } from "lucide-react";
 import { useResult } from "../data/ResultContext.jsx";
 import { Button } from "../components/ui.jsx";
 import DiaryToday from "../components/DiaryToday.jsx";
 import { universeSummary } from "../data/myUniverse.js";
+import { jobChangeRumination } from "../data/diarySignals.js";
 
 // 홈 = 진입 허브. 인사 + 마스코트 + 오늘 기록 + 새 시뮬 + 나의 우주 요약.
 export default function HomeHub() {
   const navigate = useNavigate();
-  const { profile } = useResult();
+  const { profile, setChoices } = useResult();
   const universe = universeSummary();
+  // 반복되는 이직 고민을 일기에서 감지하면 → 비교를 먼저 제안(정직: 숫자 아님, 비교 제안일 뿐).
+  const rumination = useMemo(() => jobChangeRumination({ windowDays: 14, threshold: 3 }), []);
+
+  function startJobCompare() {
+    setChoices({ a: "이직", b: "유지" });
+    navigate("/input");
+  }
 
   return (
     <div className="pb-2">
@@ -25,6 +34,25 @@ export default function HomeHub() {
 
       {/* 가이드 캐러셀 + 이번 주 기록 + 오늘 체크인 */}
       <DiaryToday />
+
+      {/* 반복 고민 넛지 — 최근 2주 이직 고민이 잦으면 비교를 먼저 제안 */}
+      {rumination.prompt && (
+        <button
+          onClick={startJobCompare}
+          className="tap mt-4 flex w-full items-center gap-3 rounded-[18px] border border-cyan/40 bg-[#12203a] px-4 py-3.5 text-left transition-colors hover:bg-[#16264a]"
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-cyan/15 text-cyan">
+            <GitCompareArrows size={18} strokeWidth={2} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[13px] font-semibold text-cyan">
+              최근 {rumination.windowDays}일 동안 이직 고민이 {rumination.count}일 나타났어요
+            </span>
+            <span className="block text-[11px] text-sub">이직 vs 현상 유지, 지금 비교해볼까요?</span>
+          </span>
+          <ChevronRight size={18} className="text-cyan" />
+        </button>
+      )}
 
       {/* 새 시뮬 CTA */}
       <Button className="mt-4 flex items-center justify-center gap-1.5" onClick={() => navigate("/input")}>

@@ -10,6 +10,7 @@ import { PSYCH_QUESTIONS } from "../data/psychQuestions.js";
 import Avatar from "../components/Avatar.jsx";
 import AvatarBuilder from "../components/AvatarBuilder.jsx";
 import Mascot from "../components/Mascot.jsx";
+import PrivacyVault from "../components/PrivacyVault.jsx";
 import { LEVEL_TITLES, XP_RULES, universeSummary } from "../data/myUniverse.js";
 import { LEVEL_REWARDS } from "../data/unlocks.js";
 
@@ -180,6 +181,9 @@ export default function Settings() {
         </button>
       </div>
       <h1 className="mb-3 text-[22px] font-bold">프로필 · 설정</h1>
+
+      {/* 개인정보 암호화 */}
+      <PrivacyVault />
 
       {/* 프로필 */}
       <Card>

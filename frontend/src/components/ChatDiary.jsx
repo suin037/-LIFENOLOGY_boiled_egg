@@ -19,6 +19,8 @@ const AREAS = [
 const DAILY_Q = [
   { text: "오늘 하루, 주로 뭘 하면서 보냈어요?" },
   { text: "오늘 누구와 함께한 시간이 있었나요?" },
+  // 고민을 직접 물어야 이직·관계 등 신호를 잡을 수 있다(diarySignals 입력원).
+  { text: "요즘 마음에 걸리는 고민 있어요? 일·관계·건강 뭐든 좋아요. (없으면 넘겨도 돼요)", skip: true },
   { text: "오늘 먹은 것 중에 맛있었던 게 있어요?" },
 ];
 // 건강 = 고정 질문(매일 안 바뀜). 선택형(옵션) + 정량 수치(number). 수치는 후에 삼성헬스 자동수신 자리.
@@ -45,15 +47,39 @@ function areaQuestions(key) {
   return DAILY_Q;
 }
 
+// 하루 단위 대화 드래프트 — 챗봇을 닫아도 그날 대화가 유지되고, 날이 바뀌면 새로 시작.
+const DRAFT_KEY = "pm.chatDraft.v1";
+function loadDraft() {
+  try {
+    const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null");
+    if (d && d.date === todayKey()) return d; // 오늘 것만 유효 → 다음날 자동 새 기록
+  } catch { /* 무시 */ }
+  return { date: todayKey(), d: {} };
+}
+function draftFor(area) {
+  return loadDraft().d[area] || null;
+}
+function saveDraftArea(area, msgs, qi) {
+  const d = loadDraft();
+  d.d[area] = { msgs, qi };
+  try { localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch { /* 무시 */ }
+}
+
 export default function ChatDiary({ onSaved, embedded = false, onMessagesChange, initialArea = "daily", showAreas = true }) {
   const { setProfile } = useResult(); // 성향 답변을 프로필에 반영(모든 시나리오 개인화 재료)
   const [area, setArea] = useState(initialArea);
   const [qs, setQs] = useState(() => areaQuestions(initialArea));
-  const [qi, setQi] = useState(0);
-  const [msgs, setMsgs] = useState(() => [{ role: "bot", text: areaQuestions(initialArea)[0].text }]);
+  // 오늘 저장된 드래프트가 있으면 이어서(챗봇 닫았다 열어도 유지).
+  const _init = draftFor(initialArea);
+  const [qi, setQi] = useState(() => _init?.qi ?? 0);
+  const [msgs, setMsgs] = useState(() =>
+    _init?.msgs?.length ? _init.msgs : [{ role: "bot", text: areaQuestions(initialArea)[0].text }],
+  );
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(null);
+  const [editIdx, setEditIdx] = useState(null); // 수정 중인 답변 인덱스
+  const [editText, setEditText] = useState("");
   const threadRef = useRef(null);
 
   const mascot = AREAS.find((a) => a.key === area)?.mascot || "nova";
@@ -63,15 +89,31 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
   useEffect(() => {
     if (threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight;
     onMessagesChange?.(msgs);
-  }, [msgs]); // eslint-disable-line react-hooks/exhaustive-deps
+    saveDraftArea(area, msgs, qi); // 하루 단위 드래프트로 저장(닫아도 유지)
+  }, [msgs, qi, area]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function switchArea(key) {
     const list = areaQuestions(key);
+    const dr = draftFor(key);
     setArea(key);
     setQs(list);
-    setQi(0);
-    setMsgs([{ role: "bot", text: list[0].text }]);
+    setQi(dr?.qi ?? 0);
+    setMsgs(dr?.msgs?.length ? dr.msgs : [{ role: "bot", text: list[0].text }]);
     setSaved(null);
+    setEditIdx(null);
+  }
+
+  // 답변 수정 — 답변 옆 '수정' 버튼 → 인라인 편집 → 반영.
+  function startEdit(i) {
+    setEditIdx(i);
+    setEditText(msgs[i]?.text || "");
+  }
+  function commitEdit() {
+    if (editIdx == null) return;
+    const v = editText.trim();
+    if (v) setMsgs((m) => m.map((msg, idx) => (idx === editIdx ? { ...msg, text: v } : msg)));
+    setEditIdx(null);
+    setEditText("");
   }
 
   function answer(raw) {
@@ -135,10 +177,31 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
               <Mascot which={mascot} size={26} />
               <span className="rounded-2xl border border-line bg-[#141b2e] px-3 py-1.5 text-[13px] text-ink">{m.text}</span>
             </div>
+          ) : editIdx === i ? (
+            <div key={i} className="flex items-center gap-1 self-end" style={{ maxWidth: "90%" }}>
+              <input
+                value={editText}
+                autoFocus
+                onChange={(e) => setEditText(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && commitEdit()}
+                onBlur={commitEdit}
+                className="rounded-2xl border border-cyan bg-[#12203a] px-3 py-1.5 text-[13px] text-ink outline-none"
+              />
+              <button onMouseDown={(e) => e.preventDefault()} onClick={commitEdit} className="tap text-[10px] text-cyan">완료</button>
+            </div>
           ) : (
-            <span key={i} className="self-end rounded-2xl bg-[#12203a] px-3 py-1.5 text-[13px]" style={{ maxWidth: "82%", color: "#dbeafe" }}>
-              {m.text}
-            </span>
+            <div key={i} className="group flex items-center gap-1 self-end" style={{ maxWidth: "90%" }}>
+              <button
+                onClick={() => startEdit(i)}
+                className="tap shrink-0 rounded-md px-1 text-[10px] text-mut hover:text-cyan"
+                aria-label="답변 수정"
+              >
+                ✎
+              </button>
+              <span className="rounded-2xl bg-[#12203a] px-3 py-1.5 text-[13px]" style={{ color: "#dbeafe" }}>
+                {m.text}
+              </span>
+            </div>
           ),
         )}
       </div>
@@ -189,7 +252,7 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
             />
           </div>
         ) : (
-          <div className="mt-2 flex gap-2">
+          <div className="mt-2 flex items-center gap-2">
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -200,6 +263,11 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
             <button onClick={() => answer()} disabled={!input.trim()} className="tap rounded-xl border border-line px-3 text-[13px] text-sub">
               답변
             </button>
+            {qs[qi]?.skip && (
+              <button onClick={() => answer("기록 안 함")} className="tap px-2 text-[12px] text-mut">
+                넘기기
+              </button>
+            )}
           </div>
         ))}
 

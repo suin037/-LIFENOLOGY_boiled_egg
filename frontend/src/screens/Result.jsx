@@ -3,13 +3,16 @@ import { useNavigate } from "react-router-dom";
 import { useResult } from "../data/ResultContext.jsx";
 import { useDiary } from "../data/DiaryContext.jsx";
 import { labelOf } from "../data/prediction.js";
-import { saveMe, getScenario } from "../data/api.js";
+import { detectLifeDomains } from "../data/choices.js";
+import { redactPII, redactEntries } from "../data/piiRedact.js";
+import { saveMe, getScenario, getThirdPath } from "../data/api.js";
 import { Eyebrow, Button } from "../components/ui.jsx";
 import LifeView from "../components/result/LifeView.jsx";
 import ChangeView from "../components/result/ChangeView.jsx";
 import EvidenceView from "../components/result/EvidenceView.jsx";
 import ActionView from "../components/result/ActionView.jsx";
 import AvatarComparison from "../components/result/AvatarComparison.jsx";
+import DiarySignalCard from "../components/result/DiarySignalCard.jsx";
 
 export default function Result() {
   const navigate = useNavigate();
@@ -50,7 +53,10 @@ export default function Result() {
         onRetry={result.visualError ? retryVisuals : null}
       />
 
+      {/* 3층: ① 통계(아래 탭) · ② 내 기록 기반 상태 · ③ 개인화 해석 */}
+      <DiarySignalCard />
       <PersonaScenario a={a} b={b} />
+      <ThirdPath a={a} b={b} />
 
       {/* 서브뷰 칩 */}
       <div className="no-scrollbar my-2.5 flex gap-1.5 overflow-x-auto pb-1">
@@ -77,6 +83,75 @@ export default function Result() {
       <Button variant="ghost" className="mt-4" onClick={() => navigate("/input")}>
         다른 갈림길로 다시 해보기
       </Button>
+    </div>
+  );
+}
+
+// A/B 외의 '제3의 길' — 성향+일기신호로 LLM이 생성 (재구성 제안, 수치 예측 아님)
+function ThirdPath({ a, b }) {
+  const { profile } = useResult();
+  const { entries } = useDiary();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const [res, setRes] = useState(null);
+
+  async function run() {
+    setBusy(true); setErr(null); setRes(null);
+    try {
+      // 진로 계열일 때만 일기 entries(→ 이직 신호)를 넘긴다. 관계 등은 선택지만으로
+      // 제안받아 이직 프레임이 섞이지 않게 한다(LLM은 선택지를 보고 해당 분야로 제안).
+      const isJob = detectLifeDomains(`${a.choice} ${b.choice}`).some((k) => ["career", "finance", "business"].includes(k))
+        || /이직|퇴사|유지|창업|진학|직장|커리어/.test(`${a.choice}${b.choice}`);
+      // 외부 AI 전송 전 PII 마스킹 — 이름·연봉·연락처 등 원문 개인정보를 가린다.
+      const known = { name: profile.name, company: "" };
+      const rawEntries = entries.map((e) => ({
+        date: e.date, mood: e.mood, text: e.text, answers: e.answers || {},
+        energy: e.energy, competency: e.competency, emotion: e.emotion,
+      }));
+      const r = await getThirdPath({
+        choice_a: redactPII(a.choice, known).masked,
+        choice_b: redactPII(b.choice, known).masked,
+        age: a.meta?.age,
+        major: a.meta?.occupation,
+        entries: isJob ? redactEntries(rawEntries, known).entries : [],
+      });
+      if (!r.ok) throw new Error(r.reason === "no_api_key" ? "서버에 ANTHROPIC_API_KEY 미설정" : r.reason || "생성 실패");
+      setRes(r);
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mb-3 rounded-2xl border border-gold/50 bg-[#211a10] p-3.5">
+      <div className="flex items-center justify-between">
+        <div className="text-[13px] font-bold text-gold">💡 생각지 못한 제3의 길</div>
+        <button
+          onClick={run}
+          disabled={busy}
+          className="tap rounded-xl bg-gold px-3 py-1.5 text-[11px] font-bold text-[#2a1e05] disabled:opacity-60"
+        >
+          {busy ? "찾는 중…" : res ? "다시" : "제안 받기"}
+        </button>
+      </div>
+      {err && <p className="mt-2 text-[10px] text-[#F0736F]">API 실패 — 서버(:8000) 켜졌나요? {err}</p>}
+      {res ? (
+        <>
+          <p className="mt-2 text-[13px] font-semibold leading-relaxed text-ink">{res.title}</p>
+          {res.rationale && <p className="mt-1.5 whitespace-pre-line text-[12px] leading-relaxed text-sub">{res.rationale}</p>}
+          <p className="mt-1.5 text-[10px] text-mut">
+            {res.signal_used ? "✓ 내 일기 신호 반영 · " : ""}정답이 아니라 재구성 제안이에요 — 수치 예측이 아닙니다.
+          </p>
+        </>
+      ) : (
+        !busy && (
+          <p className="mt-2 text-[11px] leading-relaxed text-mut">
+            {a.choice} vs {b.choice} 두 갈래 말고, 내 성향·일기에 맞는 제3의 길을 제안받아요.
+          </p>
+        )
+      )}
     </div>
   );
 }
