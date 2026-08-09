@@ -13,7 +13,8 @@ export default function HomeHub() {
   const { profile, setChoices } = useResult();
   const universe = universeSummary();
   // 반복되는 이직 고민을 일기에서 감지하면 → 비교를 먼저 제안(정직: 숫자 아님, 비교 제안일 뿐).
-  const rumination = useMemo(() => jobChangeRumination({ windowDays: 14, threshold: 3 }), []);
+  // 결과 카드(28일)와 창을 맞춰 숫자가 어긋나 보이지 않게 한다.
+  const rumination = useMemo(() => jobChangeRumination({ windowDays: 28, threshold: 4 }), []);
 
   function startJobCompare() {
     setChoices({ a: "이직", b: "유지" });
