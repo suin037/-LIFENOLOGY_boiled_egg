@@ -2,9 +2,9 @@
 //  · nova(핑크)=햄스터 / cosmo(블루)=물범(머리 위 행성 고리) / lumi(옐로)=병아리
 //  · expr="happy" 면 눈이 ^ᴗ^ 로(간식/쓰다듬 리액션), mood="시무룩"이면 처진 눈.
 const V = {
-  nova:  { edge: "#FFE1EC", tint: "#F49CBE", eye: "#4A2130", animal: "hamster" },
-  cosmo: { edge: "#DCEEFF", tint: "#89C0F0", eye: "#22415C", animal: "seal" },
-  lumi:  { edge: "#FFF3CF", tint: "#F2CE62", eye: "#6E521B", animal: "chick", beak: "#F59A3C" },
+  nova:  { edge: "#FFE6EF", tint: "#F4A8C6", eye: "#4A2130", animal: "hamster", blush: "#F7A9C6" },
+  cosmo: { edge: "#E4F1FF", tint: "#8FC4F2", eye: "#22415C", animal: "seal",    blush: "#F4A6C0" },
+  lumi:  { edge: "#FFF6D8", tint: "#F3D26E", eye: "#6E521B", animal: "chick", beak: "#F59A3C", blush: "#F6AEA0" },
 };
 
 // 5각 별 path
@@ -24,36 +24,46 @@ export default function PetCreature({ size = 120, variant = "cosmo", mood = "기
   const sad = mood === "시무룩";
   const happy = expr === "happy" && !sad;
 
-  // 점눈 / 웃는눈(^ᴗ^) / 처진눈
+  // 점눈 / 웃는눈(^ᴗ^) / 처진눈 — 주기적 깜빡임(pm-blink)으로 감싼다.
   const Eyes = ({ lx, rx, y }) => {
+    let inner;
+    // 기분 나쁠 때(시무룩) = 눈이 -  - 일자(언짢은 표정)
     if (sad)
-      return (
+      inner = (
         <>
-          <path d={`M${lx - 3.5},${y + 1} Q${lx},${y + 4} ${lx + 3.5},${y + 1}`} fill="none" stroke={v.eye} strokeWidth="2.2" strokeLinecap="round" />
-          <path d={`M${rx - 3.5},${y + 1} Q${rx},${y + 4} ${rx + 3.5},${y + 1}`} fill="none" stroke={v.eye} strokeWidth="2.2" strokeLinecap="round" />
+          <path d={`M${lx - 3},${y} h6`} fill="none" stroke={v.eye} strokeWidth="2.2" strokeLinecap="round" />
+          <path d={`M${rx - 3},${y} h6`} fill="none" stroke={v.eye} strokeWidth="2.2" strokeLinecap="round" />
         </>
       );
     // 담곰(햄스터)은 웃어도 눈 그대로(입만) — 나머지는 눈만 웃음.
-    if (happy && v.animal !== "hamster")
-      return (
+    else if (happy && v.animal !== "hamster")
+      inner = (
         <>
           <path d={`M${lx - 2.5},${y + 1} Q${lx},${y - 1.7} ${lx + 2.5},${y + 1}`} fill="none" stroke={v.eye} strokeWidth="2" strokeLinecap="round" />
           <path d={`M${rx - 2.5},${y + 1} Q${rx},${y - 1.7} ${rx + 2.5},${y + 1}`} fill="none" stroke={v.eye} strokeWidth="2" strokeLinecap="round" />
         </>
       );
     // 햄스터 평소 = 농담곰식 작은 점눈(밋밋·데드팬, 하이라이트 없음)
-    if (v.animal === "hamster")
-      return (
+    else if (v.animal === "hamster")
+      inner = (
         <>
           <circle cx={lx} cy={y} r="2" fill={v.eye} />
           <circle cx={rx} cy={y} r="2" fill={v.eye} />
         </>
       );
+    else
+      inner = (
+        <>
+          <circle cx={lx} cy={y} r="2.4" fill={v.eye} />
+          <circle cx={rx} cy={y} r="2.4" fill={v.eye} />
+        </>
+      );
+    // 웃거나 시무룩일 땐 깜빡 안 함(표정 유지), 평소에만 깜빡.
+    const blink = !sad && !happy;
     return (
-      <>
-        <circle cx={lx} cy={y} r="2.4" fill={v.eye} />
-        <circle cx={rx} cy={y} r="2.4" fill={v.eye} />
-      </>
+      <g style={blink ? { transformBox: "view-box", transformOrigin: `50px ${y}px`, animation: "pm-blink 4.6s ease-in-out infinite" } : undefined}>
+        {inner}
+      </g>
     );
   };
 
@@ -64,11 +74,11 @@ export default function PetCreature({ size = 120, variant = "cosmo", mood = "기
       {happy && v.animal === "hamster" ? (
         <path d={`M44,${y + 0.6} Q49,${y + 2.8} 56,${y - 2.2}`} fill="none" stroke={v.eye} strokeWidth="1.8" strokeLinecap="round" />
       ) : v.animal === "hamster" ? (
-        <path d={`M44,${y + 1.8} Q50,${y - 2.4} 56,${y + 1.8}`} fill="none" stroke={v.eye} strokeWidth="1.7" strokeLinecap="round" />
+        <path d={`M45.5,${y} L54.5,${y}`} fill="none" stroke={v.eye} strokeWidth="1.7" strokeLinecap="round" />
       ) : (
         <>
           <path d={`M50,${y - 1.4} L50,${y + 0.3}`} stroke={v.eye} strokeWidth="1.3" strokeLinecap="round" />
-          <path d={`M44.5,${y} Q47.5,${y + 3.2} 50,${y + 0.4} Q52.5,${y + 3.2} 55.5,${y}`} fill="none" stroke={v.eye} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+          <path d={`M44.5,${y + 1.8} Q47.5,${y + 3.4} 50,${y - 0.2} Q52.5,${y + 3.4} 55.5,${y + 1.8}`} fill="none" stroke={v.eye} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
         </>
       )}
     </>
@@ -101,7 +111,9 @@ export default function PetCreature({ size = 120, variant = "cosmo", mood = "기
           <ellipse cx="58" cy="85" rx="7" ry="4.6" fill={`url(#${gid})`} />
           {/* 몸 (동글·약간 넓게) */}
           <ellipse cx="50" cy="58" rx="31" ry="28" fill={`url(#${gid})`} />
-          {/* 농담곰식: 볼터치 없이 밋밋. 눈은 작고 넓게. */}
+          {/* 볼터치(은은한 파스텔) — 담곰도 살짝 */}
+          <ellipse cx="30" cy="59" rx="6.4" ry="4.2" fill={v.blush} opacity="0.5" />
+          <ellipse cx="70" cy="59" rx="6.4" ry="4.2" fill={v.blush} opacity="0.5" />
           <Eyes lx={40} rx={60} y={54} />
           <WMouth y={65} />
         </>
@@ -118,9 +130,9 @@ export default function PetCreature({ size = 120, variant = "cosmo", mood = "기
           <path d="M43,88 Q50,84 57,88 Q50,92 43,88 Z" fill={`url(#${gid})`} />
           {/* 몸 (동글·통통) */}
           <ellipse cx="50" cy="59" rx="30" ry="28" fill={`url(#${gid})`} />
-          {/* 볼터치 */}
-          <ellipse cx="32" cy="63" rx="5.5" ry="3.6" fill={v.tint} opacity="0.42" />
-          <ellipse cx="68" cy="63" rx="5.5" ry="3.6" fill={v.tint} opacity="0.42" />
+          {/* 볼터치(파스텔·큼) */}
+          <ellipse cx="31" cy="63" rx="6.6" ry="4.3" fill={v.blush} opacity="0.5" />
+          <ellipse cx="69" cy="63" rx="6.6" ry="4.3" fill={v.blush} opacity="0.5" />
           <Eyes lx={41} rx={59} y={55} />
           <WMouth y={65} />
         </>
@@ -139,9 +151,9 @@ export default function PetCreature({ size = 120, variant = "cosmo", mood = "기
           <path d="M56,88 v4 M54,93 h4 M56,92 l-3,2 M56,92 l3,2" stroke={v.beak} strokeWidth="1.8" strokeLinecap="round" fill="none" />
           {/* 몸 (동글) */}
           <ellipse cx="50" cy="58" rx="29" ry="28" fill={`url(#${gid})`} />
-          {/* 볼터치 */}
-          <ellipse cx="33" cy="61" rx="5" ry="3.3" fill={v.tint} opacity="0.5" />
-          <ellipse cx="67" cy="61" rx="5" ry="3.3" fill={v.tint} opacity="0.5" />
+          {/* 볼터치(파스텔·큼) */}
+          <ellipse cx="32" cy="60" rx="6.2" ry="4" fill={v.blush} opacity="0.52" />
+          <ellipse cx="68" cy="60" rx="6.2" ry="4" fill={v.blush} opacity="0.52" />
           <Eyes lx={41} rx={59} y={52} />
           {/* 부리 (웃어도 그대로 — 병아리는 눈만 웃음) */}
           {sad ? (

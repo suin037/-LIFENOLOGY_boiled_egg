@@ -106,6 +106,7 @@ export default function PetMascot() {
         }
         @keyframes pm-heart { 0%{ transform: translateY(0) scale(.6); opacity:0 } 25%{ opacity:1 } 100%{ transform: translateY(-44px) scale(1.1); opacity:0 } }
         @keyframes pm-chomp { 0%,100%{ transform: scale(1,1) } 50%{ transform: scale(1.07,0.9) } }
+        @keyframes pm-blink { 0%,90%,100%{ transform: scaleY(1) } 94%{ transform: scaleY(0.08) } }
         @keyframes pm-cookie-eat {
           0%   { transform: translate(30px,-14px) rotate(-10deg) scale(1); opacity:0 }
           12%  { transform: translate(4px,-2px) rotate(-4deg) scale(1); opacity:1 }
