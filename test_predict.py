@@ -19,6 +19,8 @@ sys.path.insert(0, str(BACKEND))
 _stub = types.ModuleType("utils.claude_api")
 _stub.generate_narrative = lambda *a, **k: "(narrative 생략 — 테스트 모드)"
 _stub.generate_scenarios = lambda *a, **k: {"_skipped": True}
+# 기동 워밍업이 서사 스키마도 미리 컴파일한다 → 이 심볼도 스텁에 있어야 한다.
+_stub.warm_narrative_schema = lambda *a, **k: False
 sys.modules["utils.claude_api"] = _stub
 
 from schemas import PredictRequest   # noqa: E402

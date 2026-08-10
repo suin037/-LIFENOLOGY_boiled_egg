@@ -35,7 +35,7 @@ import stat_evidence
 import indicators as indicators_mod
 import diary_bridge
 import personalize
-from utils.claude_api import generate_scenarios
+from utils.claude_api import generate_scenarios, warm_narrative_schema
 from rag.psych_narrative import get_psych_evidence, build_psych_prompt_block
 from rag import safety as rag_safety
 from utils.cloudflare_images import generate_pair
@@ -139,6 +139,9 @@ def _warmup() -> None:
     # 가장 무거운 것 — 임베딩 모델 + 벡터DB
     step("psych_rag", lambda: get_psych_evidence(
         {"경제적안정도": 0.5, "성장가능성": 0.5, "삶의질": 0.5}, decision_type="이직"))
+    # 서사의 구조화 출력 스키마는 처음 쓸 때 한 번 컴파일 비용을 낸다(이후 24h 캐시).
+    # 그 비용도 첫 사용자에게서 기동 쪽으로 옮긴다. 키가 없으면 조용히 건너뛴다.
+    step("narrative_schema", warm_narrative_schema)
     _warmup_state["done"] = True
     log.info("워밍업 완료: %s", _warmup_state["steps"])
 

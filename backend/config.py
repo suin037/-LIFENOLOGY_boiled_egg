@@ -38,6 +38,17 @@ class Settings(BaseSettings):
     # 환경변수 CLAUDE_MODEL 로 덮어쓸 수 있음(예: claude-sonnet-5 / claude-opus-4-8).
     claude_model: str = "claude-haiku-4-5"
 
+    # ── 서사 생성 지연 ──
+    # 서사 호출 지연은 입력 처리가 아니라 출력 토큰 생성이 전부다(측정: 입력
+    # 4,057tok 처리는 무시할 수준, 출력 1,266tok ÷ ~100tok/s = 12.4s).
+    # True 면 서로 의존하지 않는 A 서사·B 서사·비교+이미지장면을 동시 3콜로 뽑아
+    # 벽시계 시간을 '합'에서 '최댓값'으로 바꾼다. False 면 예전 1회 호출 경로
+    # (A·B·비교가 한 컨텍스트에서 나오지만 3배 느리다).
+    narrative_parallel: bool = True
+    # 콜별 출력 상한. 한국어 JSON은 토큰 효율이 낮아 너무 낮추면 객체가 잘린다.
+    narrative_max_tokens_story: int = 900
+    narrative_max_tokens_comparison: int = 700
+
     @property
     def goms_clean_abspath(self) -> Path:
         return ROOT / self.goms_clean_path
