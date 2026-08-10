@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import Mascot from "./Mascot.jsx";
 import PetCreature from "./PetCreature.jsx";
+import PetShop from "./PetShop.jsx";
 import { loadPet, claimDaily, petMascot, feedMascot, setWhich, moodOf, canPatToday } from "../data/petCare.js";
+import { loadShop, equippedItem, coinsAvailable } from "../data/petShop.js";
 
 // 🧸 마스코트 육성(가벼운 버전) — 쓰다듬기(말랑 튕김) + 간식으로 친밀도 키우기.
 // 3D 느낌은 CSS 소프트 그라디언트·그림자·squash/stretch로 '말랑말랑'하게.
@@ -19,6 +21,8 @@ export default function PetMascot() {
   const [crumbs, setCrumbs] = useState([]); // 와구와구 부스러기
   const [expr, setExpr] = useState("idle"); // 리액션 표정(^ᴗ^)
   const [nonce, setNonce] = useState(0); // 하트 id용(랜덤 대신)
+  const [shopOpen, setShopOpen] = useState(false);
+  const [shop, setShop] = useState(() => loadShop()); // 장착 아이템·코인
 
   // 상호작용하면 잠깐 웃는 표정(^ᴗ^)으로.
   function react(ms = 1400) {
@@ -36,6 +40,12 @@ export default function PetMascot() {
   const guide = GUIDES.find((g) => g.key === pet.which) || GUIDES[1];
   const mood = moodOf(pet.happiness);
   const pattedToday = !canPatToday(pet);
+
+  // 장착 아이템(배경·소품·가구) + 코인
+  const bgItem = equippedItem("background", shop);
+  const accItem = equippedItem("accessory", shop);
+  const furItem = equippedItem("furniture", shop);
+  const coins = coinsAvailable(shop);
 
   // 동물을 직접 누르면: 토닥토닥 모션만(친밀도 변화 없음).
   function tapOnly() {
@@ -122,7 +132,15 @@ export default function PetMascot() {
       `}</style>
 
       <div className="flex items-center justify-between">
-        <div className="text-[13px] font-bold text-ink">🧸 귀염둥이 돌보기</div>
+        <div className="flex items-center gap-2">
+          <div className="text-[13px] font-bold text-ink">🧸 귀염둥이 돌보기</div>
+          <button
+            onClick={() => setShopOpen(true)}
+            className="tap flex items-center gap-1 rounded-full bg-white/8 px-2 py-0.5 text-[10.5px] font-semibold text-ink"
+          >
+            🛍️ 꾸미기 <span className="text-[#F5C846]">🪙{coins}</span>
+          </button>
+        </div>
         <div className="flex items-center gap-1">
           <span className="mr-1 text-[9.5px] text-mut">돌보미</span>
           {GUIDES.map((g) => (
@@ -139,9 +157,13 @@ export default function PetMascot() {
       </div>
 
       {/* 무대 — 말랑한 마스코트 */}
-      <div className="relative mx-auto mt-3 flex h-[150px] w-full max-w-[240px] items-end justify-center">
+      <div className="relative mx-auto mt-3 flex h-[150px] w-full max-w-[240px] items-end justify-center overflow-hidden rounded-[16px]">
+        {/* 장착 배경 */}
+        {bgItem && <div className="pointer-events-none absolute inset-0" style={{ background: bgItem.render }} />}
         {/* 배경 후광 */}
         <div className="pointer-events-none absolute inset-0" style={{ background: `radial-gradient(circle at 50% 44%, ${guide.glow}, transparent 62%)` }} />
+        {/* 장착 가구 (구석) */}
+        {furItem && <span className="pointer-events-none absolute bottom-1.5 right-2 text-[22px]">{furItem.render}</span>}
         {/* 바닥 그림자 */}
         <div className="absolute bottom-3 h-3 w-24 rounded-[50%] bg-black/40 blur-md" />
         {/* 하트 */}
@@ -166,6 +188,8 @@ export default function PetMascot() {
             <div className="relative">
               <PetCreature size={124} variant={guide.key} mood={mood} expr={expr} />
               <div className="pointer-events-none absolute left-[24%] top-[24%] h-8 w-8 rounded-full bg-white/45 blur-[7px]" />
+              {/* 장착 소품 (머리 위) */}
+              {accItem && <span className="pointer-events-none absolute left-1/2 top-[2px] -translate-x-1/2 text-[24px]">{accItem.render}</span>}
               {/* 입가로 날아와 와구와구 사라지는 쿠키 */}
               {eating && (
                 <span
@@ -227,6 +251,8 @@ export default function PetMascot() {
         </button>
       </div>
       <p className="mt-2 text-[9.5px] leading-relaxed text-mut">쓰다듬기는 하루 한 번(친밀도 +1~10), 간식은 친밀도 +7. 동물을 누르면 토닥토닥.</p>
+
+      {shopOpen && <PetShop onClose={() => setShopOpen(false)} onChange={() => setShop(loadShop())} />}
     </div>
   );
 }
