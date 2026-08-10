@@ -29,7 +29,7 @@ export default function Result() {
   return (
     <div>
       <Eyebrow>결과 · CHART No.0427</Eyebrow>
-      <h1 className="text-[21px] font-bold leading-[1.2]">
+      <h1 className="text-[21px] font-bold leading-[1.2] lg:text-[28px]">
         {a.meta.age}세 · {a.meta.occupation}
       </h1>
       <p className="mt-1 text-[13px]">
@@ -38,6 +38,8 @@ export default function Result() {
         <span className="font-bold text-gold">{labelOf(b.choice)}</span>
       </p>
 
+      <div className="lg:mt-5 lg:grid lg:grid-cols-[minmax(0,.9fr)_minmax(0,1.1fr)] lg:items-start lg:gap-7">
+        <section className="lg:sticky lg:top-0">
       <AvatarComparison
         avatar={profile.avatarConfig}
         a={a}
@@ -51,6 +53,8 @@ export default function Result() {
       />
 
       <PersonaScenario a={a} b={b} />
+        </section>
+        <section>
 
       {/* 서브뷰 칩 */}
       <div className="no-scrollbar my-2.5 flex gap-1.5 overflow-x-auto pb-1">
@@ -72,6 +76,8 @@ export default function Result() {
 
       <div key={tab} className="animate-fade">
         <Active a={a} b={b} domains={result.domains || scenarioDomains} dataMode={result.dataMode || "demo"} />
+      </div>
+        </section>
       </div>
 
       <Button variant="ghost" className="mt-4" onClick={() => navigate("/input")}>
