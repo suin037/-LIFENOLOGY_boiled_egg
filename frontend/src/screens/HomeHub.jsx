@@ -4,6 +4,7 @@ import { Orbit, ChevronRight, Sparkles, GitCompareArrows } from "lucide-react";
 import { useResult } from "../data/ResultContext.jsx";
 import { Button } from "../components/ui.jsx";
 import DiaryToday from "../components/DiaryToday.jsx";
+import PetMascot from "../components/PetMascot.jsx";
 import { universeSummary } from "../data/myUniverse.js";
 import { jobChangeRumination } from "../data/diarySignals.js";
 
@@ -32,6 +33,9 @@ export default function HomeHub() {
         <br />
         비춰볼까요?
       </h1>
+
+      {/* 🧸 귀염둥이 육성 — 기록하면 간식, 쓰다듬고 먹이면 친밀도↑ */}
+      <PetMascot />
 
       {/* 가이드 캐러셀 + 이번 주 기록 + 오늘 체크인 */}
       <DiaryToday />
