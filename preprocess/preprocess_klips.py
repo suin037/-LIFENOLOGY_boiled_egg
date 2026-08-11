@@ -27,8 +27,14 @@ KLIPS 는 1차=1998 이므로 `연도 = 차수 + 1997` (18차=2015 … 27차=202
 | 직종 | `p{w}0352` | 표준직업분류 7차(2017코드) |
 | 종업원규모 | `p{w}0403` | 전체종업원수(범주). 없으면 `p{w}0402`(명) 를 범주화 |
 | 종사상지위 | `p{w}0314` | 1=상용 2=임시 3=일용 4=자영 5=무급가족 |
-| 월임금_명목 | `p{w}1642` | 임금근로자 월평균임금(만원) |
+| 월임금_명목 | `p{w}1642` | **임금근로자** 월평균임금(만원) |
+| 자영소득_명목 | `p{w}1672` | **비임금근로자**(자영) 월평균소득(만원) |
 | 취업년/월 | `p{w}0301` / `p{w}0302` | 현 일자리 시작시점 → 근속·이직 파생 |
+
+`p{w}1642` 는 임금근로자만 응답한다 → 자영(종사상지위 4) 행은 임금이 100% 결측이다.
+그래서 창업(임금근로→자영) 전이의 **결과변수가 통째로 관측되지 않았다**. 비임금근로자
+소득 `p{w}1672` 를 함께 읽어 `월소득_*`(둘을 합친 총소득)을 만든다. 임금만 보는
+기존 컬럼(`월임금_*`)은 하위호환을 위해 그대로 둔다(L5 궤적·이직 L3 이 쓴다).
 
 KLIPS 는 무응답을 `-1` 로 코딩한다 → 전부 결측 처리한다.
 
@@ -109,6 +115,7 @@ def read_wave(klips_dir: Path, w: int) -> pd.DataFrame:
         "종업원규모_명": f"p{w}0402",
         "종사상지위": f"p{w}0314",
         "월임금_명목": f"p{w}1642",
+        "자영소득_명목": f"p{w}1672",
         "취업년": f"p{w}0301",
         "취업월": f"p{w}0302",
     }
@@ -119,7 +126,13 @@ def read_wave(klips_dir: Path, w: int) -> pd.DataFrame:
         d[name] = _blank_negatives(pd.to_numeric(raw[col], errors="coerce"))
 
     d["직종"] = d["직종"].mask(d["직종"] >= 999)          # 999 = 분류불능
-    d["월임금_명목"] = d["월임금_명목"].mask(d["월임금_명목"] <= 0)
+    for c in ("월임금_명목", "자영소득_명목"):
+        d[c] = d[c].mask(d[c] <= 0)
+
+    # 총소득 = 임금근로자면 임금, 비임금(자영)이면 사업소득. 두 문항은 상호배타적이라
+    # 한쪽만 응답한다 → 창업 전이의 결과변수를 이 컬럼으로 관측한다.
+    d["월소득_명목"] = d["월임금_명목"].fillna(d["자영소득_명목"])
+    d["자영여부"] = (d["종사상지위"] == 4).astype("float64").mask(d["종사상지위"].isna())
 
     # 종업원규모: 범주 응답 우선, 없으면 인원수 응답을 같은 결의 범주로 환산
     binned = pd.cut(d.pop("종업원규모_명"), bins=FIRM_SIZE_BINS,
@@ -150,6 +163,8 @@ def build_panel(klips_dir: Path, waves: list[int], cpi: dict[int, float],
         )
     factor = b["year"].map(lambda y: cpi[base_year] / cpi[int(y)])
     b["월임금_실질"] = (b["월임금_명목"] * factor).round(1)
+    b["자영소득_실질"] = (b["자영소득_명목"] * factor).round(1)
+    b["월소득_실질"] = (b["월소득_명목"] * factor).round(1)
 
     # ── 근속기간(년) ──────────────────────────────────────────────────────
     b["근속기간"] = (b["year"] - b["취업년"]).clip(lower=0)
@@ -170,7 +185,9 @@ def build_panel(klips_dir: Path, waves: list[int], cpi: dict[int, float],
     ).astype(int)
 
     cols = ["pid", "wave", "year", "성별", "나이", "학력", "직종", "종업원규모",
-            "종사상지위", "월임금_명목", "월임금_실질", "근속기간", "이직"]
+            "종사상지위", "자영여부",
+            "월임금_명목", "월임금_실질", "자영소득_실질", "월소득_명목", "월소득_실질",
+            "근속기간", "이직"]
     return b[cols + ["_job_key"]]
 
 
@@ -196,6 +213,31 @@ def build_spells(b: pd.DataFrame) -> pd.DataFrame:
                      .first().rename("entry_years").reset_index())
     sp = sp.merge(first_seen, on=["pid", "_job_key"], how="left")
     return sp[["pid", "jobseq", "시작wave", "duration", "event", "entry_years"]]
+
+
+def treatment_counts(b: pd.DataFrame, age_min: int = 20, age_max: int = 45) -> dict:
+    """이직 외 treatment(창업·진학)의 전이 표본 규모. 학습 가능 여부 판단 근거.
+
+    `결과관측` = 전이 다음 해에 소득이 실제로 관측된 건수. 인과추정에 실제로
+    쓸 수 있는 건 이 수치이며, 이게 작으면 모델을 만들지 **않는** 판단 근거가 된다.
+    """
+    d = b.sort_values(["pid", "wave"])
+    g = d.groupby("pid", sort=False)
+    nxt = g.shift(-1)
+    cons = (nxt["wave"] - d["wave"]) == 1
+    age_ok = d["나이"].between(age_min, age_max)
+    y_next = nxt["월소득_실질"].notna()
+
+    startup = cons & d["종사상지위"].isin([1, 2, 3]) & (nxt["종사상지위"] == 4)
+    enroll = cons & (nxt["학력"] > d["학력"])          # 학력코드 상승 = 진학(수료)
+    grad = enroll & (d["학력"] >= 6)                   # 전문대졸 이상 → 대학원 등
+
+    def _c(m):
+        return {"전이": int(m.sum()), "연령내": int((m & age_ok).sum()),
+                "연령내_결과관측": int((m & age_ok & y_next).sum())}
+
+    return {"age_band": [age_min, age_max], "창업": _c(startup),
+            "진학_전체": _c(enroll), "진학_고등교육이상": _c(grad)}
 
 
 def main() -> None:
@@ -239,6 +281,10 @@ def main() -> None:
         "job_change_rate": float(b["이직"].mean()),
         "spells": int(len(sp)),
         "spell_events": int(sp["event"].sum()),
+        "income_rows_total": int(b["월소득_실질"].notna().sum()),
+        "self_employed_rows": int((b["자영여부"] == 1).sum()),
+        # 이직 외 treatment 표본 — 창업/진학 모델을 만들 수 있는지의 근거
+        "treatment_transitions": treatment_counts(b),
     }
     (args.out / "klips_build_report.json").write_text(
         json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -247,6 +293,11 @@ def main() -> None:
     print(f"       실질임금(기준 {args.base_year}년) 중앙값 {wage.median():.0f}만원 · "
           f"이직률 {b['이직'].mean():.1%}")
     print(f"       연도별 실질임금 중앙값: {by_wave.dropna().to_dict()}")
+    tc = report["treatment_transitions"]
+    print(f"       treatment 전이(20~45세, 결과관측): "
+          f"창업 {tc['창업']['연령내_결과관측']:,} · "
+          f"진학 {tc['진학_전체']['연령내_결과관측']:,} "
+          f"(고등교육이상 {tc['진학_고등교육이상']['연령내_결과관측']:,})")
     print(f"       → {args.out}/klips_base.pkl, klips_base_생존.csv, klips_build_report.json")
 
 

@@ -14,6 +14,7 @@ import httpx
 import json
 import logging
 import sys
+import threading
 import traceback
 
 log = logging.getLogger("parallel-me")
@@ -28,12 +29,13 @@ from schemas import (
 )
 from core import run_prediction
 from compare import build_comparison
+from choice_classifier import classification_stats
 
 import stat_evidence
 import indicators as indicators_mod
 import diary_bridge
 import personalize
-from utils.claude_api import generate_scenarios
+from utils.claude_api import generate_scenarios, warm_narrative_schema
 from rag.psych_narrative import get_psych_evidence, build_psych_prompt_block
 from rag import safety as rag_safety
 from utils.cloudflare_images import generate_pair
@@ -104,6 +106,54 @@ try:
 except Exception:
     qmode_app = None
 
+# ── 기동 워밍업 ────────────────────────────────────────────────────────────
+# 무거운 지연 로딩이 **첫 사용자 요청**에 얹히던 문제.
+# 실측(워밍 후 /simulate 0.44s)과 달리 서버 기동 직후 첫 요청은 30초를 넘겼는데,
+# 대부분이 심리카드 RAG 의 임베딩 모델(ko-sroberta) 로딩이었다. 엔진을 3.7배 빠르게
+# 만들어도 이 앞에선 묻힌다 → 기동 시점에 미리 올려 서버 부팅 쪽으로 옮긴다.
+#
+# 백그라운드 스레드로 도는 이유: 블로킹하면 uvicorn 이 그동안 연결을 안 받아
+# /health 조차 안 뜨고, --reload 개발 루프도 매번 느려진다. 온보딩을 채우는 동안
+# 로딩이 끝나므로 사용자는 기다리지 않는다.
+_warmup_state: dict = {"started": False, "done": False, "steps": {}}
+
+
+def _warmup() -> None:
+    import time as _t
+
+    def step(name, fn):
+        t0 = _t.perf_counter()
+        try:
+            fn()
+            _warmup_state["steps"][name] = round(_t.perf_counter() - t0, 2)
+        except Exception as exc:            # 워밍업 실패가 서버를 죽이면 안 된다
+            _warmup_state["steps"][name] = f"실패: {type(exc).__name__}"
+            log.warning("워밍업 '%s' 실패(요청 시 지연 로딩으로 폴백): %s", name, exc)
+
+    import trajectory as _traj
+    step("klips_panel", _traj._panel)
+    step("yp_panel", _traj._yp_panel)
+    step("artifacts", lambda: (
+        __import__("models.econml_model", fromlist=["_load_all"])._load_all(),
+        __import__("models.lifelines_model", fromlist=["_load_all"])._load_all()))
+    # 가장 무거운 것 — 임베딩 모델 + 벡터DB
+    step("psych_rag", lambda: get_psych_evidence(
+        {"경제적안정도": 0.5, "성장가능성": 0.5, "삶의질": 0.5}, decision_type="이직"))
+    # 서사의 구조화 출력 스키마는 처음 쓸 때 한 번 컴파일 비용을 낸다(이후 24h 캐시).
+    # 그 비용도 첫 사용자에게서 기동 쪽으로 옮긴다. 키가 없으면 조용히 건너뛴다.
+    step("narrative_schema", warm_narrative_schema)
+    _warmup_state["done"] = True
+    log.info("워밍업 완료: %s", _warmup_state["steps"])
+
+
+@app.on_event("startup")
+def _on_startup() -> None:
+    if not settings.warmup_on_startup or _warmup_state["started"]:
+        return
+    _warmup_state["started"] = True
+    threading.Thread(target=_warmup, name="warmup", daemon=True).start()
+
+
 # 프론트(Vite 기본 5173) 에서의 호출 허용
 app.add_middleware(
     CORSMiddleware,
@@ -115,23 +165,26 @@ app.add_middleware(
 
 
 def _simulate_without_artifacts(req, diary, safety_level) -> dict:
-    """로컬 모델 파일이 없을 때 RAG+Claude 서사만 제공하는 개발용 폴백."""
-    default_indicators = {
-        "경제적안정도": 0.5,
-        "성장가능성": 0.5,
-        "삶의질": 0.5,
-    }
-    psych_a = get_psych_evidence(
-        default_indicators, emotions=req.emotions, decision_type=req.choice_a
-    )
-    psych_b = get_psych_evidence(
-        default_indicators, emotions=req.emotions, decision_type=req.choice_b
-    )
+    """로컬 모델 파일이 없을 때 RAG+Claude 서사만 제공하는 개발용 폴백.
+
+    ⚠ 예전엔 3지표를 전부 0.5 로 채워 넣고 그대로 심리카드를 검색했다.
+    카드 검색은 '가장 낮은 지표'를 초점으로 잡고 그 지표의 버킷(낮음/중간/높음)으로
+    카드를 거르는데, 0.5 셋은 **측정된 게 아니라 자리채우기**다. 그 위에서 뽑힌 카드는
+    사용자와 아무 관계가 없으면서 근거처럼 보인다 — 근거수준 라벨만 '데이터부족'으로
+    정직하고 정작 화면에 뜨는 카드는 그렇지 않았다.
+    → 지표를 측정하지 못했으면 **카드 검색을 하지 않는다.** 지표도 0.5 가 아니라
+      None 으로 내보내 '측정 못 함'과 '중간값'을 구분한다(프론트는 null 이면
+      자체 파생 폴백을 쓴다).
+    """
+    psych_a = psych_b = {"focus_indicator": None, "level": None, "cards": [],
+                         "skipped": "지표 미측정(아티팩트 부재) — 지표 기반 카드 검색 생략"}
     ev_a = stat_evidence.evidence_for_choice(req.choice_a)
     ev_b = stat_evidence.evidence_for_choice(req.choice_b)
     note_parts = [
         "개발용 폴백: 로컬 예측 모델 아티팩트가 없어 수치 예측은 제외하고, "
-        "검색된 통계·심리 근거와 사용자 입력만으로 서사를 작성한다. 숫자를 만들지 말 것."
+        "검색된 통계 근거와 사용자 입력만으로 서사를 작성한다. 숫자를 만들지 말 것. "
+        "3지표를 측정하지 못해 심리 이론카드도 붙이지 않았다 — "
+        "심리학적 해석을 지어내지 말 것."
     ]
     if req.choice_a_detail:
         note_parts.append(f"[사용자가 적은 A의 구체적 상황] {req.choice_a_detail}")
@@ -140,10 +193,7 @@ def _simulate_without_artifacts(req, diary, safety_level) -> dict:
     diary_line = diary_bridge.diary_context_line(diary)
     if diary_line:
         note_parts.append("[일기 신호] " + diary_line)
-    for label, psych in (("A", psych_a), ("B", psych_b)):
-        block = build_psych_prompt_block(psych)
-        if block:
-            note_parts.append(f"[{label} 심리근거]\n{block}")
+    # 심리근거 블록은 넣지 않는다 — 위에서 카드 검색 자체를 건너뛰었다.
     scen_a = {"choice": req.choice_a, "coverage": "RAG 서사 미리보기(수치 모델 제외)"}
     scen_b = {"choice": req.choice_b, "coverage": "RAG 서사 미리보기(수치 모델 제외)"}
     narrative = generate_scenarios(
@@ -155,7 +205,10 @@ def _simulate_without_artifacts(req, diary, safety_level) -> dict:
         "choice_a": req.choice_a,
         "choice_b": req.choice_b,
         "compare": None,
-        "indicators": {"A": default_indicators, "B": default_indicators},
+        # 0.5 자리채우기 대신 null — '측정 못 함'을 '중간값'으로 위장하지 않는다
+        "indicators": {"A": None, "B": None},
+        "indicators_measured": False,
+        "psych": {"A": psych_a, "B": psych_b},
         "evidence": {"A": ev_a, "B": ev_b},
         "diary": diary,
         "safety_level": safety_level,
@@ -164,6 +217,18 @@ def _simulate_without_artifacts(req, diary, safety_level) -> dict:
         "model": settings.claude_model,
         "fallback": "missing_prediction_artifacts",
     }
+
+
+def _measured(scores: dict, detail: dict, override: dict | None) -> dict:
+    """심리카드 검색에 넘길 지표만 남긴다(근거 없이 채운 중립값은 뺀다).
+
+    전부 미측정이면 빈 dict → get_psych_evidence 가 카드 없이 돌려준다.
+    요청이 직접 준 override 는 사용자가 책임지는 값이라 그대로 통과시킨다.
+    """
+    if override:
+        return scores
+    un = set((detail or {}).get("unmeasured") or [])
+    return {k: v for k, v in scores.items() if k not in un}
 
 
 @functools.lru_cache(maxsize=1)
@@ -194,10 +259,44 @@ def _artifact_manifest() -> dict:
     }
 
 
+@functools.lru_cache(maxsize=1)
+def _treatment_coverage() -> dict:
+    """어떤 선택 유형에 개인단위 인과·생존이 붙는지 + 안 붙으면 그 근거(표본 수).
+
+    '진학은 데이터가 없다' 를 가정이 아니라 **측정된 수치**로 말하기 위한 것.
+    (train_treatments.py 가 만든 treatment_report.json)
+    """
+    p = settings.artifacts_abspath / "treatment_report.json"
+    if not p.exists():
+        return {"available": False, "note": "python train_treatments.py 로 생성"}
+    try:
+        r = json.loads(p.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return {"available": False, "error": f"{type(exc).__name__}"}
+    return {
+        "available": True,
+        "built_at": r.get("built_at"),
+        "age_band": r.get("age_band"),
+        "min_treated": r.get("min_treated"),
+        "treatments": {k: {kk: v[kk] for kk in
+                           ("label", "n_treated", "trained", "reason", "linear_ate",
+                            "linear_ci", "n_spells") if kk in v}
+                       for k, v in (r.get("treatments") or {}).items()},
+    }
+
+
 @app.get("/health")
 def health() -> dict:
+    # 선택 분류 통계·워밍업 상태는 캐시하지 않는다 — 런타임 값이라 매번 새로 읽는다.
+    from rag import psych_retriever as _pr
+
     return {"status": "ok", "model": settings.claude_model,
-            "artifacts": _artifact_manifest()}
+            "warmup": {**_warmup_state, "psych_rag_loaded": _pr.is_loaded(),
+                       "note": "done=false 면 첫 요청이 임베딩 모델 로딩(수십 초)을 "
+                               "기다릴 수 있다"},
+            "artifacts": _artifact_manifest(),
+            "treatment_coverage": _treatment_coverage(),
+            "choice_classification": classification_stats()}
 
 
 @app.post("/visualize")
@@ -309,8 +408,13 @@ def simulate(req: SimulateRequest) -> dict:
     baseline = getattr(req.profile, "monthly_wage", None)
 
     # 1) 3지표 산출(엔진 → 0~1). 요청 override 가 있으면 그걸 사용.
-    ind_a = req.indicator_scores or indicators_mod.compute_indicators(scen_a, baseline)
-    ind_b = req.indicator_scores or indicators_mod.compute_indicators(scen_b, baseline)
+    #    나이를 넘기는 건 백분위를 **같은 나이대 안에서** 재기 위해서다
+    #    ("29살 320만원" 이 잘 버는 건지는 나이대 없이 판정할 수 없다).
+    age = getattr(req.profile, "age", None)
+    det_a = indicators_mod.compute_indicators_detail(scen_a, baseline, age)
+    det_b = indicators_mod.compute_indicators_detail(scen_b, baseline, age)
+    ind_a = req.indicator_scores or det_a["scores"]
+    ind_b = req.indicator_scores or det_b["scores"]
 
     # 1-1) 성향 개인화(Option A): 가치가중치 → 서술순서·초점·질적강조·확신도.
     #      모델 매칭엔 관여 안 함. value_weights 없으면 focus_* = None(기존 동작 유지).
@@ -335,9 +439,14 @@ def simulate(req: SimulateRequest) -> dict:
 
     # 2) 심리카드(민주 psych RAG): 3지표 + 감정 → 초점지표의 이론카드
     #    성향이 있으면 '중요하며 위태로운' 축을 초점으로 넘김(없으면 최저지표 폴백).
-    psych_a = get_psych_evidence(ind_a, emotions=req.emotions,
+    #    ⚠ 초점은 '가장 낮은 지표' 로 정해지므로, 근거가 없어 중립값(0.5)만 채워진
+    #    지표가 섞이면 자리채우기가 카드 선택을 좌우한다 → 측정된 지표만 넘긴다.
+    #    (표시용 ind_a/ind_b 는 3개를 그대로 유지한다.)
+    psych_a = get_psych_evidence(_measured(ind_a, det_a, req.indicator_scores),
+                                 emotions=req.emotions,
                                  decision_type=req.choice_a, focus_override=focus_a)
-    psych_b = get_psych_evidence(ind_b, emotions=req.emotions,
+    psych_b = get_psych_evidence(_measured(ind_b, det_b, req.indicator_scores),
+                                 emotions=req.emotions,
                                  decision_type=req.choice_b, focus_override=focus_b)
 
     # 3) 통계 근거(숫자 근거) — 선택지별
@@ -390,6 +499,13 @@ def simulate(req: SimulateRequest) -> dict:
         "snapshots": cmp.get("snapshots"),
         "compare": cmp,
         "indicators": {"A": ind_a, "B": ind_b},
+        "indicators_measured": True,
+        # 3지표의 근거 — 각 구성요소가 같은 나이대에서 몇 백분위인지. 점수만 보면
+        # 어느 항이 지표를 끌어내렸는지 알 수 없어 해석·검증이 불가능하다.
+        "indicator_detail": {
+            "A": {k: v for k, v in det_a.items() if k != "scores"},
+            "B": {k: v for k, v in det_b.items() if k != "scores"},
+        },
         "personalization": pz,
         "psych": {
             "A": {"focus": psych_a.get("focus_indicator"), "level": psych_a.get("level"),

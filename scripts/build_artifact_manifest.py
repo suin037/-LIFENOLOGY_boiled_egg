@@ -36,18 +36,29 @@ KNOWN = {
     "econml.pkl":         ("L3", "이직→소득 인과효과 (GOMS 단면, 최후 폴백)"),
     "econml_klips.pkl":   ("L3", "이직→소득 인과효과 (KLIPS 종단)"),
     "econml_yp.pkl":      ("L3", "이직→소득 인과효과 (YP 청년패널 종단)"),
+    "econml_klips_startup.pkl": ("L3", "창업(임금근로→자영)→소득 인과효과 (KLIPS 종단)"),
     "lifelines.pkl":      ("L4", "재직 생존분석 (GOMS 폴백)"),
     "lifelines_klips.pkl": ("L4", "재직 생존분석 (KLIPS 스펠)"),
     "lifelines_yp.pkl":   ("L4", "재직 생존분석 (YP 스펠)"),
+    "lifelines_klips_startup.pkl": ("L4", "자영(창업) 상태 이탈 생존분석 (KLIPS 자영 스펠)"),
     "layer1_lookup.pkl":  ("L1", "룰베이스 생활지표 조회표"),
     "encoders.pkl":       ("-",  "GOMS 인코더/중앙값 (knn.pkl·econml.pkl 전용)"),
 }
 
 # backend/models/*.py 의 _select() 와 같은 규칙. 코드가 바뀌면 여기도 갱신할 것.
 ROUTING = {
-    "L2 (knn)": "age ≤ 31 이면 GOMS + YP 를 절반씩 섞고, 그 외엔 GOMS 단독",
-    "L3 (econml)": "age ≤ 31 → yp → klips → goms, 그 외 → klips → yp → goms (있는 것 중 첫째)",
-    "L4 (lifelines)": "age ≤ 31 → yp → klips → goms, 그 외 → klips → yp → goms (있는 것 중 첫째)",
+    "treatment": "선택 유형 → treatment: 이직=move / 창업=startup / 진학=매핑 없음(표본 부족)",
+    "L2 (knn)": "이직에만 적용. age ≤ 31 이면 GOMS + YP 를 절반씩 섞고, 그 외엔 GOMS 단독",
+    "L3 (econml)": "move: age ≤ 31 → yp → klips → goms, 그 외 → klips → yp → goms / "
+                   "startup: klips 단독(연령 라우팅 대상 없음)",
+    "L4 (lifelines)": "move: age ≤ 31 → yp → klips → goms, 그 외 → klips → yp → goms / "
+                      "startup: klips 자영 스펠 단독",
+    "동적효과": "dynamic_effects.json 의 상대시간별 ATE 로 연차별 효과·CI 밴드 구성 "
+                "(관측 밖 연차는 마지막 관측값 유지 + extrapolated 표시)",
+    "L5 (궤적 매칭)": "가중 z-거리 + 직종 목적변수 인코딩. 요청에 없는 항목은 거리에서 제외"
+                     "(중앙값 대체 안 함). 가중치는 scripts/eval_matching.py --tune 로 탐색",
+    "3지표": "indicator_reference.json 의 나이대별 분포에 대는 백분위 순위 "
+             "(예전 손튜닝 상수 폐기). 소득은 실현 시점 나이대에 댄다",
 }
 
 
@@ -71,6 +82,9 @@ def summarize(art: dict) -> dict:
         out["source"] = str(src)
     if (n := art.get("n")) is not None:
         out["n"] = int(n)
+    for k in ("treatment", "n_treated", "event_label", "caveat"):
+        if art.get(k) is not None:
+            out[k] = art[k]
 
     # L3 인과: LinearDML(해석 가능한 analytic CI) 우선, CausalForest ATE 도 같이
     if art.get("linear_ate") is not None:
@@ -134,10 +148,37 @@ def main() -> int:
                                     "rows", "persons", "wage_median_real",
                                     "job_change_rate") if k in r}
 
+    # treatment 커버리지 — 어떤 선택 유형에 개인단위 인과가 붙고, 안 붙으면 왜인지
+    tp = ARTIFACTS / "treatment_report.json"
+    treatments = json.loads(tp.read_text(encoding="utf-8")) if tp.exists() else None
+    dp = ARTIFACTS / "dynamic_effects.json"
+    dyn = json.loads(dp.read_text(encoding="utf-8")) if dp.exists() else None
+
+    # 매칭 품질 측정치 + 3지표 기준 분포 — "개선했다"를 수치로 남긴다
+    mp = ARTIFACTS / "matching_eval.json"
+    match_eval = None
+    if mp.exists():
+        m = json.loads(mp.read_text(encoding="utf-8"))
+        match_eval = {k: m[k] for k in ("measured_at", "queries", "k", "weights",
+                                        "paired_vs_legacy", "metric_note") if k in m}
+    ip = ARTIFACTS / "indicator_reference.json"
+    ind_ref = None
+    if ip.exists():
+        r = json.loads(ip.read_text(encoding="utf-8"))
+        ind_ref = {"built_at": r.get("built_at"), "age_bands": r.get("age_bands"),
+                   "sources": r.get("sources"),
+                   "dists": {k: sorted(v) for k, v in (r.get("dists") or {}).items()}}
+
     manifest = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "git": git_version(),
         "routing": ROUTING,
+        "treatments": treatments,
+        "dynamic_effects": {k: {"label": v.get("label"),
+                                "years": sorted(int(h) for h in v.get("horizons", {}))}
+                            for k, v in (dyn or {}).items()},
+        "matching_eval": match_eval,
+        "indicator_reference": ind_ref,
         "data_vintage": data_vintage,
         "artifacts": entries,
         "missing": sorted(n for n, e in entries.items() if not e["present"]),
