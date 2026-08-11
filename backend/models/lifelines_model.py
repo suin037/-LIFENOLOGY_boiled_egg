@@ -64,6 +64,40 @@ def _select(features: dict, treatment: str = "move") -> tuple:
     return next(iter(arts.values()))
 
 
+def _industry_row(features: dict, art: dict) -> dict[str, float]:
+    """업종(KSIC 대분류 문자) → Cox 더미 값.
+
+    창업 모델에만 있는 축이다. `features["ksic_section"]` 은 자유입력에서 뽑는다
+    (`choice_classifier.extract_startup_context`).
+
+    업종을 모를 때 0 으로 채우면 **기준 업종(도소매)의 위험을 그대로 뒤집어쓴다.**
+    그건 '모름' 이 아니라 특정 업종을 찍는 것이므로, 학습 표본의 업종 구성 평균
+    (`industry_means`)으로 채워 '평균적인 창업' 에 해당하는 위험을 낸다.
+    """
+    cols = art.get("industry_cols") or []
+    if not cols:
+        return {}
+    means = art.get("industry_means", {})
+    sec = features.get("ksic_section")
+    if not sec:
+        return {c: float(means.get(c, 0.0)) for c in cols}
+    if sec == art.get("industry_reference"):
+        return {c: 0.0 for c in cols}          # 기준 범주 = 더미 전부 0
+    target = f"ind_{sec}"
+    if target not in cols:
+        # 학습 때 표본이 얇아 '기타' 로 합쳐진 업종
+        target = "ind_기타"
+        if target not in cols:
+            return {c: float(means.get(c, 0.0)) for c in cols}
+    return {c: (1.0 if c == target else 0.0) for c in cols}
+
+
+def _covariate_frame(features: dict, art: dict, enc: dict) -> pd.DataFrame:
+    ind = _industry_row(features, art)
+    row = [ind[c] if c in ind else _value(c, features, enc) for c in art["cov_cols"]]
+    return pd.DataFrame([row], columns=art["cov_cols"])
+
+
 def _value(col: str, features: dict, enc: dict) -> float:
     med = enc.get("medians", {})
     if col in ("age", "age_start"):
@@ -84,8 +118,7 @@ def _value(col: str, features: dict, enc: dict) -> float:
 def estimate_survival(features: dict, treatment: str = "move") -> float:
     """예상 상태 지속기간 중앙값(개월). 이직=재직기간, 창업=자영 유지기간."""
     art, enc = _select(features, treatment)
-    X = pd.DataFrame([[_value(c, features, enc) for c in art["cov_cols"]]],
-                     columns=art["cov_cols"])
+    X = _covariate_frame(features, art, enc)
     med = art["cox"].predict_median(X)
     v = float(med.iloc[0]) if hasattr(med, "iloc") else float(med)
     if not np.isfinite(v):
@@ -106,7 +139,7 @@ def model_confidence(features: dict, treatment: str = "move") -> dict | None:
     cv = art.get("cv_concordance")
     if not cv:
         return None
-    return {
+    out = {
         "metric": "5-fold C-index",
         "c_index_test": cv.get("test"),
         "c_index_train": cv.get("train"),
@@ -117,6 +150,19 @@ def model_confidence(features: dict, treatment: str = "move") -> dict | None:
         "source": art.get("source"),
         "max_horizon_years": art.get("max_horizon_years"),
     }
+    if art.get("industry_used"):
+        # 업종축이 켜졌는지, 이 요청의 업종이 실제로 잡혔는지를 응답에 남긴다.
+        sec = features.get("ksic_section")
+        out["industry_axis"] = {
+            "enabled": True,
+            "applied_section": sec,
+            "resolved": bool(sec),
+            "reference": art.get("industry_reference"),
+            "cv_gain": art.get("industry_cv_gain"),
+            "note": ("업종별 이탈위험 적용" if sec else
+                     "업종 미상 — 학습표본 업종 구성 평균으로 대체"),
+        }
+    return out
 
 
 def risk_timeline(features: dict, years=(1, 3, 5, 10),
@@ -128,8 +174,7 @@ def risk_timeline(features: dict, years=(1, 3, 5, 10),
     → KLIPS(≈10년)는 10년까지, YP(≈4년)는 관측 내 연차만.
     """
     art, enc = _select(features, treatment)
-    X = pd.DataFrame([[_value(c, features, enc) for c in art["cov_cols"]]],
-                     columns=art["cov_cols"])
+    X = _covariate_frame(features, art, enc)
     sf = art["cox"].predict_survival_function(X)
     idx = np.asarray(sf.index, dtype=float)
     max_yr = art.get("max_horizon_years", 10)   # 소스별 신뢰 최대 연차(KLIPS10/YP5)

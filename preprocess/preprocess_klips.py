@@ -11,7 +11,7 @@
 그 결과 서비스가 보여주는 소득 궤적이 20년 전 임금 수준이었고, 성장률(%)에는
 물가상승분이 성장으로 섞여 들어갔다. 이 스크립트는
 
-  1. **18~27차(2015~2024)** 로 재빌드하고,
+  1. **12~27차(2009~2024)** 로 재빌드하고,
   2. 명목 월임금을 CPI 로 **실제 디플레이트**해 `월임금_실질`(기준연도 표기)로 만든다.
 
 ## 차수 ↔ 연도
@@ -25,6 +25,7 @@ KLIPS 는 1차=1998 이므로 `연도 = 차수 + 1997` (18차=2015 … 27차=202
 | 나이 | `p{w}0107` | 만나이 |
 | 학력 | `p{w}0110` | 2=무학 … 5=고졸 6=전문대 7=대졸 8=석사 9=박사 |
 | 직종 | `p{w}0352` | 표준직업분류 7차(2017코드) |
+| 산업 | `p{w}0342` | 표준산업분류 **10차**(2017코드). 12차부터 존재 |
 | 종업원규모 | `p{w}0403` | 전체종업원수(범주). 없으면 `p{w}0402`(명) 를 범주화 |
 | 종사상지위 | `p{w}0314` | 1=상용 2=임시 3=일용 4=자영 5=무급가족 |
 | 월임금_명목 | `p{w}1642` | **임금근로자** 월평균임금(만원) |
@@ -47,7 +48,7 @@ KLIPS 는 무응답을 `-1` 로 코딩한다 → 전부 결측 처리한다.
 
 사용법:
     python preprocess/preprocess_klips.py
-    python preprocess/preprocess_klips.py --waves 18-27 --base-year 2024
+    python preprocess/preprocess_klips.py --waves 12-27 --base-year 2024
     python preprocess/preprocess_klips.py --klips-dir "../KLIPS" --out data/raw/klips
 """
 
@@ -68,6 +69,32 @@ CPI_PATH = Path("data/reference/cpi_korea_2020base.csv")
 
 # 종업원수(명) → 범주 코드. p{w}0403 범주와 결이 같도록 계단식으로 자른다.
 FIRM_SIZE_BINS = [0, 4, 9, 29, 49, 99, 299, 499, 999, np.inf]
+
+# ── KSIC 10차 중분류(2자리) → 대분류(A~U) ────────────────────────────────────
+# `p{w}0342` 는 표준산업분류 **10차** 소분류 코드다. KOSIS 기업생멸통계의
+# `ksic_section` 과 같은 분류 체계라, 대분류로 접으면 두 데이터가 같은 축에서 만난다
+# (창업 생존율은 집단통계, 자영 이탈위험은 개인단위 — 같은 업종 기준으로 읽힌다).
+#
+# ⚠ SPSS 에 숫자로 저장돼 **선행 0 이 날아간다**: 011(작물재배업) 이 11 로 들어온다.
+#   3자리로 zero-pad 한 뒤 앞 2자리를 취해야 농림어업(A)이 제조업(C)으로 새지 않는다.
+KSIC10_SECTION_BOUNDS = [
+    (1, 3, "A"),    (5, 8, "B"),    (10, 34, "C"),  (35, 35, "D"), (36, 39, "E"),
+    (41, 42, "F"),  (45, 47, "G"),  (49, 52, "H"),  (55, 56, "I"), (58, 63, "J"),
+    (64, 66, "K"),  (68, 68, "L"),  (70, 73, "M"),  (74, 76, "N"), (84, 84, "O"),
+    (85, 85, "P"),  (86, 87, "Q"),  (90, 91, "R"),  (94, 96, "S"), (97, 98, "T"),
+    (99, 99, "U"),
+]
+
+
+def ksic_section(code) -> str | None:
+    """KSIC 10차 소분류 코드 → 대분류 문자. 분류 밖(공백 구간)이면 None."""
+    if pd.isna(code) or code <= 0:
+        return None
+    major = int(str(int(code)).zfill(3)[:2])
+    for lo, hi, sec in KSIC10_SECTION_BOUNDS:
+        if lo <= major <= hi:
+            return sec
+    return None
 
 
 def parse_waves(spec: str) -> list[int]:
@@ -111,6 +138,7 @@ def read_wave(klips_dir: Path, w: int) -> pd.DataFrame:
         "나이": f"p{w}0107",
         "학력": f"p{w}0110",
         "직종": f"p{w}0352",
+        "산업": f"p{w}0342",
         "종업원규모_범주": f"p{w}0403",
         "종업원규모_명": f"p{w}0402",
         "종사상지위": f"p{w}0314",
@@ -119,13 +147,21 @@ def read_wave(klips_dir: Path, w: int) -> pd.DataFrame:
         "취업년": f"p{w}0301",
         "취업월": f"p{w}0302",
     }
+    # 산업(10차 코드)은 12차부터 있다. 그 앞 차수는 8차/9차 코드뿐이라 그냥 비운다
+    # — 다른 분류 체계를 억지로 10차에 끼워 맞추면 업종별 수치가 조용히 틀어진다.
+    present = set(pyreadstat.read_sav(str(path), metadataonly=True)[1].column_names)
+    src = {k: v for k, v in src.items() if v in present}
     raw, _ = pyreadstat.read_sav(str(path), usecols=["pid", *src.values()])
 
     d = pd.DataFrame({"pid": raw["pid"]})
     for name, col in src.items():
         d[name] = _blank_negatives(pd.to_numeric(raw[col], errors="coerce"))
+    for name in ("산업", "직종"):
+        if name not in d.columns:
+            d[name] = np.nan
 
     d["직종"] = d["직종"].mask(d["직종"] >= 999)          # 999 = 분류불능
+    d["산업대분류"] = d["산업"].map(ksic_section)
     for c in ("월임금_명목", "자영소득_명목"):
         d[c] = d[c].mask(d[c] <= 0)
 
@@ -184,7 +220,8 @@ def build_panel(klips_dir: Path, waves: list[int], cpi: dict[int, float],
         & prev_wave.notna()
     ).astype(int)
 
-    cols = ["pid", "wave", "year", "성별", "나이", "학력", "직종", "종업원규모",
+    cols = ["pid", "wave", "year", "성별", "나이", "학력", "직종",
+            "산업", "산업대분류", "종업원규모",
             "종사상지위", "자영여부",
             "월임금_명목", "월임금_실질", "자영소득_실질", "월소득_명목", "월소득_실질",
             "근속기간", "이직"]
@@ -244,7 +281,9 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="KLIPS 원본 → 종단 패널/스펠")
     ap.add_argument("--klips-dir", type=Path, default=DEFAULT_KLIPS_DIR)
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
-    ap.add_argument("--waves", default="18-27", help="예: 18-27 또는 18,19,20")
+    ap.add_argument("--waves", default="12-27",
+                    help="예: 12-27 또는 18,19,20. 산업(10차 코드)은 12차부터라 "
+                         "그 앞 차수를 넣으면 업종축이 빈다")
     ap.add_argument("--base-year", type=int, default=2024,
                     help="실질임금 기준연도(기본 2024 = 최신 차수)")
     ap.add_argument("--cpi", type=Path, default=CPI_PATH)
@@ -283,6 +322,14 @@ def main() -> None:
         "spell_events": int(sp["event"].sum()),
         "income_rows_total": int(b["월소득_실질"].notna().sum()),
         "self_employed_rows": int((b["자영여부"] == 1).sum()),
+        # 업종(KSIC 10차 대분류) — L4 자영 생존모델의 공변량 후보. 자영 행에서
+        # 얼마나 채워졌는지가 곧 '업종별 이탈위험을 낼 수 있는가' 의 근거다.
+        "industry_rows": int(b["산업대분류"].notna().sum()),
+        "industry_rows_self_employed": int(
+            b.loc[b["자영여부"] == 1, "산업대분류"].notna().sum()),
+        "industry_dist_self_employed": {
+            k: int(v) for k, v in
+            b.loc[b["자영여부"] == 1, "산업대분류"].value_counts().items()},
         # 이직 외 treatment 표본 — 창업/진학 모델을 만들 수 있는지의 근거
         "treatment_transitions": treatment_counts(b),
     }

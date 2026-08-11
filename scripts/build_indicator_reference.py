@@ -23,7 +23,7 @@
 ## 만드는 분포 (나이대별)
 | 키 | 내용 | 출처 |
 |---|---|---|
-| `income_level`  | 월 실질임금(만원)                 | KLIPS 18~27차 |
+| `income_level`  | 월 실질임금(만원)                 | KLIPS 패널(빌드 차수) |
 | `income_growth` | 5년 뒤 소득 증가율(%)             | KLIPS 같은 사람 t → t+5 |
 | `satisfaction`  | 종합 만족도(1~5)                  | YP 청년패널 5개 facet 평균 |
 | `exit_risk`     | N년 이탈 누적확률(0~1), 연차별     | 서빙 중인 Cox 모델 예측 분포 |
@@ -58,6 +58,15 @@ ARTIFACTS = ROOT / "backend/models/artifacts"
 AGE_BANDS = [(22, 26), (27, 31), (32, 36), (37, 45)]
 RISK_YEARS = (1, 3, 5, 10)
 GRID = 101          # 0~100 백분위
+
+
+def _panel_label() -> str:
+    """기준 분포가 실제로 어느 차수에서 나왔는지. 차수를 바꿔 재빌드하면 따라 바뀐다."""
+    try:
+        w = pd.read_pickle(KLIPS)["wave"]
+        return f"KLIPS {int(w.min())}-{int(w.max())}차"
+    except Exception:
+        return "KLIPS"
 
 
 def band_label(lo: int, hi: int) -> str:
@@ -179,7 +188,7 @@ def main() -> int:
         "grid_points": GRID,
         "note": "각 값은 0~100 백분위에 대응하는 분위점 격자. 백분위 순위는 보간으로 구한다. "
                 "'all' 은 나이대 표본이 부족할 때의 폴백.",
-        "sources": {"income_level": "KLIPS 18-27차 월임금_실질(2024년 기준 실질)",
+        "sources": {"income_level": f"{_panel_label()} 월임금_실질(2024년 기준 실질)",
                     "income_growth": "KLIPS 같은 사람 t→t+5 소득 증가율(%), ±300% 절단",
                     "satisfaction": "YP 청년패널 5개 facet 평균(1~5)",
                     "exit_risk": "서빙 Cox 모델의 연차별 이탈확률 예측 분포"},

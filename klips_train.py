@@ -40,6 +40,16 @@ def find_file(stem: str) -> Path:
 
 
 # ---------------------------------------------------------------- L3
+# 학습에 실제로 쓰인 차수 범위. artifact 의 `source` 는 여기서 만든다 —
+# 문자열로 박아두면 --waves 를 바꿔 재빌드했을 때 틀린 출처가 서빙까지 흘러간다.
+PANEL_LABEL = "KLIPS"
+
+
+def _set_panel_label(b) -> None:
+    global PANEL_LABEL
+    PANEL_LABEL = f"KLIPS {int(b['wave'].min())}-{int(b['wave'].max())}차"
+
+
 def build_causal_panel() -> pd.DataFrame:
     """연속 관측 (t, t+1) 쌍 -> 인과추론용 행 구성.
 
@@ -48,6 +58,7 @@ def build_causal_panel() -> pd.DataFrame:
     X(이질성)   = 나이·성별·학력
     """
     b = pd.read_pickle(find_file("klips_base.pkl"))
+    _set_panel_label(b)
     b = b[["pid", "wave", "성별", "나이", "학력", "직종", "종업원규모",
            "월임금_실질", "근속기간", "이직"]].copy()
     b = b.dropna(subset=["월임금_실질"])
@@ -121,7 +132,7 @@ def train_econml_klips(d: pd.DataFrame) -> dict:
     return {"model": est, "x_cols": X_COLS, "medians": medians,
             "ate": ate, "ate_ci": (lb, ub),
             "linear_ate": lin_ate, "linear_ci": (llb, lub),
-            "source": "KLIPS 18-27차 종단"}
+            "source": f"{PANEL_LABEL} 종단"}
 
 
 # ---------------------------------------------------------------- L4
@@ -148,6 +159,7 @@ def train_lifelines_klips() -> dict:
 
     s = pd.read_csv(find_file("klips_base_"))       # klips_base_생존.csv
     b = pd.read_pickle(find_file("klips_base.pkl"))
+    _set_panel_label(b)          # 이 함수만 단독 호출돼도 출처가 맞도록
     cov = (b.sort_values("wave")
              .groupby("pid")
              .agg(sex=("성별", "first"), edu=("학력", "last"),
@@ -187,8 +199,8 @@ def train_lifelines_klips() -> dict:
     medians = {"age_start": float(s["age_start"].median()),
                "sex": float(s["sex"].median()), "edu": float(s["edu"].median())}
     return {"km": km, "cox": cox, "cov_cols": cov_cols, "medians": medians,
-            "source": "KLIPS 스펠", "n": len(s), "n_features": len(cov_cols),
-            "max_horizon_years": 10,      # KLIPS 18~27차 → 10년까지 신뢰
+            "source": f"{PANEL_LABEL} 스펠", "n": len(s), "n_features": len(cov_cols),
+            "max_horizon_years": 10,      # 관측 10년 초과 구간은 과대추정 방지로 스킵
             "cv_concordance": {"train": round(cv[0], 3), "test": round(cv[1], 3),
                                "test_std": round(cv[2], 3), "gap": round(cv[3], 3)}}
 

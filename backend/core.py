@@ -17,12 +17,13 @@
 """
 
 from schemas import PredictRequest, PredictResponse
-from choice_classifier import classify
+from choice_classifier import classify, extract_startup_context
 from models.knn_model import find_neighbors
 from models.econml_model import estimate_effect
 from models.lifelines_model import estimate_survival, risk_timeline
 from models.dynamic_effect import shift_at, profile_meta
-from rulebase import query_life_indicators, startup_closure_timeline
+from rulebase import (query_choice_indicators, query_life_indicators,
+                      startup_closure_timeline, startup_context_meta)
 from trajectory import project_trajectory, yp_satisfaction, matched_features
 from utils.scoring import build_feature_vector
 from utils.claude_api import generate_narrative
@@ -111,8 +112,17 @@ def run_prediction(req: PredictRequest, with_narrative: bool = True,
     kind = cls.kind
     treatment = KIND_TREATMENT.get(kind)
 
+    # 창업이면 자유입력에서 업종을 뽑아 features 에 실는다. L4 자영 생존모델이
+    # 업종 더미를 covariate 로 갖고 있어서, 이게 없으면 '평균 업종' 위험만 나온다.
+    if kind == "창업":
+        features["ksic_section"] = extract_startup_context(req.choice).ksic_section
+
     # Layer 1: 룰베이스 생활지표 패널 — 선택지 무관 항상 제공
-    life_indicators = _memo(cache, "life", lambda: query_life_indicators(features))
+    # 선택 의존 지표(창업 업종·규모별 생존율)는 캐시에 태우지 않고 매번 계산한다.
+    # 태우면 A('카페 창업')의 업종 숫자가 B('이직')에도 그대로 실린다.
+    # `+` 로 새 리스트를 만든다 — extend 하면 공유 캐시 자체가 오염된다.
+    life_indicators = (_memo(cache, "life", lambda: query_life_indicators(features))
+                       + query_choice_indicators(features))
 
     # Layer 5: 종단 궤적 — 비슷한 사람들의 향후 N년 실제 경로 분포
     # 소득 궤적은 선택 무관(기준 경로) → A/B 공유. 선택 반영은 아래 인과효과에서.
@@ -168,7 +178,8 @@ def run_prediction(req: PredictRequest, with_narrative: bool = True,
         # L4 자영 스펠 모델이 없을 때만 집단통계(KOSIS 기업생멸)로 후퇴
         timeline = startup_closure_timeline(features)
 
-    coverage = _coverage(kind, available_layers, survival, effect, wellbeing_meta)
+    coverage = _coverage(kind, available_layers, survival, effect, wellbeing_meta,
+                         startup_context_meta(features) if kind == "창업" else {})
 
     # narrative 는 3번 팀원 RAG/Claude API 담당. 키 미설정·호출 실패 시에도
     # 예측(L1~L4)은 정상 반환되도록 방어.
@@ -208,7 +219,8 @@ def run_prediction(req: PredictRequest, with_narrative: bool = True,
     )
 
 
-def _coverage(kind: str, layers: list[str], survival, effect, wb_meta: dict) -> str:
+def _coverage(kind: str, layers: list[str], survival, effect, wb_meta: dict,
+              su_meta: dict | None = None) -> str:
     """무엇이 적용됐고 무엇이 왜 빠졌는지 한 줄로. 빈 자리는 이유까지 적는다."""
     parts = [f"{kind}: " + "·".join(layers)]
     if kind == "진학":
@@ -227,6 +239,17 @@ def _coverage(kind: str, layers: list[str], survival, effect, wb_meta: dict) -> 
         if effect is not None:
             parts.append("⚠소득 효과는 임금(임금근로자)과 사업소득(자영)을 비교한 값 — "
                          "개념이 달라 '창업하면 이만큼 번다' 로 읽으면 안 됨")
+        if su_meta:
+            # 어떤 업종·규모 기준의 생존율인지. 업종을 못 뽑았으면 그것도 밝힌다
+            # (전체 평균은 업종별 26~67% 를 뭉갠 값이라 그냥 쓰면 오해를 부른다).
+            if su_meta.get("industry"):
+                parts.append(f"생존율 기준: {su_meta['label']}")
+            else:
+                parts.append(f"생존율 기준: {su_meta['label']} — 자유입력에서 업종을 "
+                             "특정하지 못해 전체 평균(업종별 5년 26~67%로 갈림)")
+            if su_meta.get("scale_inferred"):
+                parts.append("규모는 개인 창업으로 가정(상용 1~4인). 기업생멸통계는 "
+                             "고용원 없는 1인 자영업을 아예 빼고 집계해 실제보다 낙관적")
     elif kind == "이직" and survival is None:
         parts.append("생존 L4는 artifact 부재로 미제공")
 
