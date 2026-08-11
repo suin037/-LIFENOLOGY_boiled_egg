@@ -23,7 +23,10 @@ import pandas as pd
 
 from config import settings
 
-DATA = settings.goms_clean_abspath.parent          # <ROOT>/data
+DATA = settings.data_abspath                       # <ROOT>/data
+# ⚠ 예전엔 goms_clean_abspath.parent 로 잡았는데, goms_clean 이 data/clean/ 로
+#   옮겨지면서 data/clean/dgroup 을 가리키게 됐다. _csv() 가 없는 경로를 조용히
+#   None 으로 넘겨 L1 생활지표가 통째로 빈 채 서빙됐다. data_dir 기준으로 고정.
 DGROUP = DATA / "dgroup"
 LANOLLAB = DATA / "lanollab"
 

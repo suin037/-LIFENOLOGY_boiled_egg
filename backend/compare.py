@@ -18,6 +18,7 @@ from schemas import (
     FacetTrajectory, FacetPoint, PredictRequest, PredictResponse,
 )
 from core import run_prediction, choice_kind
+from trajectory import wage_basis
 from utils.scoring import build_feature_vector
 from models.lifelines_model import model_confidence
 from models.econml_model import effect_confidence
@@ -128,7 +129,9 @@ def _regret_summary(pr: PredictResponse, kind: str) -> dict | None:
 
 # ---------------------------------------------------------------- 주인공: 소득
 def _income(income_path: list, kind: str) -> list[IndicatorPoint]:
-    src = "KLIPS 종단 소득 궤적(L5)" + (" + 이직 인과(L3)" if kind == "이직" else "")
+    # 화폐 기준(실질/기준연도)을 출처에 명시 — 안 적으면 "5년 뒤 400만원" 을 명목으로 오독한다.
+    src = (f"KLIPS 종단 소득 궤적(L5, {wage_basis()['label']})"
+           + (" + 이직 인과(L3)" if kind == "이직" else ""))
     out = []
     for y in SNAPSHOTS:
         p = _point_at(income_path, y)
@@ -145,7 +148,10 @@ def _income(income_path: list, kind: str) -> list[IndicatorPoint]:
 def _growth_potential(income_path: list) -> list[IndicatorPoint]:
     base = _point_at(income_path, 0)
     base_income = float(base.income_p50) if base and base.income_p50 else None
-    src = "L5 소득 궤적 기울기(현재 대비)"
+    # 실질 궤적 위에서 계산해야 물가상승분이 '성장'으로 잡히지 않는다.
+    wb = wage_basis()
+    src = ("L5 소득 궤적 기울기(현재 대비, 실질)" if wb["deflated"]
+           else "L5 소득 궤적 기울기(현재 대비) ⚠명목 — 물가상승분 포함")
     out = []
     for y in SNAPSHOTS:
         p = _point_at(income_path, y)
