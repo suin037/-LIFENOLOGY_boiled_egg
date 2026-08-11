@@ -78,7 +78,7 @@ export default function InputScreen() {
   }
 
   return (
-    <div className="-mx-5 -mt-1 min-h-full bg-[linear-gradient(180deg,#111D39_0%,#0B1325_46%,#171511_100%)] px-5 pb-7 pt-3">
+    <div className="-mx-5 -mt-1 min-h-full bg-[linear-gradient(180deg,#111D39_0%,#0B1325_46%,#171511_100%)] px-5 pb-7 pt-3 lg:mx-auto lg:rounded-[28px] lg:px-8 lg:py-7">
       <div className="flex items-center justify-between">
         <div>
           <div className="text-[12px] font-semibold text-[#76A7FF]">시뮬레이션</div>
@@ -103,7 +103,7 @@ export default function InputScreen() {
         </div>
       </div>
 
-      <div className="relative mt-4 flex min-h-[570px] flex-col overflow-hidden rounded-[28px] border border-white/10 bg-[#08111F]/70 shadow-[0_26px_70px_rgba(0,0,0,.35)]">
+      <div className="relative mt-4 flex min-h-[570px] flex-col overflow-hidden rounded-[28px] border border-white/10 bg-[#08111F]/70 shadow-[0_26px_70px_rgba(0,0,0,.35)] lg:min-h-[450px] lg:flex-row">
         <ChoicePanel
           side="A" text={textA} domains={scenarioDomains.a} domainAuto={domainAuto.a}
           active={focused === "a"} grow={panelGrow("a")} suggestions={SUGGESTIONS.a}
@@ -112,10 +112,10 @@ export default function InputScreen() {
           onDomain={(key) => toggleDomain("A", key)} onRedetect={() => resetDomainDetection("A")}
         />
 
-        <div className="pointer-events-none absolute left-0 right-0 top-1/2 z-20 flex -translate-y-1/2 items-center gap-3">
-          <span className="h-px flex-1 bg-gradient-to-r from-transparent to-white/20" />
+        <div className="pointer-events-none absolute left-0 right-0 top-1/2 z-20 flex -translate-y-1/2 items-center gap-3 lg:bottom-0 lg:left-1/2 lg:right-auto lg:top-0 lg:-translate-x-1/2 lg:translate-y-0 lg:flex-col">
+          <span className="h-px flex-1 bg-gradient-to-r from-transparent to-white/20 lg:h-auto lg:w-px lg:bg-gradient-to-b" />
           <span className="flex h-12 w-12 items-center justify-center rounded-full border border-white/15 bg-[#07101E] text-[13px] font-black text-white shadow-[0_0_30px_rgba(75,126,255,.22)]">VS</span>
-          <span className="h-px flex-1 bg-gradient-to-l from-transparent to-white/20" />
+          <span className="h-px flex-1 bg-gradient-to-l from-transparent to-white/20 lg:h-auto lg:w-px lg:bg-gradient-to-t" />
         </div>
 
         <ChoicePanel
@@ -160,7 +160,7 @@ function ChoicePanel({ side, text, domains, domainAuto, active, grow, suggestion
   const accentText = isA ? "text-[#78A8FF]" : "text-[#FFB85C]";
 
   return (
-    <section onClick={onFocus} style={{ flexGrow: grow, flexBasis: 0 }} className={`relative min-h-[240px] px-5 py-6 transition-[flex-grow,background-color] duration-500 ease-out ${isA ? "bg-[radial-gradient(circle_at_15%_10%,rgba(69,116,225,.19),transparent_48%)]" : "bg-[radial-gradient(circle_at_85%_90%,rgba(211,137,49,.15),transparent_48%)]"} ${active ? "opacity-100" : "opacity-75"}`}>
+    <section onClick={onFocus} style={{ flexGrow: grow, flexBasis: 0 }} className={`relative min-h-[240px] px-5 py-6 transition-[flex-grow,background-color] duration-500 ease-out lg:px-8 lg:py-9 ${isA ? "bg-[radial-gradient(circle_at_15%_10%,rgba(69,116,225,.19),transparent_48%)]" : "bg-[radial-gradient(circle_at_85%_90%,rgba(211,137,49,.15),transparent_48%)]"} ${active ? "opacity-100" : "opacity-75"}`}>
       <div className={`text-[11px] font-black tracking-[.12em] ${accentText}`}>CHOICE {side}</div>
       <textarea value={text} onFocus={onFocus} onChange={(event) => onText(event.target.value)} rows={2} maxLength={100} placeholder={isA ? "첫 번째 길을 적어주세요" : "두 번째 길을 적어주세요"} className="mt-3 w-full resize-none border-b border-white/15 bg-transparent pb-3 text-[22px] font-bold leading-[1.35] tracking-[-.025em] text-ink outline-none placeholder:text-white/25" />
 
