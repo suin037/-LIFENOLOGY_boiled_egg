@@ -39,18 +39,20 @@ export async function tagDomain(text) {
   }
 }
 
-// 마스코트 대화 한 턴 → 답변 텍스트. 실패 시 간단 폴백.
-export async function chatTurn(messages, persona = "lumi") {
+// 마스코트 대화 한 턴 → 가이드별 역할 + 최근 기록 컨텍스트로 답장.
+// 키 없음/서버 없음/에러 → null 반환(호출부가 고정질문으로 폴백).
+export async function chatTurn(messages, persona = "lumi", context = null) {
   try {
     const res = await fetch(`${BASE}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages, persona }),
+      body: JSON.stringify({ messages, persona, context }),
     });
-    if (!res.ok) throw new Error();
-    return (await res.json()).reply;
+    if (!res.ok) return null;
+    const j = await res.json();
+    return j.reply || null; // no_api_key 면 reply=null
   } catch {
-    return "그랬구나. 조금 더 얘기해줄래?";
+    return null;
   }
 }
 

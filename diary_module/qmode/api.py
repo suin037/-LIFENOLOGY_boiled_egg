@@ -376,6 +376,63 @@ def scenario(req: ScenarioReq):
         return {"narrative": f"(서사 생성 오류: {e})", "persona_used": bool(pb)}
 
 
+# ── 마스코트 대화 — 가이드별 역할(노바:일상 되묻기 / 코스모:힘든점·위로 / 루미:건강) ──
+class ChatReq(BaseModel):
+    messages: list = []                  # [{role:"user"|"bot", text}]
+    persona: str = "lumi"                # nova / cosmo / lumi
+    context: Optional[dict] = None       # {recent:[{date,emotion,text}], hardStreak:int}
+
+
+_CHAT_ROLE = {
+    "nova": "너는 '노바', 일상을 함께 돌아보는 다정한 친구야. 사용자의 최근 기록에서 있었던 사건 하나를 골라 '그거 그 뒤로 어떻게 됐어요?'처럼 자연스럽게 되물어. 가볍고 따뜻하게.",
+    "cosmo": "너는 '코스모', 마음을 살피는 차분한 친구야. 요즘 힘들었던 점이 있었는지 부드럽게 물어. 최근에 힘든 기록이 연달아 있으면, 질문보다 먼저 진심으로 공감하고 위로부터 건네.",
+    "lumi": "너는 '루미', 몸 상태를 챙기는 친구야. 수면·활동·컨디션을 가볍게 물어봐.",
+}
+
+
+@app.post("/chat")
+def chat(req: ChatReq):
+    """가이드 페르소나 + 최근 기록으로 한 턴 대화. 키 없으면 reply=None(프론트가 고정질문 폴백)."""
+    import os
+    R1._load_dotenv()
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        return {"reply": None, "reason": "no_api_key"}
+    role = _CHAT_ROLE.get(req.persona, _CHAT_ROLE["lumi"])
+    ctx = req.context or {}
+    recent = ctx.get("recent") or []
+    hard = int(ctx.get("hardStreak") or 0)
+    ctx_lines = "\n".join(
+        f"- {r.get('date','')}: {(r.get('emotion') or '')} · {r.get('text','')}"
+        for r in recent[:5]
+    ) or "(최근 기록 없음)"
+    convo = "\n".join(
+        f"{'나' if m.get('role') == 'user' else '너'}: {m.get('text', '')}"
+        for m in req.messages[-8:]
+    )
+    extra = ""
+    if req.persona == "cosmo" and hard >= 2:
+        extra = f"\n[중요] 최근 힘든 기록이 {hard}번 연속이야. 이번엔 질문 말고, 먼저 짧게 공감·위로 한마디만 건네."
+    system = (
+        f"{role}\n\n한국어로 1~2문장, 담백하게. 과한 리액션·이모지 남발 금지. "
+        f"자연스러운 반말 톤 유지. 진단·조언 강요 금지.{extra}"
+    )
+    user = (
+        f"[사용자 최근 기록]\n{ctx_lines}\n\n[지금까지 대화]\n{convo}\n\n"
+        "다음에 네가 건넬 말 딱 한 마디:"
+    )
+    try:
+        from anthropic import Anthropic
+        resp = Anthropic().messages.create(
+            model="claude-sonnet-5", max_tokens=200, thinking={"type": "disabled"},
+            system=system, messages=[{"role": "user", "content": user}],
+        )
+        reply = "".join(b.text for b in resp.content if b.type == "text").strip()
+        kind = "comfort" if (req.persona == "cosmo" and hard >= 2) else "followup"
+        return {"reply": reply or None, "kind": kind}
+    except Exception as e:      # noqa: BLE001
+        return {"reply": None, "reason": f"error: {e}"}
+
+
 # ── 제3의 제안 — A/B 외에 성향·일기신호에 근거한 '생각 못한 제3의 길' ──────
 class ThirdPathReq(BaseModel):
     choice_a: str = "이직"
