@@ -106,7 +106,7 @@ export default function PetMascot() {
   }
 
   return (
-    <div className="mb-4 overflow-hidden rounded-[22px] border border-white/10 bg-[#101A2A]/70 p-4 backdrop-blur lg:mx-auto lg:mt-2 lg:max-w-[680px]">
+    <div className="mb-4 overflow-hidden rounded-[22px] border border-white/10 bg-[#101A2A]/70 p-4 backdrop-blur lg:mt-2">
       <style>{`
         @keyframes pm-bob { 0%,100%{ transform: translateY(0) } 50%{ transform: translateY(-6px) } }
         @keyframes pm-squish {
@@ -154,10 +154,10 @@ export default function PetMascot() {
         </div>
       </div>
 
-      {/* 데스크톱: 가로형(무대 왼쪽 · 컨트롤 오른쪽) */}
-      <div className="lg:mt-2 lg:flex lg:items-center lg:gap-6">
+      {/* 데스크톱: 가로형(무대 왼쪽 · 컨트롤 오른쪽), 카드 안 가운데 정렬 */}
+      <div className="lg:mt-2 lg:flex lg:items-center lg:justify-center lg:gap-10">
       {/* 무대 — 말랑한 마스코트 */}
-      <div className="relative mx-auto mt-3 flex h-[150px] w-full max-w-[240px] items-end justify-center overflow-hidden rounded-[16px] lg:mx-0 lg:mt-0 lg:h-[190px] lg:w-[280px] lg:max-w-[280px] lg:shrink-0">
+      <div className="relative mx-auto mt-3 flex h-[150px] w-full max-w-[240px] items-end justify-center overflow-hidden rounded-[16px] lg:mx-0 lg:mt-0 lg:h-[220px] lg:w-[380px] lg:max-w-[380px] lg:shrink-0">
         {/* 장착 배경 */}
         {bgItem && <div className="pointer-events-none absolute inset-0" style={{ background: bgItem.render }} />}
         {/* 배경 후광 */}
@@ -229,8 +229,8 @@ export default function PetMascot() {
         </button>
       </div>
 
-      {/* 오른쪽 컨트롤 열(데스크톱) */}
-      <div className="lg:min-w-0 lg:flex-1">
+      {/* 오른쪽 컨트롤 열(데스크톱) — 고정폭으로 가운데 정렬 */}
+      <div className="lg:w-[360px] lg:shrink-0">
       {/* 상태 + 액션 */}
       <div className="mt-1 flex items-center gap-2 text-[11px] lg:mt-0">
         <span className="text-mut">기분</span>
