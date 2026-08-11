@@ -20,6 +20,7 @@
 """
 
 import json
+import threading
 from pathlib import Path
 
 # chromadb / sentence-transformers 는 무거운 선택 의존성이라 지연 임포트한다.
@@ -34,6 +35,8 @@ EMB_MODEL = "jhgan/ko-sroberta-multitask"  # 로더와 반드시 동일
 # ── 임계값 설정(카드 밖으로 분리한 부분) ────────────────────────────────
 # score < 낮음 → '낮음', score > 높음 → '높음', 그 사이는 '중간'.
 # 지표별로 다르게 두고 싶으면 키를 추가한다. 없으면 _default 사용.
+# indicators.py v2 부터 점수가 **같은 나이대 분포의 백분위 순위**라, 이 임계값은
+# 그대로 "하위 1/3 / 상위 1/3" 을 뜻하게 됐다(예전 손튜닝 점수에선 의미가 없었다).
 INDICATOR_THRESHOLDS = {
     "_default": {"낮음": 0.33, "높음": 0.66},
     # "경제적안정도": {"낮음": 0.30, "높음": 0.70},
@@ -75,12 +78,19 @@ def _direction_matches(direction, level):
 
 _client = None
 _collection = None
+# 임베딩 모델 로딩은 30초 넘게 걸린다. 락이 없으면 서버 기동 워밍업 스레드와
+# 때마침 들어온 첫 요청이 **동시에** 모델을 올려 두 배로 기다리게 된다.
+_load_lock = threading.Lock()
 
 
 def _get_collection():
     """chromadb 컬렉션(정본). 미설치/미빌드면 예외 → 호출측이 폴백으로 전환."""
     global _client, _collection
-    if _collection is None:
+    if _collection is not None:
+        return _collection
+    with _load_lock:
+        if _collection is not None:            # 락 대기 중에 다른 쪽이 끝냈으면 재사용
+            return _collection
         import chromadb  # 지연 임포트(무거운 선택 의존성)
         from chromadb.utils import embedding_functions
 
@@ -90,6 +100,11 @@ def _get_collection():
         _client = chromadb.PersistentClient(path=str(DB_DIR))
         _collection = _client.get_collection(COLLECTION, embedding_function=ef)
     return _collection
+
+
+def is_loaded() -> bool:
+    """임베딩 모델·벡터DB 가 이미 메모리에 올라와 있는지(워밍업 상태 확인용)."""
+    return _collection is not None
 
 
 # ── 폴백: chromadb/ST/벡터DB 없이도 카드 JSON에서 직접 검색 ─────────────────
