@@ -106,7 +106,7 @@ export default function PetMascot() {
   }
 
   return (
-    <div className="mb-4 overflow-hidden rounded-[22px] border border-white/10 bg-[#101A2A]/70 p-4 backdrop-blur">
+    <div className="mb-4 overflow-hidden rounded-[22px] border border-white/10 bg-[#101A2A]/70 p-4 backdrop-blur lg:mx-auto lg:mt-2 lg:max-w-[680px]">
       <style>{`
         @keyframes pm-bob { 0%,100%{ transform: translateY(0) } 50%{ transform: translateY(-6px) } }
         @keyframes pm-squish {
@@ -130,18 +130,17 @@ export default function PetMascot() {
         @keyframes pm-crumb { 0%{ transform: translate(0,0) scale(1); opacity:1 } 100%{ transform: translate(var(--cx), var(--cy)) scale(.3); opacity:0 } }
       `}</style>
 
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="text-[13px] font-bold text-ink">🧸 귀염둥이 돌보기</div>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="whitespace-nowrap text-[13px] font-bold text-ink">🧸 귀염둥이</div>
           <button
             onClick={() => setShopOpen(true)}
-            className="tap flex items-center gap-1 rounded-full bg-white/8 px-2 py-0.5 text-[10.5px] font-semibold text-ink"
+            className="tap flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-white/8 px-2 py-0.5 text-[10.5px] font-semibold text-ink"
           >
             🛍️ 꾸미기 <span className="text-[#F5C846]">🪙{coins}</span>
           </button>
         </div>
-        <div className="flex items-center gap-1">
-          <span className="mr-1 text-[9.5px] text-mut">돌보미</span>
+        <div className="flex shrink-0 items-center gap-1">
           {GUIDES.map((g) => (
             <button
               key={g.key}
@@ -155,8 +154,10 @@ export default function PetMascot() {
         </div>
       </div>
 
+      {/* 데스크톱: 가로형(무대 왼쪽 · 컨트롤 오른쪽) */}
+      <div className="lg:mt-2 lg:flex lg:items-center lg:gap-6">
       {/* 무대 — 말랑한 마스코트 */}
-      <div className="relative mx-auto mt-3 flex h-[150px] w-full max-w-[240px] items-end justify-center overflow-hidden rounded-[16px]">
+      <div className="relative mx-auto mt-3 flex h-[150px] w-full max-w-[240px] items-end justify-center overflow-hidden rounded-[16px] lg:mx-0 lg:mt-0 lg:h-[190px] lg:w-[280px] lg:max-w-[280px] lg:shrink-0">
         {/* 장착 배경 */}
         {bgItem && <div className="pointer-events-none absolute inset-0" style={{ background: bgItem.render }} />}
         {/* 배경 후광 */}
@@ -228,8 +229,10 @@ export default function PetMascot() {
         </button>
       </div>
 
+      {/* 오른쪽 컨트롤 열(데스크톱) */}
+      <div className="lg:min-w-0 lg:flex-1">
       {/* 상태 + 액션 */}
-      <div className="mt-1 flex items-center gap-2 text-[11px]">
+      <div className="mt-1 flex items-center gap-2 text-[11px] lg:mt-0">
         <span className="text-mut">기분</span>
         <span className="font-semibold" style={{ color: mood === "기쁨" ? "#5DCAA5" : mood === "시무룩" ? "#F0A0A0" : "#9FB0CE" }}>
           {mood === "기쁨" ? "😊 기쁨" : mood === "시무룩" ? "🥺 시무룩" : "🙂 보통"}
@@ -261,6 +264,8 @@ export default function PetMascot() {
         </button>
       </div>
       <p className="mt-2 text-[9.5px] leading-relaxed text-mut">쓰다듬기는 하루 한 번(친밀도 +1~10), 간식은 친밀도 +7. 동물을 누르면 토닥토닥.</p>
+      </div>
+      </div>
 
       {shopOpen && (
         <PetShop
