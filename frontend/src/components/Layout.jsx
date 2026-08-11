@@ -26,7 +26,8 @@ export default function Layout() {
       <div
         className="relative flex h-screen w-full max-w-phone flex-col overflow-hidden bg-bg
                    sm:h-[900px] sm:max-h-[94vh] sm:rounded-[44px] sm:border sm:border-[#52627B]
-                   lg:h-[calc(100vh-64px)] lg:max-h-none lg:max-w-[1240px] lg:rounded-[32px]
+                   md:aspect-[16/10] md:h-auto md:max-h-[calc(100vh-48px)] md:max-w-[calc((100vh-48px)*1.6)] md:rounded-[32px]
+                   lg:max-w-[1240px]
                    sm:ring-1 sm:ring-white/10
                    sm:shadow-[0_30px_90px_rgba(0,0,0,.65),0_0_45px_rgba(65,118,190,.18)]"
         style={{ backgroundImage: "radial-gradient(circle at 85% 8%, rgba(47,111,232,.12), transparent 32%), linear-gradient(180deg, #0B1423 0%, #08101D 100%)" }}

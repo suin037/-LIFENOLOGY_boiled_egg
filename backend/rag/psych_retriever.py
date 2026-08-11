@@ -28,6 +28,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent.parent
 DB_DIR = ROOT / "data" / "vectordb"
 CARDS_DIR = ROOT / "data" / "lanollab" / "심리학_이론카드"
+EXTRA_CARDS_DIR = ROOT / "diary_module" / "qmode" / "cards_new"
 COLLECTION = "psych_theory"
 EMB_MODEL = "jhgan/ko-sroberta-multitask"  # 로더와 반드시 동일
 
@@ -102,8 +103,10 @@ def _load_cards():
     if _CARDS_CACHE is not None:
         return _CARDS_CACHE
     cards = []
-    if CARDS_DIR.exists():
-        for p in CARDS_DIR.glob("**/cards_*.json"):
+    for card_dir in (CARDS_DIR, EXTRA_CARDS_DIR):
+        if not card_dir.exists():
+            continue
+        for p in card_dir.glob("**/cards_*.json"):
             try:
                 obj = json.loads(p.read_text(encoding="utf-8"))
             except Exception:

@@ -2,14 +2,12 @@ import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, Caption } from "../components/ui.jsx";
 import Constellation from "../components/Constellation.jsx";
-import PlanetGlobe from "../components/PlanetGlobe.jsx";
+import UniverseMap from "../components/UniverseMap.jsx";
 import { useResult } from "../data/ResultContext.jsx";
 import { PLANETS, SAVED_UNIVERSES } from "../data/result.js";
 import {
   universeSummary,
   constellationGroups,
-  groupsByPlanet,
-  scenariosByPlanet,
   setPlanet as persistPlanet,
   seedDemoCheckins,
   resetUniverse,
@@ -58,6 +56,7 @@ export default function MyUniverse() {
   const [reportCache, setReportCache] = useState({}); // weekKey → { report, actions }
   const [reportBusy, setReportBusy] = useState(false);
   const [reportErr, setReportErr] = useState(null);
+  const [viewAll, setViewAll] = useState(true);
 
   const planet = u.state.planet;
   const selectedPlanet = PLANETS.find((p) => p.key === planet) || PLANETS[0];
@@ -72,6 +71,7 @@ export default function MyUniverse() {
   );
 
   function choosePlanet(key) {
+    setViewAll(false);
     persistPlanet(key);
     refresh();
   }
@@ -83,10 +83,8 @@ export default function MyUniverse() {
     setPicked(null);
     setShowReport(false);
     setConstellationSheetOpen(false);
-
     if (isDemo(u.state)) resetUniverse();
     else if (u.stars === 0) seedDemoCheckins();
-
     refresh();
   }
 
@@ -147,42 +145,24 @@ export default function MyUniverse() {
   }
 
   return (
-    <div
-      className="universe-scene relative min-h-full overflow-hidden rounded-[28px] border border-white/10 px-4 pb-8 shadow-[0_20px_55px_rgba(0,0,0,.3)] lg:min-h-[680px] lg:px-8 [&>.bg-card]:my-0 [&>.bg-card]:rounded-none [&>.bg-card]:border-t [&>.bg-card]:border-white/[.07] [&>.bg-card]:bg-transparent [&>.bg-card]:px-0 [&>.bg-card]:py-6"
-      style={{
-        backgroundColor: "#0A1322",
-        backgroundImage: "radial-gradient(circle at 18% 12%, rgba(94,143,255,.2), transparent 25%), radial-gradient(circle at 82% 38%, rgba(143,92,246,.14), transparent 28%), radial-gradient(circle, rgba(255,255,255,.42) 0 1px, transparent 1.3px), linear-gradient(180deg,#0D1728 0%,#091321 58%,#0C1626 100%)",
-        backgroundSize: "auto, auto, 73px 73px, auto",
-      }}
-    >
-      <div className="mb-3 mt-2 flex items-start justify-between gap-3">
+    <div className="universe-scene relative -mx-5 -mt-1 flex min-h-full flex-col overflow-hidden px-5 pb-8 md:h-full md:min-h-0 md:pb-1 [&>.bg-card]:my-0 [&>.bg-card]:rounded-none [&>.bg-card]:border-t [&>.bg-card]:border-white/[.07] [&>.bg-card]:bg-transparent [&>.bg-card]:px-0 [&>.bg-card]:py-6">
+      <div className="pointer-events-none absolute inset-0 -z-0 bg-[radial-gradient(circle_at_18%_12%,rgba(94,143,255,.18),transparent_25%),radial-gradient(circle_at_82%_38%,rgba(143,92,246,.13),transparent_28%),linear-gradient(180deg,#070D19_0%,#050A13_58%,#080E1A_100%)]" />
+      <div className="pointer-events-none absolute inset-0 -z-0 opacity-70 [background-image:radial-gradient(circle,rgba(255,255,255,.7)_0_1px,transparent_1.3px),radial-gradient(circle,rgba(126,180,255,.55)_0_1px,transparent_1.4px)] [background-position:0_0,31px_47px] [background-size:67px_67px,91px_91px]" />
+      <div className="flex items-start justify-between gap-3 md:shrink-0">
         <div>
-          <h1 className="text-[24px] font-bold leading-[1.2]">나의 우주</h1>
-          <p className="mt-1 text-[13px] text-sub">
-            하루에 별 하나. {STARS_PER_CONSTELLATION}개가 모이면 별자리가 됩니다.
-          </p>
+          <h1 className="mb-1 mt-2 text-[24px] font-bold leading-[1.2] md:mt-0 md:text-[20px]">나의 우주</h1>
+          <p className="mb-3 text-[13px] text-sub md:mb-1 md:text-[11px]">하루에 별 하나. {STARS_PER_CONSTELLATION}개가 모이면 별자리가 됩니다.</p>
         </div>
         {(u.stars === 0 || isDemo(u.state)) && (
-          <button
-            type="button"
-            onClick={toggleDemoRecords}
-            className="tap mt-0.5 shrink-0 rounded-full border border-white/15 bg-white/[.06] px-2.5 py-1.5 text-[10px] font-semibold text-sub transition-colors hover:border-cyan/50 hover:text-cyan"
-          >
+          <button type="button" onClick={toggleDemoRecords} className="tap mt-2 shrink-0 rounded-full border border-white/15 bg-white/[.06] px-2.5 py-1.5 text-[10px] font-semibold text-sub">
             {isDemo(u.state) ? "데모 비우기" : "6주 데모 보기"}
           </button>
         )}
       </div>
 
-      {isDemo(u.state) && (
-        <div className="mb-3 flex items-center gap-1.5 rounded-xl border border-cyan/20 bg-cyan/[.07] px-3 py-2 text-[10px] text-cyan">
-          <span aria-hidden="true">✦</span>
-          6주 예시 기록을 보고 있어요. 실제 사용자 기록에는 포함되지 않습니다.
-        </div>
-      )}
-
       {/* 레벨 / XP */}
-      <Card className="universe-level !my-3 flex items-center gap-3 !rounded-[20px] !border !border-white/10 !bg-[#101A2A]/75 !p-3.5 shadow-[0_18px_50px_rgba(0,0,0,.24)] backdrop-blur-xl">
-        <div className="h-11 w-11 shrink-0 rounded-full bg-gradient-to-br from-cyan to-[#8B5CF6]" />
+      <Card className="universe-level order-1 !my-3 flex items-center gap-3 !rounded-[20px] !border !border-white/10 !bg-[#101A2A]/75 !p-3.5 shadow-[0_18px_50px_rgba(0,0,0,.24)] backdrop-blur-xl md:!my-1 md:!p-2.5">
+        <div className="h-11 w-11 shrink-0 rounded-full bg-gradient-to-br from-cyan to-[#8B5CF6] md:h-8 md:w-8" />
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between">
             <span className="text-sm font-bold">
@@ -240,7 +220,7 @@ export default function MyUniverse() {
       </Card> */}
 
       {/* 별자리 만들기 */}
-      <Card className="hidden">
+      <Card className="hidden order-3">
         <div className="mb-1 flex items-center gap-1.5 text-base font-semibold">✦ 별자리 만들기</div>
 
         {u.stars === 0 ? (
@@ -359,113 +339,86 @@ export default function MyUniverse() {
         )}
       </Card>
 
-      {/* 행성 우주 — 도메인별 지구본(옛 행성 선택 대체). 칩이 곧 행성 선택. */}
-      <Card>
-        <div className="mb-1 text-base font-semibold">🪐 행성 우주</div>
-        <p className="mb-2 text-[11px] text-mut">행성은 당신의 삶의 영역입니다 · 눌러서 그 영역을 봐요</p>
-        <div className="mb-1 flex flex-wrap gap-1.5">
-          {PLANETS.map((p) => (
-            <button
-              key={p.key}
-              onClick={() => choosePlanet(p.key)}
-              className={`tap rounded-full border px-2.5 py-1 text-[11px] ${
-                planet === p.key ? "border-cyan text-cyan" : "border-line text-mut"
-              }`}
-            >
-              {p.label}
-            </button>
-          ))}
+      {/* 하나의 우주 안에서 다섯 삶의 영역과 전체 별자리를 함께 본다. */}
+      <Card className="order-2 !border-t-0 !py-2 md:min-h-0 md:flex-1 md:!py-1">
+        <div className="mb-3 flex items-end justify-between md:mb-1">
+          <div>
+            <div className="text-[10px] font-bold tracking-[.16em] text-[#8FA2CB]">MY UNIVERSE</div>
+            <div className="mt-1 text-[16px] font-bold md:text-[14px]">다섯 세계와 나의 별자리</div>
+          </div>
+          <span className="text-[10px] text-mut">행성을 눌러 전환</span>
         </div>
-        <PlanetGlobe
-          planet={selectedPlanet}
-          groups={groupsByPlanet(planet)}
-          scenarios={scenariosByPlanet(planet).map((s) => ({
-            date: s.date,
-            title: s.title,
-            dateLabel: s.date,
-            br: s.br,
-          }))}
-          onOpen={() => navigate("/input")}
+        <div className="no-scrollbar -mx-1 mb-3 flex gap-2 overflow-x-auto px-1 pb-1 md:mb-1 md:gap-1.5">
+          <button type="button" onClick={() => setViewAll(true)} className={`tap shrink-0 rounded-full border px-4 py-2 text-[11px] font-semibold md:px-3 md:py-1.5 md:text-[10px] ${viewAll ? "border-[#D8E3FF] bg-[#D8E3FF] text-[#10162A]" : "border-white/10 bg-white/[.04] text-sub"}`}>전체</button>
+          {PLANETS.map((item) => <button key={item.key} type="button" onClick={() => choosePlanet(item.key)} className={`tap shrink-0 rounded-full border px-4 py-2 text-[11px] font-semibold md:px-3 md:py-1.5 md:text-[10px] ${!viewAll && item.key === planet ? "border-white/25 bg-white/10 text-white" : "border-white/10 bg-white/[.04] text-sub"}`}>{item.label}</button>)}
+        </div>
+        <UniverseMap
+          planets={PLANETS}
+          groups={groups}
+          scenarios={u.state.scenarios || []}
+          selectedKey={planet}
+          onPlanetSelect={choosePlanet}
           onConstellationOpen={openPlanetConstellation}
+          onOpen={() => navigate("/input")}
         />
-        <p className="mt-2 rounded-xl border border-line bg-[#0E1424] px-3 py-2.5 text-[12px] text-sub">
-          선택된 행성: <span className="font-bold text-ink">{selectedPlanet.label}</span> — 일기를
-          저장하면 이 영역으로 자동 분류돼 별로 쌓이고, 갈림길을 시뮬레이션합니다.
-        </p>
-
-        <div className="mt-4 border-t border-white/[.07] pt-4">
-          <div className="mb-2 flex items-center justify-between">
-            <div>
-              <div className="text-[12px] font-semibold text-ink">나의 우주 기록</div>
-              <p className="mt-0.5 text-[10px] text-mut">지금까지 발견한 별과 탐험 기록이에요.</p>
+        <div className="relative z-20 -mt-16 rounded-[28px] border border-white/10 bg-[#0A1122]/95 p-4 shadow-[0_-20px_55px_rgba(0,0,0,.35)] backdrop-blur-xl md:-mt-24 md:rounded-[22px] md:p-3">
+          <div className="mx-auto mb-4 h-1 w-12 rounded-full bg-white/20 md:mb-2" />
+          <div className="flex items-center gap-3">
+            <div className="h-11 w-11 shrink-0 rounded-full border border-white/30" style={{ background: `radial-gradient(circle at 30% 25%,#fff9,transparent 22%),linear-gradient(145deg,${selectedPlanet.to},${selectedPlanet.from})`, boxShadow: `0 0 20px ${selectedPlanet.from}66` }} />
+            <div className="min-w-0 flex-1">
+              <div className="text-[14px] font-bold">{selectedPlanet.label} 세계</div>
+              <div className="mt-0.5 text-[10px] text-mut">별 {u.stats.stars}개 · 시뮬레이션 {u.stats.simulations}개</div>
             </div>
-            <button onClick={() => navigate("/archive")} className="tap text-[11px] font-semibold text-cyan">
-              전체 기록 →
-            </button>
+            <div className="text-right"><div className="text-[24px] font-bold text-[#8EADFF]">{groups.length}</div><div className="text-[9px] text-mut">별자리</div></div>
           </div>
-          <div className="grid grid-cols-3 gap-2">
-            <MiniStat label="시뮬레이션" value={u.stats.simulations} center />
-            <MiniStat label="수집한 별" value={u.stats.stars} center />
-            <MiniStat label="완성한 별자리" value={u.completed} center />
+          <div className="mt-4 grid grid-cols-3 gap-2 md:mt-2">
+            <MiniStat label="이번 달 별" value={`${u.stats.stars}개`} center />
+            <MiniStat label="완성 별자리" value={`${u.completed}개`} center />
+            <MiniStat label="시뮬레이션" value={`${u.stats.simulations}개`} center />
           </div>
+          <button type="button" onClick={() => u.checkedInToday ? (group && openPlanetConstellation(group)) : navigate("/home")} className="tap mt-4 w-full rounded-2xl bg-gradient-to-r from-[#D5E0FF] to-white py-3.5 text-[13px] font-bold text-[#10162A] md:mt-2 md:py-2.5 md:text-[11px]">
+            {u.checkedInToday ? "오늘의 별 기록 보기" : "오늘의 별 기록하기"}
+          </button>
         </div>
+
       </Card>
 
       {constellationSheetOpen && group && (
-        <div className="fixed inset-0 z-[70] flex animate-backdrop-in items-end justify-center bg-[#02050C]/70 backdrop-blur-[4px]" onClick={() => setConstellationSheetOpen(false)}>
-          <div className="mb-[68px] flex max-h-[calc(100dvh-88px)] w-full max-w-phone animate-sheet-up flex-col overflow-hidden rounded-t-[34px] border border-white/10 bg-[#0D1727] shadow-[0_-24px_70px_rgba(0,0,0,.55)]" onClick={(event) => event.stopPropagation()}>
+        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-[#02050C]/70 backdrop-blur-[4px]" onClick={() => setConstellationSheetOpen(false)}>
+          <div className="mb-[68px] flex max-h-[calc(100dvh-88px)] w-full max-w-phone flex-col overflow-hidden rounded-t-[34px] border border-white/10 bg-[#0D1727] shadow-[0_-24px_70px_rgba(0,0,0,.55)]" onClick={(event) => event.stopPropagation()}>
             <div className="shrink-0 px-5 pb-3 pt-3">
               <div className="mx-auto mb-3 h-1 w-11 rounded-full bg-white/25" />
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-[11px] font-bold text-cyan">{selectedPlanet.label} 행성의 별자리</div>
+                  <div className="text-[11px] font-bold text-cyan">나의 우주 별자리</div>
                   <h2 className="mt-1 text-[20px] font-bold">{weekBack === 0 ? "이번 주 기록" : `${weekBack}주 전 기록`}</h2>
                 </div>
                 <button type="button" onClick={() => setConstellationSheetOpen(false)} className="tap flex h-10 w-10 items-center justify-center rounded-full bg-white/[.07] text-[22px] text-sub" aria-label="별자리 상세 닫기">×</button>
               </div>
-              {groups.length > 1 && (
-                <div className="mt-3 flex items-center justify-between rounded-full border border-white/10 bg-black/10 px-2 py-1.5">
-                  <PagerBtn disabled={idx <= 0} onClick={() => { setWeekBack((value) => value + 1); setPicked(null); setShowReport(false); }}>‹</PagerBtn>
-                  <span className="text-[11px] text-sub">{group.weekStart} · {group.filled}/{STARS_PER_CONSTELLATION}일 기록</span>
-                  <PagerBtn disabled={weekBack <= 0} onClick={() => { setWeekBack((value) => Math.max(0, value - 1)); setPicked(null); setShowReport(false); }}>›</PagerBtn>
-                </div>
-              )}
             </div>
-
-            <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-10">
+            <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto px-5 pb-10">
               <div className="rounded-[24px] border border-white/10 bg-[#091321] p-3">
                 <Constellation size={292} stars={group.stars} todayDate={todayKey()} selectedDate={picked?.date} onSelect={(star) => star.future ? null : setPicked((current) => current?.date === star.date ? null : star)} />
-                <p className="mt-1 text-center text-[11px] text-mut">별을 누르면 그날의 일기와 체크인 상태를 볼 수 있어요.</p>
+                <p className="mt-1 text-center text-[11px] text-mut">별을 누르면 그날의 일기와 체크인 기록을 볼 수 있어요.</p>
               </div>
-
               {picked && <StarDetail star={picked} />}
-
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <MiniStat label="기록한 날" value={`${group.filled}일`} center />
                 <MiniStat label="연속 기록" value={`${u.streak}일`} center />
               </div>
-
-              {group.complete ? (
+              {group.complete && (
                 <>
                   <button type="button" onClick={() => { const next = !showReport; setShowReport(next); if (next) loadWeekReport(); }} className="tap mt-3 w-full rounded-2xl border border-cyan/60 bg-[#122440] py-3 text-[12px] font-bold text-cyan">
-                    {showReport ? "주간 리포트 접기" : "주간 리포트 한 번에 보기"}
+                    {showReport ? "주간 리포트 접기" : "주간 리포트 보기"}
                   </button>
-                  {showReport && (
-                    <div className="mt-2 space-y-2">
-                      <WeeklyReport group={group} constellation={constellation} />
-                      <NarrativeBlock data={reportCache[group.weekStart]} busy={reportBusy} err={reportErr} onRetry={loadWeekReport} />
-                    </div>
-                  )}
+                  {showReport && <div className="mt-2 space-y-2"><WeeklyReport group={group} constellation={constellation} /><NarrativeBlock data={reportCache[group.weekStart]} busy={reportBusy} err={reportErr} onRetry={loadWeekReport} /></div>}
                 </>
-              ) : (
-                <div className="mt-3 rounded-2xl border border-dashed border-white/10 px-3 py-3 text-center text-[11px] text-mut">이번 주가 끝나면 주간 리포트가 만들어져요. {group.remaining ? `${group.remaining}일 남았어요.` : ""}</div>
               )}
             </div>
           </div>
         </div>
       )}
-
-      <p className="mb-2 mt-1 text-center text-[10px] leading-relaxed text-mut">
+      <p className="order-4 mb-2 mt-1 text-center text-[10px] leading-relaxed text-mut md:hidden">
         레벨·별·XP는 앱 참여 지표이며, 실측 데이터 결과가 아닙니다.
         <br />
         {HONESTY_NOTE}

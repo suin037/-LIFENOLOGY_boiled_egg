@@ -45,7 +45,7 @@ function pickTrajectory(raw, choice) {
 const maxYear = (rows, fallback) =>
   Array.isArray(rows) && rows.length ? Math.max(...rows.map((p) => p.year ?? 0)) : fallback;
 
-function buildSide(scenario, choice, detail, profile, evidence, domainCov, domainStats) {
+function buildSide(scenario, choice, detail, profile, evidence, domainCov, domainStats, validatedPrediction, indicatorEvidence) {
   const raw = scenario?.raw || {};
   const { rows: trajectory, isBaseline } = pickTrajectory(raw, choice);
   const wellbeing = raw.wellbeing_trajectory || [];
@@ -96,6 +96,10 @@ function buildSide(scenario, choice, detail, profile, evidence, domainCov, domai
     graph_guard_note: domainCov?.guard_note || null,
     // 영역별 실측 집단통계 지표(항목3) — { domainKey: {label, evidence, indicators[]} }
     domain_stats: domainStats || {},
+    // 새 후보 모델: 검증 집단효과와 실험적 개인 추정치가 분리된 원응답.
+    validated_prediction: validatedPrediction || null,
+    // 각 지표의 숫자와 그 숫자를 뒷받침하는 근거 수준을 분리한다.
+    indicator_evidence: indicatorEvidence || null,
   };
 }
 
@@ -118,8 +122,10 @@ export function mapSimulateToPair(sim, { choiceA, choiceB, detailA = "", detailB
   const ev = cmp.evidence_levels || sim.evidence_levels || {};
   const dc = cmp.domain_coverage || sim.domain_coverage || {};
   const ds = cmp.domain_stats || sim.domain_stats || {};
-  const a = buildSide(A, choiceA, detailA, profile, ev.A, dc.A, ds.A);
-  const b = buildSide(B, choiceB, detailB, profile, ev.B, dc.B, ds.B);
+  const vp = cmp.validated_predictions || sim.validated_predictions || {};
+  const ie = cmp.indicator_evidence || sim.indicator_evidence || {};
+  const a = buildSide(A, choiceA, detailA, profile, ev.A, dc.A, ds.A, vp.A, ie.A);
+  const b = buildSide(B, choiceB, detailB, profile, ev.B, dc.B, ds.B, vp.B, ie.B);
 
   // 실데이터가 하나라도 있으면 실수치 모드. 연차별 궤적이 비어도(관측범위 밖/표본부족)
   // 이웃·인과·기대임금·지표 같은 실측이 있으면 목업으로 되돌리지 않는다.

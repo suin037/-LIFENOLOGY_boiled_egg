@@ -32,6 +32,7 @@ export default function LifeView({ a, b, domains = { a: [], b: [] } }) {
 
   return (
     <div>
+      {(a.indicator_evidence || b.indicator_evidence) && <EvidenceSummary a={a} b={b} />}
       <h2 className="mb-1 mt-1 text-base font-semibold">이 선택과 관련된 핵심 지표</h2>
       <div className="mt-3 space-y-2.5">
         {empty && <Card><Caption>선택한 삶의 영역에 연결된 수치 데이터가 아직 충분하지 않습니다. 임의 점수는 만들지 않았어요.</Caption></Card>}
@@ -39,6 +40,51 @@ export default function LifeView({ a, b, domains = { a: [], b: [] } }) {
         {extraA.map((it, i) => <Indicator key={`a${i}`} it={it} tag={`A · ${labelOf(a.choice)}`} tagColor="#7FD4FF" />)}
         {extraB.map((it, i) => <Indicator key={`b${i}`} it={it} tag={`B · ${labelOf(b.choice)}`} tagColor="#F5C86B" />)}
       </div>
+    </div>
+  );
+}
+
+const EVIDENCE_LABEL = {
+  directional_evidence: "방향 근거 있음",
+  insufficient_evidence: "근거 부족",
+  reference_only: "참고 통계만",
+  user_provided_state: "현재 상태 입력",
+};
+
+function EvidenceSummary({ a, b }) {
+  const keys = ["경제적안정도", "성장가능성", "삶의질"];
+  return (
+    <Card className="mb-4">
+      <div className="text-sm font-semibold text-ink">예측 근거 상태</div>
+      <Caption>현재 모델이 실제로 검증한 범위를 표시합니다.</Caption>
+      <div className="mt-3 space-y-2">
+        {keys.map((key) => {
+          const left = a.indicator_evidence?.[key];
+          const right = b.indicator_evidence?.[key];
+          if (!left && !right) return null;
+          return (
+            <div key={key} className="rounded-xl border border-line bg-bg/40 px-3 py-2.5">
+              <div className="mb-1 text-xs font-semibold text-ink">{key}</div>
+              <EvidenceSide label="A" item={left} />
+              <EvidenceSide label="B" item={right} />
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+function EvidenceSide({ label, item }) {
+  if (!item) return null;
+  const effect = typeof item.effect === "number"
+    ? ` · 집단 평균 ${item.effect >= 0 ? "+" : ""}${item.effect.toFixed(1)}%p`
+    : "";
+  return (
+    <div className="mt-1 text-[11px] leading-5 text-sub">
+      <span className="mr-1 font-semibold text-ink">{label}</span>
+      <span>{EVIDENCE_LABEL[item.status] || item.status}</span>{effect}
+      {item.reason && <div className="pl-4 text-[10px] text-mut">{item.reason}</div>}
     </div>
   );
 }

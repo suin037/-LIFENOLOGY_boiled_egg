@@ -8,7 +8,7 @@ requests>=2.32
 python-multipart>=0.0.9
 pandas>=2.2
 numpy>=1.26
-scikit-learn>=1.4
+scikit-learn==1.9.0      # joblib 모델은 학습/서빙 버전이 같아야 함
 econml>=0.15
 lifelines>=0.28
 pyreadstat>=1.2

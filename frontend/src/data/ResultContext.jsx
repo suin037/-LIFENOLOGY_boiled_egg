@@ -23,6 +23,10 @@ const DEFAULT_PROFILE = {
   occupation: "사회계열",
   income: 280, // 만원/월 → 백엔드 monthly_wage
   edu_level: 7, // 대졸
+  occupation_group: null, // KSCO 직종 대분류 1~9 — 이직 시뮬레이션에서 수집
+  employment_status: null, // KLIPS 종사상지위 1~5
+  tenure_years: null, // 현재 일자리 근속연수
+  firm_size: null, // KLIPS 기업규모 코드 1~11
   values: [], // qmode UI 표시용 가치 강제순위 — 온보딩에서 사용자가 직접 선택
   value_ranking: [], // 가치 카드 id 중요한 순 → 개인화 입력(백엔드가 가중치로 변환)
   mbti: "", // 심리 성향 input

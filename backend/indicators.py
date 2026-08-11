@@ -15,6 +15,68 @@ from __future__ import annotations
 INDICATOR_KEYS = ["경제적안정도", "성장가능성", "삶의질"]
 
 
+def evidence_statuses(kind: str, validated_prediction: dict | None = None,
+                      provided_scores: dict | None = None) -> dict:
+    """3지표 숫자와 근거 수준을 분리한 계약.
+
+    legacy 0~1 점수는 화면 호환용일 뿐 검증된 예측으로 승격하지 않는다.
+    명시적으로 제공된 점수만 사용자 상태 신호로 심리 RAG에 사용할 수 있다.
+    """
+    if provided_scores:
+        return {
+            key: {
+                "status": "user_provided_state",
+                "score": provided_scores.get(key),
+                "eligible_for_psych_rag": provided_scores.get(key) is not None,
+                "reason": "사용자가 제공한 현재 상태 점수이며 미래 예측값이 아님",
+            }
+            for key in INDICATOR_KEYS
+        }
+
+    if kind == "이직":
+        vp = validated_prediction or {}
+        pop = vp.get("population_evidence") or {}
+        effect = pop.get("effect")
+        financial_status = "directional_evidence" if effect is not None else "insufficient_evidence"
+        return {
+            "경제적안정도": {
+                "status": financial_status,
+                "score": None,
+                "direction": "positive" if effect is not None and effect > 0 else "uncertain",
+                "effect": effect,
+                "unit": pop.get("unit"),
+                "ci95": pop.get("ci95"),
+                "eligible_for_psych_rag": False,
+                "reason": "집단 임금효과의 방향 근거이며 개인의 현재 심리 상태 점수가 아님",
+            },
+            "성장가능성": {
+                "status": "insufficient_evidence", "score": None,
+                "eligible_for_psych_rag": False,
+                "reason": "최근 연도 검증에서 성장 효과가 재현되지 않음",
+            },
+            "삶의질": {
+                "status": "insufficient_evidence", "score": None,
+                "eligible_for_psych_rag": False,
+                "reason": "반복 검증에서 삶의 질 효과가 안정적이지 않음",
+            },
+        }
+
+    reason = "해당 선택의 검증된 개인 예측모델이 없어 집단통계·관측값만 제공"
+    return {
+        key: {"status": "reference_only", "score": None,
+              "eligible_for_psych_rag": False, "reason": reason}
+        for key in INDICATOR_KEYS
+    }
+
+
+def psych_eligible_scores(statuses: dict) -> dict:
+    """미래 예측값을 심리 상태처럼 사용하는 것을 차단한다."""
+    return {
+        key: item["score"] for key, item in (statuses or {}).items()
+        if item.get("eligible_for_psych_rag") and item.get("score") is not None
+    }
+
+
 def _clamp01(x: float) -> float:
     return max(0.0, min(1.0, x))
 

@@ -177,9 +177,9 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], onOpen, on
       st.groupHit = [];
       const cx = w / 2,
         cy = h / 2,
-        Rsky = Math.min(w, h) * 0.35,
-        scale = Math.min(w, h) * 0.12,
-        pr = Math.min(w, h) * 0.086;
+        Rsky = Math.min(w, h) * 0.4,
+        scale = Math.min(w, h) * 0.11,
+        pr = Math.min(w, h) * 0.15;
       const C = disp.length;
       const PH = [0.3, -0.22, 0.24, -0.32, 0.16];
       ctx.beginPath();
@@ -349,7 +349,7 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], onOpen, on
     <div>
       <canvas
         ref={cvRef}
-        style={{ width: "100%", height: "320px", display: "block", touchAction: "none", cursor: "grab" }}
+        style={{ width: "100%", height: "500px", display: "block", touchAction: "none", cursor: "grab" }}
       />
       {disp.length === 0 && (
         <div className="pointer-events-none -mt-[178px] mb-[128px] text-center">

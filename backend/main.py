@@ -19,6 +19,7 @@ log = logging.getLogger("parallel-me")
 
 from config import ROOT, settings
 from schemas import (
+    Profile,
     PredictRequest,
     PredictResponse,
     CompareRequest,
@@ -37,6 +38,7 @@ from rag.psych_narrative import get_psych_evidence, build_psych_prompt_block
 from rag import safety as rag_safety
 from utils.cloudflare_images import generate_pair
 from domain_router import route_domains
+from models.job_change_candidate import financial_impact, prediction_for_choice
 
 # 삶의 영역(domain) key → 라벨. 프론트 LIFE_DOMAINS 와 1:1 (행동+영역 구조화 입력).
 DOMAIN_LABELS = {
@@ -121,10 +123,12 @@ def _simulate_without_artifacts(req, diary, safety_level) -> dict:
         "삶의질": 0.5,
     }
     psych_a = get_psych_evidence(
-        default_indicators, emotions=req.emotions, decision_type=req.choice_a
+        default_indicators, emotions=req.emotions, decision_type=req.choice_a,
+        eligible_indicators=[], basis="fallback_without_prediction"
     )
     psych_b = get_psych_evidence(
-        default_indicators, emotions=req.emotions, decision_type=req.choice_b
+        default_indicators, emotions=req.emotions, decision_type=req.choice_b,
+        eligible_indicators=[], basis="fallback_without_prediction"
     )
     ev_a = stat_evidence.evidence_for_choice(req.choice_a)
     ev_b = stat_evidence.evidence_for_choice(req.choice_b)
@@ -168,6 +172,12 @@ def _simulate_without_artifacts(req, diary, safety_level) -> dict:
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok", "model": settings.claude_model}
+
+
+@app.post("/models/job-change/financial-impact")
+def job_change_financial_impact(profile: Profile) -> dict:
+    """검증된 집단 방향성과 실험적 개인 조건 추정치를 분리해 반환한다."""
+    return financial_impact(profile.model_dump())
 
 
 @app.post("/visualize")
@@ -223,6 +233,15 @@ def compare(req: CompareRequest) -> dict:
     cmp["evidence_levels"] = {
         "A": _scenario_evidence(cmp["scenarios"]["A"], has_rag=False),
         "B": _scenario_evidence(cmp["scenarios"]["B"], has_rag=False),
+    }
+    validated_predictions = {
+        "A": prediction_for_choice(cmp["scenarios"]["A"]["kind"], cmp["profile"]),
+        "B": prediction_for_choice(cmp["scenarios"]["B"]["kind"], cmp["profile"]),
+    }
+    cmp["validated_predictions"] = validated_predictions
+    cmp["indicator_evidence"] = {
+        "A": indicators_mod.evidence_statuses(cmp["scenarios"]["A"]["kind"], validated_predictions["A"]),
+        "B": indicators_mod.evidence_statuses(cmp["scenarios"]["B"]["kind"], validated_predictions["B"]),
     }
     return cmp
 
@@ -281,6 +300,10 @@ def simulate(req: SimulateRequest) -> dict:
     # 1) 3지표 산출(엔진 → 0~1). 요청 override 가 있으면 그걸 사용.
     ind_a = req.indicator_scores or indicators_mod.compute_indicators(scen_a, baseline)
     ind_b = req.indicator_scores or indicators_mod.compute_indicators(scen_b, baseline)
+    validated_a = prediction_for_choice(scen_a["kind"], cmp["profile"])
+    validated_b = prediction_for_choice(scen_b["kind"], cmp["profile"])
+    status_a = indicators_mod.evidence_statuses(scen_a["kind"], validated_a, req.indicator_scores)
+    status_b = indicators_mod.evidence_statuses(scen_b["kind"], validated_b, req.indicator_scores)
 
     # 1-1) 성향 개인화(Option A): 가치가중치 → 서술순서·초점·질적강조·확신도.
     #      모델 매칭엔 관여 안 함. value_weights 없으면 focus_* = None(기존 동작 유지).
@@ -305,10 +328,19 @@ def simulate(req: SimulateRequest) -> dict:
 
     # 2) 심리카드(민주 psych RAG): 3지표 + 감정 → 초점지표의 이론카드
     #    성향이 있으면 '중요하며 위태로운' 축을 초점으로 넘김(없으면 최저지표 폴백).
-    psych_a = get_psych_evidence(ind_a, emotions=req.emotions,
-                                 decision_type=req.choice_a, focus_override=focus_a)
-    psych_b = get_psych_evidence(ind_b, emotions=req.emotions,
-                                 decision_type=req.choice_b, focus_override=focus_b)
+    psych_scores_a = indicators_mod.psych_eligible_scores(status_a)
+    psych_scores_b = indicators_mod.psych_eligible_scores(status_b)
+    psych_basis = "user_provided_state" if req.indicator_scores else "validated_model"
+    psych_a = get_psych_evidence(
+        psych_scores_a, emotions=req.emotions, decision_type=req.choice_a,
+        focus_override=focus_a if focus_a in psych_scores_a else None,
+        eligible_indicators=psych_scores_a.keys(), basis=psych_basis,
+    )
+    psych_b = get_psych_evidence(
+        psych_scores_b, emotions=req.emotions, decision_type=req.choice_b,
+        focus_override=focus_b if focus_b in psych_scores_b else None,
+        eligible_indicators=psych_scores_b.keys(), basis=psych_basis,
+    )
 
     # 3) 통계 근거(숫자 근거) — 선택지별
     ev_a = stat_evidence.evidence_for_choice(req.choice_a)
@@ -360,6 +392,11 @@ def simulate(req: SimulateRequest) -> dict:
         "snapshots": cmp.get("snapshots"),
         "compare": cmp,
         "indicators": {"A": ind_a, "B": ind_b},
+        "indicator_evidence": {"A": status_a, "B": status_b},
+        "validated_predictions": {
+            "A": validated_a,
+            "B": validated_b,
+        },
         "personalization": pz,
         "psych": {
             "A": {"focus": psych_a.get("focus_indicator"), "level": psych_a.get("level"),

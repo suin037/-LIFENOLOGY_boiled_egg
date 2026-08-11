@@ -264,7 +264,6 @@ export default function Settings() {
           <div className="mb-3 flex items-center justify-between">
             <div>
               <div className="text-[13px] font-semibold text-ink">기본 정보 수정</div>
-              <div className="mt-0.5 text-[10px] text-mut">바꾸고 싶은 항목만 수정하세요.</div>
             </div>
             <button
               type="button"
@@ -378,10 +377,6 @@ export default function Settings() {
           value={profile.mbti}
           onChange={(value) => setProfile((p) => ({ ...p, mbti: value }))}
         />
-
-        <p className="mt-4 text-[11px] text-mut">
-          성향 질문은 이제 홈 ‘오늘 기록’의 대화(성향 탭)에서 자연스럽게 물어봐요.
-        </p>
       </Card>
 
       {/* 알림 설정 */}

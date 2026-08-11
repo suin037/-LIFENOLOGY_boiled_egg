@@ -17,6 +17,19 @@ const SUGGESTIONS = {
   a: ["더 큰 회사로 이직하기", "대학원에 진학하기", "창업 준비 시작하기"],
   b: ["현재 회사에 남기", "다른 직무를 준비하기", "잠시 쉬어가기"],
 };
+const OCCUPATION_GROUPS = [
+  [1, "관리자"], [2, "전문가·관련 종사자"], [3, "사무 종사자"],
+  [4, "서비스 종사자"], [5, "판매 종사자"], [6, "농림어업 숙련 종사자"],
+  [7, "기능원·관련 기능 종사자"], [8, "장치·기계 조작·조립 종사자"], [9, "단순노무 종사자"],
+];
+const EMPLOYMENT_STATUSES = [
+  [1, "상용직"], [2, "임시직"], [3, "일용직"], [4, "고용주·자영업자"], [5, "무급가족 종사자"],
+];
+const FIRM_SIZES = [
+  [1, "1~4명"], [2, "5~9명"], [3, "10~29명"], [4, "30~49명"],
+  [5, "50~69명"], [6, "70~99명"], [7, "100~299명"], [8, "300~499명"],
+  [9, "500~999명"], [10, "1,000명 이상"], [11, "잘 모르겠음·기타"],
+];
 
 export default function InputScreen() {
   const navigate = useNavigate();
@@ -66,7 +79,12 @@ export default function InputScreen() {
   const sameCategory = Boolean(normalizedA && normalizedB && choices.a === choices.b);
   const duplicate = sameCategory && normalizedA === normalizedB;
   const missingDomains = Boolean(normalizedA && normalizedB && (!scenarioDomains.a.length || !scenarioDomains.b.length));
-  const blocked = !normalizedA || !normalizedB || duplicate || missingDomains;
+  const needJobDetails = choices.a === "이직" || choices.b === "이직";
+  const jobDetailsMissing = needJobDetails && (
+    profile.occupation_group == null || profile.employment_status == null
+    || profile.tenure_years == null || profile.firm_size == null
+  );
+  const blocked = !normalizedA || !normalizedB || duplicate || missingDomains || jobDetailsMissing;
   const needMajor = choices.a === "진학" || choices.b === "진학";
   const emotions = detectEmotions(`${diary} ${textA} ${textB}`);
   const completed = Number(Boolean(normalizedA)) + Number(Boolean(normalizedB));
@@ -131,6 +149,49 @@ export default function InputScreen() {
       {sameCategory && !duplicate && <Caption className="text-cyan">같은 유형이어도 구체적인 조건이 다르면 비교할 수 있어요.</Caption>}
       {missingDomains && <Caption className="text-danger">각 미래에 해당하는 삶의 영역을 하나 이상 선택해주세요.</Caption>}
 
+      {needJobDetails && (
+        <section className="mt-4 rounded-[22px] border border-cyan/30 bg-[#0B1729]/90 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-[13px] font-bold text-ink">이직 예측을 위한 현재 일자리 정보</div>
+              <p className="mt-1 text-[11px] leading-relaxed text-mut">유사 조건 비교에 사용하며, 선택 결과를 확정하는 정보는 아니에요.</p>
+            </div>
+            <span className="shrink-0 rounded-full bg-cyan/15 px-2 py-1 text-[9px] font-bold text-cyan">필수</span>
+          </div>
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            <JobField label="현재 직종 대분류">
+              <select value={profile.occupation_group ?? ""} onChange={(event) => setProfile((prev) => ({ ...prev, occupation_group: event.target.value === "" ? null : Number(event.target.value) }))} className="tap w-full rounded-xl border border-line bg-[#0E1424] px-3 py-2.5 text-[12px] text-ink outline-none focus:border-cyan">
+                <option value="">선택해주세요</option>
+                {OCCUPATION_GROUPS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+            </JobField>
+
+            <JobField label="고용 형태">
+              <select value={profile.employment_status ?? ""} onChange={(event) => setProfile((prev) => ({ ...prev, employment_status: event.target.value === "" ? null : Number(event.target.value) }))} className="tap w-full rounded-xl border border-line bg-[#0E1424] px-3 py-2.5 text-[12px] text-ink outline-none focus:border-cyan">
+                <option value="">선택해주세요</option>
+                {EMPLOYMENT_STATUSES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+            </JobField>
+
+            <JobField label="현 일자리 근속기간">
+              <div className="flex items-center gap-2">
+                <input type="number" min="0" max="50" step="0.5" value={profile.tenure_years ?? ""} placeholder="예: 2.5" onChange={(event) => setProfile((prev) => ({ ...prev, tenure_years: event.target.value === "" ? null : Number(event.target.value) }))} className="w-full rounded-xl border border-line bg-[#0E1424] px-3 py-2.5 text-[12px] text-ink outline-none placeholder:text-mut focus:border-cyan" />
+                <span className="shrink-0 text-[11px] text-mut">년</span>
+              </div>
+            </JobField>
+
+            <JobField label="현재 직장 전체 인원">
+              <select value={profile.firm_size ?? ""} onChange={(event) => setProfile((prev) => ({ ...prev, firm_size: event.target.value === "" ? null : Number(event.target.value) }))} className="tap w-full rounded-xl border border-line bg-[#0E1424] px-3 py-2.5 text-[12px] text-ink outline-none focus:border-cyan">
+                <option value="">선택해주세요</option>
+                {FIRM_SIZES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+            </JobField>
+          </div>
+          {jobDetailsMissing && <p className="mt-3 text-[10px] text-[#FFB36B]">네 항목을 모두 입력하면 비교를 시작할 수 있어요.</p>}
+        </section>
+      )}
+
       {needMajor && (
         <div className="mt-4 rounded-2xl border border-white/10 bg-[#0B1423]/80 p-3.5">
           <label className="mb-2 block text-[11px] font-semibold text-sub">전공 계열</label>
@@ -151,6 +212,15 @@ export default function InputScreen() {
       </button>
       <p className="mt-2 text-center text-[10px] text-mut">두 길을 채우면 코스모가 같은 조건으로 결과를 비교해요.</p>
     </div>
+  );
+}
+
+function JobField({ label, children }) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-[10px] font-semibold text-sub">{label}</span>
+      {children}
+    </label>
   );
 }
 

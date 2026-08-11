@@ -24,7 +24,16 @@ class Profile(BaseModel):
     life_satis: Optional[int] = Field(None, ge=1, le=7, description="삶의 만족도 1~7")
     happy: Optional[int] = Field(None, ge=1, le=7, description="행복감 1~7")
     is_regular: Optional[int] = Field(None, ge=1, le=2, description="1=정규직 2=비정규직")
-    firm_size: Optional[int] = Field(None, ge=1, le=9, description="기업규모 코드 1~9")
+    firm_size: Optional[int] = Field(None, ge=1, le=11, description="KLIPS 기업규모 코드 1~11")
+    occupation_group: Optional[int] = Field(
+        None, ge=1, le=9, description="현재 직종 대분류(KSCO): 1 관리자~9 단순노무"
+    )
+    employment_status: Optional[int] = Field(
+        None, ge=1, le=5, description="종사상지위: 1 상용, 2 임시, 3 일용, 4 고용주·자영업, 5 무급가족"
+    )
+    tenure_years: Optional[float] = Field(
+        None, ge=0, le=50, description="현재 일자리 근속연수"
+    )
     edu_level: Optional[int] = Field(None, ge=2, le=9,
         description="교육수준(KLIPS 학력코드: 5=고졸 6=전문대 7=대졸 8=석사 9=박사) — 궤적 매칭 정교화용(선택)")
     persona_block: Optional[str] = Field(None,

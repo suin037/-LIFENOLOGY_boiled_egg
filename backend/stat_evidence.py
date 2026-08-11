@@ -14,6 +14,24 @@ from typing import Optional
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
 
+STAT_SOURCE_HINTS = (
+    "통계", "조사", "패널", "행정", "KOSIS", "KLIPS", "GOMS", "YP",
+    "국가데이터처", "통계청", "고용노동부", "교육부", "KEDI", "기업생멸",
+    "KNHANES", "KWCS", "지역사회건강",
+)
+PSYCH_SOURCE_HINTS = (
+    "JPSP", "Journal of Personality", "Psychology", "심리학", "Ryff",
+    "Fredrickson", "Lazarus", "Carver", "Bandura",
+)
+
+
+def _is_statistical_source(source: str, text: str = "") -> bool:
+    """심리 논문이 통계 RAG로 새는 것을 막고 조사·행정통계만 허용한다."""
+    haystack = f"{source} {text[:300]}"
+    if any(hint.lower() in haystack.lower() for hint in PSYCH_SOURCE_HINTS):
+        return False
+    return any(hint.lower() in haystack.lower() for hint in STAT_SOURCE_HINTS)
+
 
 def _safe_load(p: Path):
     try:
@@ -46,7 +64,9 @@ def _load_docs() -> list[dict]:
                 continue
             text = it.get("document") or it.get("text") or it.get("content") or ""
             meta = it.get("metadata", {}) if isinstance(it.get("metadata"), dict) else {}
-            add(text, meta.get("source") or "", meta.get("indicator") or meta.get("topic") or "", "stat", it.get("id", ""))
+            source = meta.get("source") or ""
+            if _is_statistical_source(source, text):
+                add(text, source, meta.get("indicator") or meta.get("topic") or "", "stat", it.get("id", ""))
     return docs
 
 
@@ -109,5 +129,13 @@ def evidence_for_choice(choice: str, k: int = 3) -> list[dict]:
     idx = get_index()
     if idx.n_docs == 0:
         return []
-    base = _CHOICE_HINTS.get((choice or "").strip(), choice or "")
-    return idx.retrieve(f"{base} 만족도 삶의질 소득", k=k)
+    normalized = (choice or "").strip()
+    base = _CHOICE_HINTS.get(normalized, normalized)
+    ranked = idx.retrieve(base, k=min(idx.n_docs, max(k * 12, 30)))
+    if normalized == "이직":
+        # 이직 근거에서 일반 심리·삶의 질 보고서가 임금/고용 자료를 밀어내지 않게 한다.
+        job_hints = ("고용", "근로", "임금", "KLIPS", "노동")
+        focused = [d for d in ranked if any(h in f"{d['source']} {d['text']}" for h in job_hints)]
+        if focused:
+            return focused[:k]
+    return ranked[:k]
