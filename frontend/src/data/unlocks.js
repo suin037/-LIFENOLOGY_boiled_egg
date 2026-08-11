@@ -2,14 +2,6 @@
 // `type`별 렌더러가 준비되는 순서대로 실제 선택 화면에 연결한다.
 export const LEVEL_REWARDS = [
   {
-    id: "avatar_bg_aurora",
-    level: 3,
-    type: "avatarBackground",
-    name: "오로라 배경",
-    description: "아바타에 선명한 오로라 블루 배경을 적용해요.",
-    value: "#355CFF",
-  },
-  {
     id: "constellation_aurora",
     level: 6,
     type: "constellationTheme",
@@ -54,8 +46,4 @@ export function nextReward(level) {
 export function isUnlocked(id, level) {
   const reward = LEVEL_REWARDS.find((item) => item.id === id);
   return !reward || level >= reward.level;
-}
-
-export function rewardsOfType(type) {
-  return LEVEL_REWARDS.filter((reward) => reward.type === type);
 }

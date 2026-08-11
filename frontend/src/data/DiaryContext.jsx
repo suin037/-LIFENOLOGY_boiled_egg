@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { addCheckin } from "./myUniverse.js";
+import { addCheckin, setDomains } from "./myUniverse.js";
+import { tagDomain } from "./dispositionApi.js";
 
 // ─────────────────────────────────────────────────────────────
 // 일기(오늘 기록) — 매일 한 줄 + 기분(1~5). localStorage로 영속.
@@ -128,6 +129,15 @@ export function DiaryProvider({ children }) {
       note: text,
       diaryId: `e-${today}`,
     });
+    // 영역(행성) 자동 분류 — 저장 후 비동기로 태깅해 그날 체크인에 domains 를 채운다(지구본 렌즈용).
+    const forTag = [text, ...(answers ? Object.values(answers) : [])]
+      .filter((s) => (s || "").trim())
+      .join(" ");
+    if (forTag) {
+      tagDomain(forTag).then((r) => {
+        if (r && r.domains) setDomains(today, r.domains);
+      });
+    }
     setEntries((prev) => {
       const rest = prev.filter((e) => e.date !== today);
       const entry = { id: `e-${today}`, date: today, mood, text, ...extra }; // extra: energy·competency·emotion

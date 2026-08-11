@@ -33,3 +33,14 @@ export async function getScenario({ uid = "me", choice, expected_wage, causal_ef
   if (!res.ok) throw new Error(`API ${res.status}`);
   return res.json();
 }
+
+// A/B 외의 '제3의 길'을 성향+일기신호에 근거해 생성 (재구성 제안, 수치 예측 아님)
+export async function getThirdPath({ choice_a, choice_b, entries, signal_block, age, major, uid }) {
+  const res = await fetch(`${BASE}/third-path`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ choice_a, choice_b, entries, signal_block, age, major, uid }),
+  });
+  if (!res.ok) throw new Error(`API ${res.status}`);
+  return res.json();
+}

@@ -23,6 +23,7 @@ const DEFAULTS = {
   planet: "career",
   simRuns: 0, // 시뮬레이션 실행 횟수 (다른 저장소에 카운터가 없어 여기서 센다)
   demo: false, // 예시 기록으로 채워진 상태인가 (화면에 배지로 항상 표시)
+  scenarios: [], // [{ date, domain, title, br }] 그 날 그 영역에서 만든 평행우주 시나리오 → 지구본 ◆
 };
 
 // ── 저장/로드 ────────────────────────────────────────────────
@@ -33,6 +34,7 @@ export function loadUniverse() {
       ...DEFAULTS,
       ...raw,
       checkins: Array.isArray(raw.checkins) ? raw.checkins : [],
+      scenarios: Array.isArray(raw.scenarios) ? raw.scenarios : [],
       pinnedSlots: { ...DEFAULTS.pinnedSlots, ...(raw.pinnedSlots || {}) },
     };
   } catch {
@@ -46,6 +48,8 @@ function persist(state) {
   } catch {
     /* localStorage 불가 환경(사파리 프라이빗 등) — 메모리로만 동작 */
   }
+  // 같은 탭에선 storage 이벤트가 안 뜨므로 직접 알린다 → 화면 즉시 갱신(자동 태깅 반영 등).
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("pm:universe"));
   return state;
 }
 
@@ -105,6 +109,7 @@ export function addCheckin(entry = {}) {
     note: entry.note ?? "", // 한 줄 기록
     text: entry.text ?? "", // 일기 본문
     answers: entry.answers ?? null, // 질문별 답 [{ q, a }]
+    domains: entry.domains ?? null, // 자동 분류 영역(행성) key 배열 — /tag 결과
     diaryId: entry.diaryId ?? null,
     hasDiary: Boolean(
       entry.text?.trim() || entry.note?.trim() || entry.answers?.length || entry.diaryId,
@@ -225,6 +230,110 @@ export function completedCount(s = loadUniverse()) {
   return constellationGroups(s).filter((g) => g.complete && g.filled > 0).length;
 }
 
+// 특정 날 체크인에 자동분류 영역(행성 key 배열)을 나중에 채운다(/tag 응답 도착 시).
+export function setDomains(date, domains) {
+  return patch((s) => {
+    const c = s.checkins.find((x) => x.date === date);
+    if (c) c.domains = domains;
+    return s;
+  });
+}
+
+// 행성(도메인) 렌즈 — 그 영역 기록을 '독립 축적'해 별자리를 만든다.
+// 달력 주와 무관하게, 그 영역 기록 7개가 모이면 별자리 1개 완성(각 행성이 자기 별자리를 쌓음).
+// planetKey 없으면 기존 달력 주 기준(전체).
+export function groupsByPlanet(planetKey, s = loadUniverse()) {
+  if (!planetKey) return constellationGroups(s);
+  const legacyKeys = ["career", "life", "relation", "health", "growth"];
+  const domainsOf = (checkin) => {
+    if (Array.isArray(checkin.domains) && checkin.domains.length) return checkin.domains;
+    const text = `${checkin.text || ""} ${checkin.note || ""}`;
+    const inferred = [];
+    if (/회사|직장|이직|취업|진로|업무|면접|돈|소득|연봉/.test(text)) inferred.push("career");
+    if (/건강|수면|잠|운동|병원|스트레스|불안|체력/.test(text)) inferred.push("health");
+    if (/가족|친구|연인|동료|관계|사람/.test(text)) inferred.push("relation");
+    if (/공부|배움|성장|자격증|시험|목표/.test(text)) inferred.push("growth");
+    if (inferred.length) return [...new Set(inferred)];
+    // 예시 기록은 과거 버전에 영역 값이 없었으므로 날짜 기준으로 고르게 복구한다.
+    if (s.demo) {
+      const hash = String(checkin.date || "").split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
+      return [legacyKeys[hash % legacyKeys.length]];
+    }
+    return ["life"];
+  };
+  const filtered = {
+    ...s,
+    checkins: s.checkins.filter((c) => domainsOf(c).includes(planetKey)),
+  };
+  return constellationGroups(filtered);
+}
+
+// 적응형 별자리 묶기 — 기록 수에 맞춰 묶어 별자리가 너무 많아지지도, 너무 비지도 않게.
+//  · 항상 그룹 ≤ 8개, 각 그룹 ≥ 7별(마지막 제외) → 분석(4개↑)이 항상 가능.
+//  · 전체(planetKey 없음)면 모든 기록, 도메인이면 그 영역만.
+//  · 달력이 아니라 '기록 순서' 기준이라 희박한 영역도 텅 빈 별자리가 안 생긴다.
+export function adaptiveGroups(planetKey, s = loadUniverse()) {
+  const all = !planetKey || planetKey === "all";
+  const stars = s.checkins
+    .filter(
+      (c) =>
+        !c.empty &&
+        (c.mood != null || c.valence != null) &&
+        (all || (Array.isArray(c.domains) && c.domains.includes(planetKey))),
+    )
+    .sort((a, b) => a.date.localeCompare(b.date));
+  if (!stars.length) return [];
+
+  const size = Math.max(STARS_PER_CONSTELLATION, Math.ceil(stars.length / 8));
+  const groups = [];
+  for (let i = 0; i < stars.length; i += size) {
+    const chunk = stars.slice(i, i + size);
+    groups.push({
+      index: groups.length,
+      stars: chunk,
+      filled: chunk.length,
+      complete: true,
+      remaining: 0,
+      label: `${chunk[0].date.slice(5)}~${chunk[chunk.length - 1].date.slice(5)}`,
+    });
+  }
+  return groups;
+}
+
+// 그 날 그 영역에서 평행우주 시나리오를 만들었음을 기록 → 지구본 ◆. (date,domain) upsert.
+export function recordScenario({ domain, title, br = [], date } = {}) {
+  const d = date || todayKey();
+  return patch((s) => {
+    const rest = (s.scenarios || []).filter((x) => !(x.date === d && x.domain === domain));
+    s.scenarios = [...rest, { date: d, domain, title: title || "평행우주 시나리오", br }];
+    return s;
+  });
+}
+
+// 그 행성(영역)에서 만든 시나리오들 — PlanetGlobe scenarios prop 용.
+export function scenariosByPlanet(planetKey, s = loadUniverse()) {
+  return (s.scenarios || []).filter((x) => x.domain === planetKey);
+}
+
+// 결과 화면 '작은 실험'에 적은 답을 그날 기록에 덧붙인다.
+// 별(mood)을 덮어쓰지 않고 experiments[] 에 누적 → 다음 diarySignals 분석에 반영된다.
+// (actionId 당 1개 upsert. 같은 실험을 다시 적으면 덮어씀.)
+export function logExperiment({ actionId, prompt, text, date } = {}) {
+  const v = (text || "").trim();
+  const d = date || todayKey();
+  return patch((s) => {
+    let c = s.checkins.find((x) => x.date === d);
+    if (!c) {
+      c = { date: d, mood: null, valence: null, energy: null, skill: null, keyword: null, note: "", text: "", answers: null, domains: null, diaryId: null, experiments: [], hasDiary: true };
+      s.checkins = [...s.checkins, c].sort((a, b) => a.date.localeCompare(b.date));
+    }
+    const rest = (c.experiments || []).filter((e) => e.actionId !== actionId);
+    c.experiments = v ? [...rest, { actionId, prompt: prompt || "", text: v }] : rest;
+    if (v) c.hasDiary = true;
+    return s;
+  });
+}
+
 // ── XP / 레벨 ────────────────────────────────────────────────
 // 참여 지표다. 실측 데이터와 무관하며 값은 팀 재량으로 정한 것.
 export const XP_RULES = {
@@ -270,7 +379,7 @@ function rememberHighestLevel(level) {
   return highest;
 }
 
-const TITLES = [
+export const LEVEL_TITLES = [
   [1, "첫 별 관측자"],
   [3, "성운 여행자"],
   [6, "별자리 수집가"],
@@ -280,8 +389,8 @@ const TITLES = [
 ];
 
 export function titleFor(level) {
-  let t = TITLES[0][1];
-  for (const [min, name] of TITLES) if (level >= min) t = name;
+  let t = LEVEL_TITLES[0][1];
+  for (const [min, name] of LEVEL_TITLES) if (level >= min) t = name;
   return t;
 }
 
@@ -442,6 +551,16 @@ const DEMO_DIARY = {
   },
 };
 
+// 예시 기록의 영역(행성) 태그 — 데모에서도 행성별 그래프·리포트가 보이도록.
+// 일기 있는 날은 내용에 맞는 영역, 나머지(기분만 남긴 날)는 '삶의 만족(life)'.
+const DEMO_DOMAINS = {
+  "0-0": ["career"], "0-3": ["career", "health"],
+  "1-2": ["health", "career"], "1-6": ["relation"],
+  "2-3": ["career", "growth"],
+  "3-2": ["career"], "3-4": ["health"],
+  "4-3": ["career", "growth"], "4-6": ["career", "growth"],
+};
+
 /** 예시 기록 3주치를 넣는다. 달력 주(월~일)에 맞춰 넣어 요일과 무관하게 같은 모양이 나온다. */
 export function seedDemoCheckins() {
   const today = todayKey();
@@ -461,6 +580,7 @@ export function seedDemoCheckins() {
         note: diary?.note ?? ((w * 7 + d) % 4 === 1 ? DEMO_NOTES[noteAt++ % DEMO_NOTES.length] : ""),
         text: diary?.text ?? "",
         answers: diary?.answers ?? null,
+        domains: DEMO_DOMAINS[`${w}-${d}`] ?? ["life"],
       });
     });
   });

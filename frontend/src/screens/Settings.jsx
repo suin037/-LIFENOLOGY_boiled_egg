@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useResult } from "../data/ResultContext.jsx";
-import { Eyebrow, Card, Row } from "../components/ui.jsx";
+import { Eyebrow, Card } from "../components/ui.jsx";
 import { MASCOTS } from "../data/result.js";
 import ValueRankingInput from "../components/ValueRankingInput.jsx";
 import { topAxes } from "../data/valueCards.js";
@@ -10,7 +10,21 @@ import { PSYCH_QUESTIONS } from "../data/psychQuestions.js";
 import Avatar from "../components/Avatar.jsx";
 import AvatarBuilder from "../components/AvatarBuilder.jsx";
 import Mascot from "../components/Mascot.jsx";
-import { universeSummary } from "../data/myUniverse.js";
+import PrivacyVault from "../components/PrivacyVault.jsx";
+import { LEVEL_TITLES, XP_RULES, universeSummary } from "../data/myUniverse.js";
+import { LEVEL_REWARDS } from "../data/unlocks.js";
+
+const OCCUPATIONS = [
+  "연구·공학기술",
+  "경영·사무·금융·보험",
+  "교육·법률·복지·공공",
+  "보건·의료",
+  "예술·디자인·방송",
+  "영업·판매·서비스",
+  "건설·생산·운송",
+  "학생·취업준비",
+  "기타",
+];
 
 // 작은 on/off 토글 (track h-6/w-11 · thumb h-4/w-4 · translate 로 이동 — 크기 균형)
 function Toggle({ on, onClick }) {
@@ -18,16 +32,26 @@ function Toggle({ on, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className={`tap relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-        on ? "bg-cyan" : "bg-[#28324D]"
-      }`}
+      aria-pressed={on}
+      className="tap inline-flex w-11 shrink-0 items-center justify-center"
     >
-      <span
-        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-          on ? "translate-x-6" : "translate-x-1"
-        }`}
-      />
+      <span className={`relative block h-5 w-9 rounded-full transition-colors ${on ? "bg-cyan" : "bg-[#28324D]"}`}>
+        <span
+          className={`absolute left-[3px] top-[3px] h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform ${
+            on ? "translate-x-4" : "translate-x-0"
+          }`}
+        />
+      </span>
     </button>
+  );
+}
+
+function ProfileItem({ label, value }) {
+  return (
+    <div className="grid grid-cols-[54px_1fr] items-center gap-1 py-1 text-[11px]">
+      <span className="shrink-0 text-mut">{label}</span>
+      <span className="min-w-0 truncate text-right font-medium text-ink" title={String(value)}>{value}</span>
+    </div>
   );
 }
 
@@ -89,11 +113,46 @@ const NOTIF_LABELS = {
   weekly: "주간 리포트",
 };
 
+function LevelRule({ label, xp }) {
+  return (
+    <div className="flex items-center justify-between rounded-xl border border-line bg-[#0B1423] px-3 py-2">
+      <span>{label}</span>
+      <span className="font-semibold text-cyan">+{xp} XP</span>
+    </div>
+  );
+}
+
 export default function Settings() {
   const navigate = useNavigate();
   const { profile, setProfile, setOnboarded } = useResult();
   const [prefs, setPrefs] = useState(loadPrefs);
-  const unlockLevel = universeSummary().highestLevel;
+  const [editingAvatar, setEditingAvatar] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [profileDraft, setProfileDraft] = useState(null);
+  const universe = universeSummary();
+
+  function startProfileEdit() {
+    setProfileDraft({
+      name: profile.name || "",
+      age: profile.age ?? 29,
+      occupation: profile.occupation || "",
+      income: Number(profile.income) > 0 ? String(profile.income) : "",
+    });
+    setEditingProfile(true);
+  }
+
+  function saveProfileEdit() {
+    if (!profileDraft) return;
+    setProfile((current) => ({
+      ...current,
+      name: profileDraft.name.trim(),
+      age: Number(profileDraft.age),
+      occupation: profileDraft.occupation,
+      income: profileDraft.income === "" ? 0 : Number(profileDraft.income),
+    }));
+    setEditingProfile(false);
+    setProfileDraft(null);
+  }
 
   function update(patch) {
     setPrefs((p) => {
@@ -123,33 +182,187 @@ export default function Settings() {
       </div>
       <h1 className="mb-3 text-[22px] font-bold">프로필 · 설정</h1>
 
+      {/* 개인정보 암호화 */}
+      <PrivacyVault />
+
       {/* 프로필 */}
       <Card>
-        <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-mut">
-          <Avatar config={profile.avatarConfig} size={24} ring={false} /> 내 프로필
+        <div className="mb-3 text-xs font-semibold text-mut">내 프로필</div>
+        <div className="grid grid-cols-[96px_minmax(0,1fr)] items-start gap-6">
+          <div className="flex flex-col items-center">
+            <Avatar config={profile.avatarConfig} size={100} />
+            <button
+              type="button"
+              onClick={() => setEditingAvatar((open) => !open)}
+              className="tap mt-2 w-full rounded-xl border border-line bg-[#0E1424] px-2 text-[10px] font-semibold text-cyan"
+            >
+              {editingAvatar ? "수정 닫기" : "아바타 수정"}
+            </button>
+          </div>
+
+          <div className="min-w-0 divide-y divide-line/70">
+            <ProfileItem label="나이" value={`${profile.age}세`} />
+            <ProfileItem label="직종" value={profile.occupation || "—"} />
+            <ProfileItem label="월소득" value={`${profile.income}만원`} />
+            <ProfileItem label="MBTI" value={profile.mbti && profile.mbti !== "모름" ? profile.mbti : "—"} />
+            <ProfileItem label="중요 가치" value={topAxes(profile.value_ranking, 2).join(" · ") || "—"} />
+            <button
+              type="button"
+              onClick={startProfileEdit}
+              className="tap w-full pt-2 text-right text-[10px] font-semibold text-sub"
+            >
+              기본 정보 수정
+            </button>
+          </div>
         </div>
-        <Row label="나이">{profile.age}세</Row>
-        <Row label="직종">{profile.occupation}</Row>
-        <Row label="현재 월소득">{profile.income}만원</Row>
-        <Row label="MBTI">{profile.mbti && profile.mbti !== "모름" ? profile.mbti : "—"}</Row>
-        <Row label="중요 가치">{topAxes(profile.value_ranking, 3).join(" · ") || "—"}</Row>
-        <button
-          onClick={() => navigate("/onboarding")}
-          className="tap mt-3 w-full rounded-2xl border border-line bg-[#0E1424] py-2.5 text-[13px] text-cyan"
-        >
-          프로필 수정 (온보딩 다시하기)
-        </button>
       </Card>
 
-      {/* 내 아바타 — 사람 빌더 + 우주 프레임 */}
+      {/* 레벨의 의미와 적립 규칙은 설정에서 확인한다. 나의 우주에는 현재 진행률만 표시. */}
       <Card>
-        <div className="mb-3 text-xs font-semibold text-mut">내 아바타 만들기</div>
-        <AvatarBuilder
-          config={profile.avatarConfig}
-          onChange={(cfg) => setProfile((p) => ({ ...p, avatarConfig: cfg }))}
-          unlockLevel={unlockLevel}
-        />
+        <details className="group">
+          <summary className="tap flex cursor-pointer list-none items-center justify-between">
+            <div>
+              <div className="text-xs font-semibold text-mut">레벨 · 탐험 보상 안내</div>
+              <div className="mt-1 text-[13px] font-bold text-ink">
+                {universe.title} · Lv. {universe.level}
+              </div>
+            </div>
+            <span className="text-[11px] text-cyan group-open:rotate-180">⌄</span>
+          </summary>
+
+          <div className="mt-4 border-t border-line pt-4">
+            <div className="text-[11px] font-semibold text-sub">XP 적립 기준</div>
+            <div className="mt-2 grid grid-cols-2 gap-2 text-[10px] text-mut">
+              <LevelRule label="30초 체크인" xp={XP_RULES.checkin} />
+              <LevelRule label="한 줄 기록" xp={XP_RULES.diary} />
+              <LevelRule label="시뮬레이션" xp={XP_RULES.simulation} />
+              <LevelRule label="평행우주 저장" xp={XP_RULES.universeSaved} />
+              <LevelRule label="회고 작성" xp={XP_RULES.reflection} />
+            </div>
+
+            <div className="mt-4 text-[11px] font-semibold text-sub">레벨별 칭호</div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {LEVEL_TITLES.map(([level, title]) => (
+                <span key={level} className={`rounded-full border px-2.5 py-1 text-[10px] ${universe.level >= level ? "border-cyan/30 bg-cyan/10 text-cyan" : "border-line text-mut"}`}>
+                  Lv.{level} {title}
+                </span>
+              ))}
+            </div>
+
+            <div className="mt-4 text-[11px] font-semibold text-sub">탐험 보상</div>
+            <div className="mt-2 space-y-2">
+              {LEVEL_REWARDS.map((reward) => (
+                <div key={reward.id} className="flex items-center justify-between rounded-xl bg-[#0B1423] px-3 py-2.5">
+                  <span className={universe.highestLevel >= reward.level ? "text-[11px] text-ink" : "text-[11px] text-mut"}>{reward.name}</span>
+                  <span className="text-[10px] text-mut">Lv.{reward.level}</span>
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-[10px] leading-relaxed text-mut">레벨과 XP는 앱 활동 지표이며 예측 결과나 정확도에는 영향을 주지 않아요.</p>
+          </div>
+        </details>
       </Card>
+
+      {editingProfile && profileDraft && (
+        <Card className="animate-fade">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <div className="text-[13px] font-semibold text-ink">기본 정보 수정</div>
+              <div className="mt-0.5 text-[10px] text-mut">바꾸고 싶은 항목만 수정하세요.</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => { setEditingProfile(false); setProfileDraft(null); }}
+              className="tap text-[11px] text-sub"
+            >
+              취소
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            <label className="block text-[11px] text-sub">
+              이름 또는 닉네임
+              <input
+                type="text"
+                maxLength={20}
+                value={profileDraft.name}
+                onChange={(e) => setProfileDraft((p) => ({ ...p, name: e.target.value }))}
+                className="mt-1 w-full rounded-xl border border-line bg-[#0E1424] px-3.5 py-3 text-sm text-ink outline-none focus:border-cyan"
+              />
+            </label>
+
+            <label className="block text-[11px] text-sub">
+              나이 <span className="float-right font-semibold text-cyan">{profileDraft.age}세</span>
+              <input
+                type="range"
+                min="18"
+                max="70"
+                value={profileDraft.age}
+                onChange={(e) => setProfileDraft((p) => ({ ...p, age: Number(e.target.value) }))}
+                className="mt-3 h-1 w-full cursor-pointer accent-cyan"
+              />
+            </label>
+
+            <label className="block text-[11px] text-sub">
+              직종
+              <select
+                value={profileDraft.occupation}
+                onChange={(e) => setProfileDraft((p) => ({ ...p, occupation: e.target.value }))}
+                className="mt-1 w-full rounded-xl border border-line bg-[#0E1424] px-3.5 py-3 text-sm text-ink outline-none focus:border-cyan"
+              >
+                <option value="">직종을 골라주세요</option>
+                {OCCUPATIONS.map((occupation) => <option key={occupation}>{occupation}</option>)}
+              </select>
+            </label>
+
+            <label className="block text-[11px] text-sub">
+              월소득
+              <div className="mt-1 flex items-center gap-2">
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="예: 300"
+                  value={profileDraft.income}
+                  onChange={(e) => {
+                    const income = e.target.value.replace(/^0+(?=\d)/, "");
+                    setProfileDraft((p) => ({ ...p, income }));
+                  }}
+                  className="w-full rounded-xl border border-line bg-[#0E1424] px-3.5 py-3 text-sm text-ink outline-none focus:border-cyan"
+                />
+                <span className="whitespace-nowrap text-[11px] text-mut">만원 / 월</span>
+              </div>
+            </label>
+          </div>
+
+          <button
+            type="button"
+            onClick={saveProfileEdit}
+            className="tap mt-4 w-full rounded-2xl bg-cyan py-3 text-sm font-bold text-[#08111f]"
+          >
+            변경사항 저장
+          </button>
+        </Card>
+      )}
+
+      {/* 내 아바타 — 사람 빌더 + 우주 프레임 */}
+      {editingAvatar && (
+        <Card className="animate-fade">
+          <div className="mb-1 flex items-center justify-between">
+            <div>
+              <div className="text-[13px] font-semibold text-ink">아바타 수정</div>
+              <p className="mt-0.5 text-[10px] text-mut">화살표로 원하는 모습을 선택하세요.</p>
+            </div>
+            <button type="button" onClick={() => setEditingAvatar(false)} className="tap text-[11px] text-sub">
+              완료
+            </button>
+          </div>
+          <AvatarBuilder
+            config={profile.avatarConfig}
+            onChange={(cfg) => setProfile((p) => ({ ...p, avatarConfig: cfg }))}
+          />
+        </Card>
+      )}
 
       {/* 가치 우선순위 — 성향 개인화 입력 (백엔드 personalize 로 전달) */}
       <Card>
@@ -170,23 +383,9 @@ export default function Settings() {
           onChange={(value) => setProfile((p) => ({ ...p, mbti: value }))}
         />
 
-        <p className="mb-1 mt-4 text-[11px] text-sub">
-          성향 질문 <span className="text-mut"></span>
+        <p className="mt-4 text-[11px] text-mut">
+          성향 질문은 이제 홈 ‘오늘 기록’의 대화(성향 탭)에서 자연스럽게 물어봐요.
         </p>
-        <div className="space-y-3">
-          {PSYCH_QUESTIONS.map((q) => (
-            <div key={q.id}>
-              <div className="mb-1 text-[12px] leading-snug text-ink">{q.prompt}</div>
-              <textarea
-                rows={2}
-                value={(profile.psych_answers || {})[q.id] || ""}
-                onChange={(e) => setAnswer(q.id, e.target.value)}
-                placeholder="자유롭게…"
-                className="w-full resize-none rounded-lg border border-line bg-[#0E1424] px-2.5 py-2 text-[13px] text-ink outline-none focus:border-cyan"
-              />
-            </div>
-          ))}
-        </div>
       </Card>
 
       {/* 알림 설정 */}
