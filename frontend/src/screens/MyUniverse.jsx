@@ -101,6 +101,20 @@ export default function MyUniverse() {
     refresh();
   }
 
+  function toggleDemoRecords() {
+    clearSavedReports(REPORT_UID);
+    setReportCache({});
+    setWeekBack(0);
+    setPicked(null);
+    setShowReport(false);
+    setConstellationSheetOpen(false);
+
+    if (isDemo(u.state)) resetUniverse();
+    else if (u.stars === 0) seedDemoCheckins();
+
+    refresh();
+  }
+
   function openPlanetConstellation(selectedGroup) {
     const targetIndex = groups.findIndex((item) => item.weekStart === selectedGroup?.weekStart);
     if (targetIndex >= 0) setWeekBack(Math.max(0, groups.length - 1 - targetIndex));
@@ -159,17 +173,37 @@ export default function MyUniverse() {
 
   return (
     <div
-      className="universe-scene relative min-h-full overflow-hidden rounded-[28px] border border-white/10 px-4 pb-8 shadow-[0_20px_55px_rgba(0,0,0,.3)] [&>.bg-card]:my-0 [&>.bg-card]:rounded-none [&>.bg-card]:border-t [&>.bg-card]:border-white/[.07] [&>.bg-card]:bg-transparent [&>.bg-card]:px-0 [&>.bg-card]:py-6"
+      className="universe-scene relative min-h-full overflow-hidden rounded-[28px] border border-white/10 px-4 pb-8 shadow-[0_20px_55px_rgba(0,0,0,.3)] lg:min-h-[680px] lg:px-8 [&>.bg-card]:my-0 [&>.bg-card]:rounded-none [&>.bg-card]:border-t [&>.bg-card]:border-white/[.07] [&>.bg-card]:bg-transparent [&>.bg-card]:px-0 [&>.bg-card]:py-6"
       style={{
         backgroundColor: "#0A1322",
         backgroundImage: "radial-gradient(circle at 18% 12%, rgba(94,143,255,.2), transparent 25%), radial-gradient(circle at 82% 38%, rgba(143,92,246,.14), transparent 28%), radial-gradient(circle, rgba(255,255,255,.42) 0 1px, transparent 1.3px), linear-gradient(180deg,#0D1728 0%,#091321 58%,#0C1626 100%)",
         backgroundSize: "auto, auto, 73px 73px, auto",
       }}
     >
-      <h1 className="mb-1 mt-2 text-[24px] font-bold leading-[1.2]">나의 우주</h1>
-      <p className="mb-3 text-[13px] text-sub">
-        하루에 별 하나. {STARS_PER_CONSTELLATION}개가 모이면 별자리가 됩니다.
-      </p>
+      <div className="mb-3 mt-2 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-[24px] font-bold leading-[1.2]">나의 우주</h1>
+          <p className="mt-1 text-[13px] text-sub">
+            하루에 별 하나. {STARS_PER_CONSTELLATION}개가 모이면 별자리가 됩니다.
+          </p>
+        </div>
+        {(u.stars === 0 || isDemo(u.state)) && (
+          <button
+            type="button"
+            onClick={toggleDemoRecords}
+            className="tap mt-0.5 shrink-0 rounded-full border border-white/15 bg-white/[.06] px-2.5 py-1.5 text-[10px] font-semibold text-sub transition-colors hover:border-cyan/50 hover:text-cyan"
+          >
+            {isDemo(u.state) ? "데모 비우기" : "6주 데모 보기"}
+          </button>
+        )}
+      </div>
+
+      {isDemo(u.state) && (
+        <div className="mb-3 flex items-center gap-1.5 rounded-xl border border-cyan/20 bg-cyan/[.07] px-3 py-2 text-[10px] text-cyan">
+          <span aria-hidden="true">✦</span>
+          6주 예시 기록을 보고 있어요. 실제 사용자 기록에는 포함되지 않습니다.
+        </div>
+      )}
 
       {/* 데모 확인용 — 예시 데이터로 즉시 채우기(옛 리포트도 함께 정리). */}
       <div className="mb-3 grid grid-cols-2 gap-2">
