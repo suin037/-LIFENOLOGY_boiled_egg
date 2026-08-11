@@ -42,6 +42,8 @@ export default function Constellation({ stars = [], onSelect, selectedDate = nul
     const [x, y] = coord(i, s, filled);
     return { ...s, x, y, filled, lvl: level(s) };
   });
+  // 7일 다 기록해 별자리가 완성되면 은은하게 빛난다.
+  const complete = pts.length >= 7 && pts.every((p) => p.filled);
 
   return (
     <div className="relative">
@@ -104,6 +106,25 @@ export default function Constellation({ stars = [], onSelect, selectedDate = nul
           </g>
         );
       })}
+      {/* 완성 시 각 별 옆에서 작은 반짝이가 빤짝빤짝 */}
+      {complete &&
+        pts
+          .filter((p) => p.filled)
+          .flatMap((p, i) => {
+            const off = [
+              [6, -5],
+              [-5, 5],
+            ];
+            return off.map(([dx, dy], j) => (
+              <Sparkle
+                key={`spk${i}-${j}`}
+                x={p.x + dx}
+                y={p.y + dy}
+                size={1.4 + j * 0.8}
+                delay={(((i * 2 + j) * 0.26) % 1.8).toFixed(2)}
+              />
+            ));
+          })}
     </svg>
     {hovered && (
       <div
@@ -122,5 +143,17 @@ export default function Constellation({ stars = [], onSelect, selectedDate = nul
       </div>
     )}
     </div>
+  );
+}
+
+// 작은 4갈래 반짝이 별 — 완성 별자리에서 빤짝거린다.
+function Sparkle({ x, y, size = 3, delay = "0" }) {
+  const r = size,
+    s = size * 0.32;
+  const d = `M${x},${y - r} L${x + s},${y - s} L${x + r},${y} L${x + s},${y + s} L${x},${y + r} L${x - s},${y + s} L${x - r},${y} L${x - s},${y - s} Z`;
+  return (
+    <path d={d} fill="#EAF2FF">
+      <animate attributeName="opacity" values="0;1;0.3;1;0" dur="1.8s" begin={`${delay}s`} repeatCount="indefinite" />
+    </path>
   );
 }

@@ -1,15 +1,26 @@
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Orbit, ChevronRight, Sparkles } from "lucide-react";
+import { Orbit, ChevronRight, Sparkles, GitCompareArrows } from "lucide-react";
 import { useResult } from "../data/ResultContext.jsx";
 import { Button } from "../components/ui.jsx";
 import DiaryToday from "../components/DiaryToday.jsx";
+import PetMascot from "../components/PetMascot.jsx";
 import { universeSummary } from "../data/myUniverse.js";
+import { jobChangeRumination } from "../data/diarySignals.js";
 
 // 홈 = 진입 허브. 인사 + 마스코트 + 오늘 기록 + 새 시뮬 + 나의 우주 요약.
 export default function HomeHub() {
   const navigate = useNavigate();
-  const { profile } = useResult();
+  const { profile, setChoices } = useResult();
   const universe = universeSummary();
+  // 반복되는 이직 고민을 일기에서 감지하면 → 비교를 먼저 제안(정직: 숫자 아님, 비교 제안일 뿐).
+  // 결과 카드(28일)와 창을 맞춰 숫자가 어긋나 보이지 않게 한다.
+  const rumination = useMemo(() => jobChangeRumination({ windowDays: 28, threshold: 4 }), []);
+
+  function startJobCompare() {
+    setChoices({ a: "이직", b: "유지" });
+    navigate("/input");
+  }
 
   return (
     <div className="pb-2">
@@ -23,10 +34,32 @@ export default function HomeHub() {
         비춰볼까요?
       </h1>
 
+      {/* 🧸 귀염둥이 육성 — 기록하면 간식, 쓰다듬고 먹이면 친밀도↑ */}
+      <PetMascot />
+
       {/* 가이드 캐러셀 + 이번 주 기록 + 오늘 체크인 */}
       <div className="lg:mt-6 lg:grid lg:grid-cols-[minmax(0,1.45fr)_minmax(300px,.75fr)] lg:items-start lg:gap-7">
         <DiaryToday />
         <aside className="lg:sticky lg:top-0">
+
+      {/* 반복 고민 넛지 — 최근 2주 이직 고민이 잦으면 비교를 먼저 제안 */}
+      {rumination.prompt && (
+        <button
+          onClick={startJobCompare}
+          className="tap mt-4 flex w-full items-center gap-3 rounded-[18px] border border-cyan/40 bg-[#12203a] px-4 py-3.5 text-left transition-colors hover:bg-[#16264a]"
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-cyan/15 text-cyan">
+            <GitCompareArrows size={18} strokeWidth={2} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[13px] font-semibold text-cyan">
+              최근 {rumination.windowDays}일 동안 이직 고민이 {rumination.count}일 나타났어요
+            </span>
+            <span className="block text-[11px] text-sub">이직 vs 현상 유지, 지금 비교해볼까요?</span>
+          </span>
+          <ChevronRight size={18} className="text-cyan" />
+        </button>
+      )}
 
       {/* 새 시뮬 CTA */}
       <Button className="mt-4 flex items-center justify-center gap-1.5 lg:mt-0 lg:py-4" onClick={() => navigate("/input")}>
