@@ -1,11 +1,12 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import {
   CATALOG, CATS, CAT_LABELS,
-  coinsAvailable, owns, buy, toggleEquip, equippedId, loadShop,
+  coinsAvailable, owns, buy, toggleEquip, isEquipped, loadShop, consumeSnack,
 } from "../data/petShop.js";
 
-// 🛍️ 펫 꾸미기 상점 — 코인으로 배경·소품·가구·간식을 사고 장착한다.
-export default function PetShop({ onClose, onChange }) {
+// 🛍️ 펫 꾸미기 상점 — 코인으로 배경·소품·가구 구매/장착, 간식은 먹이기(소비형).
+export default function PetShop({ onClose, onChange, onFeed }) {
   const [shop, setShop] = useState(() => loadShop());
   const [cat, setCat] = useState("background");
   const [toast, setToast] = useState("");
@@ -26,13 +27,26 @@ export default function PetShop({ onClose, onChange }) {
   function handleEquip(id) {
     refresh(toggleEquip(id, shop));
   }
+  function handleFeed(id) {
+    const r = consumeSnack(id, shop);
+    if (r.ok) {
+      refresh(r.state);
+      onFeed && onFeed(r.bond);
+      setToast(`+${r.bond} 친밀도 냠냠`);
+      setTimeout(() => setToast(""), 1200);
+    } else {
+      setToast(r.reason);
+      setTimeout(() => setToast(""), 1200);
+    }
+  }
 
   const items = CATALOG.filter((it) => it.cat === cat);
+  const root = typeof document !== "undefined" && document.getElementById("pm-overlay-root");
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-0 sm:items-center" onClick={onClose}>
+  const overlay = (
+    <div className="absolute inset-0 z-50 flex items-end justify-center bg-black/60 p-0 backdrop-blur-[2px]" onClick={onClose}>
       <div
-        className="max-h-[82vh] w-full max-w-[460px] overflow-hidden rounded-t-[24px] border border-white/10 bg-[#0F1826] sm:rounded-[24px]"
+        className="flex max-h-[88%] w-full flex-col overflow-hidden rounded-t-[24px] border-t border-white/10 bg-[#0F1826]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* 헤더 */}
@@ -65,7 +79,7 @@ export default function PetShop({ onClose, onChange }) {
         <div className="grid max-h-[58vh] grid-cols-2 gap-2.5 overflow-y-auto p-4">
           {items.map((it) => {
             const owned = owns(it.id, shop);
-            const equipped = equippedId(it.cat, shop) === it.id;
+            const equipped = isEquipped(it.id, shop);
             const canBuy = coins >= it.price;
             return (
               <div key={it.id} className="rounded-[16px] border border-white/8 bg-[#131F30] p-2.5">
@@ -80,7 +94,15 @@ export default function PetShop({ onClose, onChange }) {
                 <div className="mb-1.5 truncate text-[12px] font-semibold text-ink">{it.name}</div>
 
                 {/* 액션 */}
-                {!owned ? (
+                {it.cat === "snack" ? (
+                  <button
+                    onClick={() => handleFeed(it.id)}
+                    disabled={!canBuy}
+                    className="tap w-full rounded-lg bg-[#F5C846] py-1.5 text-[11.5px] font-bold text-[#3a2c05] disabled:opacity-40"
+                  >
+                    🪙 {it.price} 먹이기 <span className="opacity-70">+{it.bond}</span>
+                  </button>
+                ) : !owned ? (
                   <button
                     onClick={() => handleBuy(it.id)}
                     disabled={!canBuy}
@@ -88,8 +110,6 @@ export default function PetShop({ onClose, onChange }) {
                   >
                     🪙 {it.price} 구매
                   </button>
-                ) : it.cat === "snack" ? (
-                  <div className="w-full rounded-lg bg-white/6 py-1.5 text-center text-[11.5px] font-semibold text-mut">보유중</div>
                 ) : (
                   <button
                     onClick={() => handleEquip(it.id)}
@@ -117,4 +137,6 @@ export default function PetShop({ onClose, onChange }) {
       </div>
     </div>
   );
+
+  return root ? createPortal(overlay, root) : overlay;
 }

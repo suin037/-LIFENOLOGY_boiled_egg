@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import Mascot from "./Mascot.jsx";
 import PetCreature from "./PetCreature.jsx";
 import PetShop from "./PetShop.jsx";
-import { loadPet, claimDaily, petMascot, feedMascot, setWhich, moodOf, canPatToday } from "../data/petCare.js";
+import { loadPet, claimDaily, petMascot, feedMascot, setWhich, moodOf, canPatToday, addBond } from "../data/petCare.js";
 import { loadShop, equippedItem, coinsAvailable } from "../data/petShop.js";
 
 // 🧸 마스코트 육성(가벼운 버전) — 쓰다듬기(말랑 튕김) + 간식으로 친밀도 키우기.
@@ -44,7 +44,6 @@ export default function PetMascot() {
   // 장착 아이템(배경·소품·가구) + 코인
   const bgItem = equippedItem("background", shop);
   const accItem = equippedItem("accessory", shop);
-  const furItem = equippedItem("furniture", shop);
   const coins = coinsAvailable(shop);
 
   // 동물을 직접 누르면: 토닥토닥 모션만(친밀도 변화 없음).
@@ -162,8 +161,6 @@ export default function PetMascot() {
         {bgItem && <div className="pointer-events-none absolute inset-0" style={{ background: bgItem.render }} />}
         {/* 배경 후광 */}
         <div className="pointer-events-none absolute inset-0" style={{ background: `radial-gradient(circle at 50% 44%, ${guide.glow}, transparent 62%)` }} />
-        {/* 장착 가구 (구석) */}
-        {furItem && <span className="pointer-events-none absolute bottom-1.5 right-2 text-[22px]">{furItem.render}</span>}
         {/* 바닥 그림자 */}
         <div className="absolute bottom-3 h-3 w-24 rounded-[50%] bg-black/40 blur-md" />
         {/* 하트 */}
@@ -188,8 +185,21 @@ export default function PetMascot() {
             <div className="relative">
               <PetCreature size={124} variant={guide.key} mood={mood} expr={expr} />
               <div className="pointer-events-none absolute left-[24%] top-[24%] h-8 w-8 rounded-full bg-white/45 blur-[7px]" />
-              {/* 장착 소품 (머리 위) */}
-              {accItem && <span className="pointer-events-none absolute left-1/2 top-[2px] -translate-x-1/2 text-[24px]">{accItem.render}</span>}
+              {/* 장착 소품 (착용 위치별) */}
+              {accItem && (
+                <span
+                  className="pointer-events-none absolute"
+                  style={{
+                    top: `${accItem.pos?.top ?? 2}px`,
+                    left: accItem.pos?.left ?? "50%",
+                    transform: `translateX(-50%)${accItem.pos?.rotate ? ` rotate(${accItem.pos.rotate}deg)` : ""}`,
+                    fontSize: `${accItem.pos?.size ?? 24}px`,
+                    lineHeight: 1,
+                  }}
+                >
+                  {accItem.render}
+                </span>
+              )}
               {/* 입가로 날아와 와구와구 사라지는 쿠키 */}
               {eating && (
                 <span
@@ -252,7 +262,16 @@ export default function PetMascot() {
       </div>
       <p className="mt-2 text-[9.5px] leading-relaxed text-mut">쓰다듬기는 하루 한 번(친밀도 +1~10), 간식은 친밀도 +7. 동물을 누르면 토닥토닥.</p>
 
-      {shopOpen && <PetShop onClose={() => setShopOpen(false)} onChange={() => setShop(loadShop())} />}
+      {shopOpen && (
+        <PetShop
+          onClose={() => setShopOpen(false)}
+          onChange={() => setShop(loadShop())}
+          onFeed={(b) => {
+            setPet((p) => addBond(p, b));
+            react();
+          }}
+        />
+      )}
     </div>
   );
 }
