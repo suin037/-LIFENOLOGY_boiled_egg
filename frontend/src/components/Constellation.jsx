@@ -18,8 +18,9 @@ export const starColor = (s) => COL[level(s) - 1];
 
 function shortNote(star) {
   const note = String(star.note || star.text || "").replace(/\s+/g, " ").trim();
-  if (!note) return star.hasDiary ? "일기를 기록했어요" : "기분을 기록했어요";
-  return note.length > 34 ? `${note.slice(0, 34)}…` : note;
+  const multi = (star.splits || 1) > 1 ? ` · 기록 ${star.splits}개(분화)` : "";
+  if (!note) return (star.hasDiary ? "일기를 기록했어요" : "기분을 기록했어요") + multi;
+  return (note.length > 34 ? `${note.slice(0, 34)}…` : note) + multi;
 }
 
 function dateLabel(dateKey) {
@@ -100,6 +101,11 @@ export default function Constellation({ stars = [], onSelect, selectedDate = nul
             <circle cx={p.x} cy={p.y} r={r + (isSel ? 8 : 3)} fill={col} opacity={isSel ? 0.4 : 0.14} />
             <circle cx={p.x} cy={p.y} r={r} fill={col}
               stroke="#FFFFFF" strokeOpacity={isToday ? 0.9 : 0.35} strokeWidth={isToday ? 1.4 : 0.6} />
+            {/* 분화한 별(하루 2기록+) — 작은 동반성이 붙은 쌍성 */}
+            {(p.splits || 1) > 1 && (
+              <circle cx={p.x + r * 1.15} cy={p.y - r * 1.0} r={r * 0.55} fill={col}
+                stroke="#FFFFFF" strokeOpacity={0.5} strokeWidth={0.5} />
+            )}
             {p.hasDiary && <circle cx={p.x} cy={p.y} r={r + 3} fill="none" stroke="#9FB0CE" strokeWidth={0.7} opacity={0.45} />}
             {/* 별이 작아서 탭 영역 별도 */}
             <circle cx={p.x} cy={p.y} r={13} fill="transparent" />

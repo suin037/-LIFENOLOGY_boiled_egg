@@ -44,7 +44,8 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], skin = "ba
   const src = (groups || []).filter((g) =>
     g.stars.some((s) => !s.empty),
   );
-  const disp = src.slice(-5);
+  // 성단 전부 표시(adaptiveGroups 최대 8묶음) — 별 합계 = 그 영역 기록 수와 일치해야 한다.
+  const disp = src.slice(-8);
   const scByDate = {};
   scenarios.forEach((s) => (scByDate[s.date] = s));
   const tone = planet ? hexToHsl(planet.from) : { h: 262, s: 46 };

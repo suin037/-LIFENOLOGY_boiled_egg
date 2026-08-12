@@ -174,6 +174,28 @@ export default function MyUniverse() {
     mq.addEventListener("change", h);
     return () => mq.removeEventListener("change", h);
   }, []);
+  // 행성 전환 공통 처리 — 낡은 상세 정리(리포트 패널은 새 행성으로 갱신 유지).
+  function switchPlanet(key) {
+    setFocusMonth(null);
+    setClusterOpen(null);
+    setClusterPicked(null);
+    setConstellationSheetOpen(false);
+    setPicked(null);
+    setShowReport(false);
+    if (planet === key) {
+      setReportSheet(false);
+      choosePlanet("all");
+    } else {
+      choosePlanet(key);
+    }
+  }
+  // 행성 뷰에서 옆으로 넘기기 — 일기 띠처럼 이전/다음 행성 순회.
+  const planetIdx = Math.max(0, PLANETS.findIndex((p) => p.key === planet));
+  function stepPlanet(dir) {
+    const i = (planetIdx + dir + PLANETS.length) % PLANETS.length;
+    switchPlanet(PLANETS[i].key);
+  }
+
   const weekDetailOpen = constellationSheetOpen && !!group;
   const detailOpen = !!clusterOpen || (reportSheet && !isAll) || weekDetailOpen;
   function closeDetail() {
@@ -402,22 +424,7 @@ export default function MyUniverse() {
               closeDetail(); // 열려 있던 상세(성단·주간·리포트)는 새 포커스로 정리
               setFocusMonth((prev) => (prev === mk ? null : mk));
             }}
-            onPlanetPick={(key) => {
-              setFocusMonth(null);
-              // 다른 행성으로 갈아타면 낡은 성단·주간 상세는 비운다.
-              // 리포트 패널은 유지 — 새 행성 내용으로 자동 갱신된다.
-              setClusterOpen(null);
-              setClusterPicked(null);
-              setConstellationSheetOpen(false);
-              setPicked(null);
-              setShowReport(false);
-              if (planet === key) {
-                setReportSheet(false);
-                choosePlanet("all");
-              } else {
-                choosePlanet(key);
-              }
-            }}
+            onPlanetPick={switchPlanet}
             onClusterOpen={(g) => {
               setClusterPicked(null);
               setClusterOpen(g);
@@ -455,6 +462,26 @@ export default function MyUniverse() {
                   choosePlanet("all");
                 }}
               />
+              {/* 행성 넘기기 — 일기 띠처럼 옆으로 순회 */}
+              <button
+                onClick={() => stepPlanet(-1)}
+                className="tap absolute left-1.5 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/[.08] text-[18px] text-sub"
+                aria-label="이전 행성"
+              >
+                ‹
+              </button>
+              <button
+                onClick={() => stepPlanet(1)}
+                className="tap absolute right-1.5 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/[.08] text-[18px] text-sub"
+                aria-label="다음 행성"
+              >
+                ›
+              </button>
+              <div className="absolute bottom-2 left-1/2 z-10 flex -translate-x-1/2 gap-1.5">
+                {PLANETS.map((p) => (
+                  <span key={p.key} className={`h-1.5 w-1.5 rounded-full ${p.key === planet ? "bg-cyan" : "bg-white/20"}`} />
+                ))}
+              </div>
             </div>
           )}
           </div>
@@ -1047,6 +1074,15 @@ function StarDetail({ star }) {
       ) : star.note ? (
         <p className="mt-1 text-[12px] text-ink">“{star.note}”</p>
       ) : null}
+      {/* 분화한 별 — 같은 날의 이전 기록들 */}
+      {Array.isArray(star.priorTexts) && star.priorTexts.length > 0 && (
+        <div className="mt-2 space-y-1 border-t border-line pt-2">
+          <div className="text-[10px] text-mut">✧ 이 별은 분화했어요 — 같은 날의 다른 기록</div>
+          {star.priorTexts.map((t, i) => (
+            <p key={i} className="text-[11px] leading-relaxed text-sub">“{t}”</p>
+          ))}
+        </div>
+      )}
       {answers.length > 0 && (
         <div className="mt-2 space-y-1.5 border-t border-line pt-2">
           {answers.map((qa, i) => (
