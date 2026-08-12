@@ -56,7 +56,38 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], onOpen, on
     if (!cv) return;
     const ctx = cv.getContext("2d");
     let raf;
-    const st = { rot: 0, tilt: 0, auto: true, dragging: false, lastX: 0, lastY: 0, moved: 0, pinned: null, hit: [], groupHit: [] };
+    const st = { rot: 0, tilt: 0, dragging: false, lastX: 0, lastY: 0, moved: 0, pinned: null, hit: [], groupHit: [], velRot: 0, velTilt: 0, t: 0, idle: 0, autoSpeed: 0.005, spin: 0 };
+    const IDLE_RESUME = 70; // 이 프레임 수(약 1.2초) 가만히 두면 자동 회전 재개
+    const AUTO_TARGET = 0.005; // 자동 회전 목표 속도
+    const clampTilt = (v) => Math.max(-1.05, Math.min(1.05, v));
+
+    // 배경 별밭 — 큰 천구에 흩뿌린 별. rot/tilt 로 같이 돌아 "우주를 훑는" 패럴랙스 느낌.
+    const bgStars = Array.from({ length: 130 }, (_, i) => ({
+      th0: (i * 2.399963) % (Math.PI * 2), // 황금각 분포로 고르게
+      ph: Math.asin(2 * (((i * 0.618034) % 1)) - 1), // 위도 -π/2..π/2
+      r: 0.35 + ((i * 0.732) % 1) * 0.95, // 크기
+      tw: (i * 1.37) % (Math.PI * 2), // 반짝임 위상
+    }));
+    function drawBgStars(cx, cy, w, h) {
+      const Rbg = Math.max(w, h) * 0.66;
+      for (const bs of bgStars) {
+        const th = bs.th0 + st.rot;
+        const A = rotateX(
+          [Math.cos(bs.ph) * Math.sin(th), Math.sin(bs.ph), Math.cos(bs.ph) * Math.cos(th)],
+          st.tilt,
+        );
+        const dep = (A[2] + 1) / 2; // 0=뒤, 1=앞
+        const px = cx + A[0] * Rbg;
+        const py = cy - A[1] * Rbg * 0.92;
+        const tw = 0.72 + 0.28 * Math.sin(st.t * 0.05 + bs.tw);
+        ctx.globalAlpha = (0.1 + 0.55 * dep) * tw;
+        ctx.beginPath();
+        ctx.arc(px, py, bs.r * (0.55 + 0.8 * dep), 0, Math.PI * 2);
+        ctx.fillStyle = "#eaf2ff";
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
 
     function resize() {
       const w = cv.clientWidth,
@@ -92,7 +123,7 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], onOpen, on
       ctx.stroke();
       ctx.restore();
     }
-    function planetOrb(cx, cy, pr) {
+    function planetOrb(cx, cy, pr, spin) {
       const { tone, label } = dataRef.current;
       const H = tone.h,
         S = tone.s;
@@ -122,15 +153,28 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], onOpen, on
       ].forEach(([p, l]) => bg.addColorStop(p, c(l)));
       ctx.fillStyle = bg;
       ctx.fillRect(cx - pr, cy - pr, 2 * pr, 2 * pr);
-      const spx = cx + pr * 0.3,
-        spy = cy + pr * 0.24;
-      let sp = ctx.createRadialGradient(spx, spy, 1, spx, spy, pr * 0.19);
-      sp.addColorStop(0, `hsla(${(H + 18) % 360},${S + 10}%,48%,0.45)`);
-      sp.addColorStop(1, `hsla(${(H + 18) % 360},${S + 10}%,48%,0)`);
-      ctx.beginPath();
-      ctx.ellipse(spx, spy, pr * 0.19, pr * 0.12, 0, 0, Math.PI * 2);
-      ctx.fillStyle = sp;
-      ctx.fill();
+      // 자전 표현 — 경도상 특징(반점·소용돌이)이 가로로 흘러 축 자전처럼 보인다.
+      const spots = [
+        { lon0: 0.4, lat: 0.22, rx: 0.22, ry: 0.13, tint: `${(H + 20) % 360},${Math.min(100, S + 12)}%,52%`, a: 0.42 },
+        { lon0: 2.4, lat: -0.26, rx: 0.17, ry: 0.11, tint: `${H},${Math.max(0, S - 8)}%,30%`, a: 0.34 },
+        { lon0: 4.3, lat: 0.02, rx: 0.2, ry: 0.1, tint: `${H},${Math.min(100, S + 6)}%,92%`, a: 0.18 },
+      ];
+      for (const o of spots) {
+        const lon = o.lon0 + spin;
+        const cl = Math.cos(lon);
+        if (cl <= 0.04) continue; // 뒷면이면 그리지 않음
+        const sx = cx + Math.sin(lon) * pr * 0.9;
+        const sy = cy + o.lat * pr;
+        const rx = pr * o.rx * cl; // 가장자리로 갈수록 납작해짐(단축법)
+        const ry = pr * o.ry;
+        let g = ctx.createRadialGradient(sx, sy, 1, sx, sy, Math.max(rx, ry));
+        g.addColorStop(0, `hsla(${o.tint},${o.a * cl})`);
+        g.addColorStop(1, `hsla(${o.tint},0)`);
+        ctx.beginPath();
+        ctx.ellipse(sx, sy, Math.max(rx, 0.6), ry, 0, 0, Math.PI * 2);
+        ctx.fillStyle = g;
+        ctx.fill();
+      }
       const lx = cx - pr * 0.4,
         ly = cy - pr * 0.46;
       let g3 = ctx.createRadialGradient(lx, ly, pr * 0.05, lx, ly, pr * 1.3);
@@ -176,8 +220,9 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], onOpen, on
       st.hit = [];
       st.groupHit = [];
       const cx = w / 2,
-        cy = h / 2,
-        Rsky = Math.min(w, h) * 0.35,
+        cy = h / 2;
+      drawBgStars(cx, cy, w, h);
+      const Rsky = Math.min(w, h) * 0.35,
         scale = Math.min(w, h) * 0.12,
         pr = Math.min(w, h) * 0.086;
       const C = disp.length;
@@ -276,11 +321,33 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], onOpen, on
         }
       }
       for (let i = 0; i < cl.length; i++) if (cl[i].z < 0) paint(cl[i]);
-      planetOrb(cx, cy, pr);
+      planetOrb(cx, cy, pr, st.spin);
       for (let i = 0; i < cl.length; i++) if (cl[i].z >= 0) paint(cl[i]);
     }
     function loop() {
-      if (st.auto && !st.dragging && st.pinned == null) st.rot += 0.005;
+      st.t++;
+      st.spin += 0.004; // 행성 자전 — 궤도 회전과 무관하게 항상 돈다
+      if (st.dragging) {
+        st.idle = 0;
+        st.autoSpeed = 0; // 드래그 중엔 자동 회전 정지
+      } else if (st.pinned == null) {
+        if (Math.abs(st.velRot) > 0.0002 || Math.abs(st.velTilt) > 0.0002) {
+          // 관성 활공 — 놓은 뒤에도 실제 우주를 민 듯 스르륵 흘러가다 마찰로 감속
+          st.rot += st.velRot;
+          st.tilt = clampTilt(st.tilt + st.velTilt);
+          st.velRot *= 0.95;
+          st.velTilt *= 0.95;
+          st.idle = 0;
+          st.autoSpeed = 0;
+        } else {
+          // 관성까지 멈춘 뒤, 잠깐 가만히 두면 스스로 다시 회전(부드럽게 가속)
+          st.idle++;
+          if (st.idle > IDLE_RESUME) {
+            st.autoSpeed += (AUTO_TARGET - st.autoSpeed) * 0.05; // 목표 속도까지 서서히
+            st.rot += st.autoSpeed;
+          }
+        }
+      }
       // Canvas animation errors must not escape into Vite's full-screen runtime overlay.
       // The rest of My Universe remains usable even if a malformed legacy record is found.
       try {
@@ -293,10 +360,14 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], onOpen, on
     }
     const onDown = (e) => {
       st.dragging = true;
-      st.auto = false; // 사용자가 건들면 자동 회전 정지 — 이후 드래그로만 움직인다
+      st.idle = 0; // 사용자가 건들면 유휴 카운터 리셋 — 손 떼고 잠시 후 자동 회전 재개
+      st.autoSpeed = 0;
+      st.velRot = 0; // 새 드래그 시작 — 이전 관성 취소
+      st.velTilt = 0;
       st.lastX = e.clientX;
       st.lastY = e.clientY;
       st.moved = 0;
+      cv.style.cursor = "grabbing";
       cv.setPointerCapture(e.pointerId);
     };
     const onMove = (e) => {
@@ -305,14 +376,20 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], onOpen, on
       const dy = e.clientY - st.lastY;
       st.moved += Math.hypot(dx, dy);
       st.rot += dx * 0.01;
-      st.tilt += dy * 0.01;
+      st.tilt = clampTilt(st.tilt + dy * 0.01);
+      // 마지막 이동량을 놓는 순간의 속도로 사용(관성) — 살짝 감쇠해 과하지 않게
+      st.velRot = dx * 0.008;
+      st.velTilt = dy * 0.008;
       st.lastX = e.clientX;
       st.lastY = e.clientY;
       st.pinned = null;
     };
     const onUp = (e) => {
       st.dragging = false;
+      cv.style.cursor = "grab";
       if (st.moved < 5) {
+        st.velRot = 0; // 탭(클릭)은 관성 없이
+        st.velTilt = 0;
         const r = cv.getBoundingClientRect(),
           mx = e.clientX - r.left,
           my = e.clientY - r.top;

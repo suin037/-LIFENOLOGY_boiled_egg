@@ -26,8 +26,8 @@ export default {
           "sans-serif",
         ],
       },
-      // Desktop preview size. Real mobile screens still use w-full.
-      maxWidth: { phone: "450px" },
+      // 화면 프레임 폭 — 삼성 갤럭시 탭(세로) 기준 800px. (실제 기기는 w-full로 꽉 참)
+      maxWidth: { phone: "800px" },
       keyframes: {
         fade: {
           from: { opacity: "0", transform: "translateY(8px)" },

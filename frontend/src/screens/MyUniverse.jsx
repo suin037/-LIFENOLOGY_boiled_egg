@@ -37,6 +37,28 @@ import {
 } from "../data/dispositionApi.js";
 import { nextReward, unlockedRewards } from "../data/unlocks.js";
 
+// 배경 별밭 — 불규칙하게 흩뿌린 별(격자 느낌 방지). 비대칭 큰 타일이라 반복이 잘 안 보인다.
+const STAR_TILE =
+  'url("data:image/svg+xml,%3Csvg%20xmlns%3D\'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg\'%20width%3D\'360\'%20height%3D\'520\'%3E%3Ccircle%20cx%3D%2232.7%22%20cy%3D%2219.3%22%20r%3D%221.01%22%20fill%3D%22%23cfe0ff%22%20opacity%3D%220.42%22%2F%3E%3Ccircle%20cx%3D%22213.0%22%20cy%3D%22323.6%22%20r%3D%220.86%22%20fill%3D%22%23ffffff%22%20opacity%3D%220.35%22%2F%3E%3Ccircle%20cx%3D%2284.6%22%20cy%3D%22181.1%22%20r%3D%220.50%22%20fill%3D%22%23cfe0ff%22%20opacity%3D%220.57%22%2F%3E%3Ccircle%20cx%3D%22222.0%22%20cy%3D%22286.2%22%20r%3D%221.05%22%20fill%3D%22%23ffffff%22%20opacity%3D%220.34%22%2F%3E%3Ccircle%20cx%3D%22304.6%22%20cy%3D%22500.2%22%20r%3D%221.14%22%20fill%3D%22%23ffffff%22%20opacity%3D%220.35%22%2F%3E%3Ccircle%20cx%3D%2267.2%22%20cy%3D%22165.0%22%20r%3D%220.79%22%20fill%3D%22%23ffffff%22%20opacity%3D%220.51%22%2F%3E%3Ccircle%20cx%3D%2243.8%22%20cy%3D%2261.9%22%20r%3D%221.52%22%20fill%3D%22%23cfe0ff%22%20opacity%3D%220.36%22%2F%3E%3Ccircle%20cx%3D%22285.8%22%20cy%3D%2249.1%22%20r%3D%221.05%22%20fill%3D%22%23cfe0ff%22%20opacity%3D%220.31%22%2F%3E%3Ccircle%20cx%3D%22146.2%22%20cy%3D%22425.9%22%20r%3D%221.19%22%20fill%3D%22%23ffffff%22%20opacity%3D%220.88%22%2F%3E%3Ccircle%20cx%3D%22233.2%22%20cy%3D%2269.9%22%20r%3D%220.71%22%20fill%3D%22%23ffffff%22%20opacity%3D%220.32%22%2F%3E%3Ccircle%20cx%3D%226.0%22%20cy%3D%22176.3%22%20r%3D%221.32%22%20fill%3D%22%23cfe0ff%22%20opacity%3D%220.77%22%2F%3E%3Ccircle%20cx%3D%22342.3%22%20cy%3D%22471.1%22%20r%3D%221.25%22%20fill%3D%22%23ffffff%22%20opacity%3D%220.89%22%2F%3E%3Ccircle%20cx%3D%2279.3%22%20cy%3D%2292.7%22%20r%3D%221.49%22%20fill%3D%22%23ffffff%22%20opacity%3D%220.32%22%2F%3E%3Ccircle%20cx%3D%22355.9%22%20cy%3D%22434.5%22%20r%3D%220.64%22%20fill%3D%22%23ffffff%22%20opacity%3D%220.78%22%2F%3E%3Ccircle%20cx%3D%22101.3%22%20cy%3D%22414.7%22%20r%3D%221.21%22%20fill%3D%22%23cfe0ff%22%20opacity%3D%220.75%22%2F%3E%3Ccircle%20cx%3D%22273.9%22%20cy%3D%22358.9%22%20r%3D%221.09%22%20fill%3D%22%23ffffff%22%20opacity%3D%220.75%22%2F%3E%3Ccircle%20cx%3D%22223.9%22%20cy%3D%22139.2%22%20r%3D%221.54%22%20fill%3D%22%23ffe6c8%22%20opacity%3D%220.56%22%2F%3E%3Ccircle%20cx%3D%22343.6%22%20cy%3D%22428.2%22%20r%3D%220.88%22%20fill%3D%22%23ffffff%22%20opacity%3D%220.71%22%2F%3E%3Ccircle%20cx%3D%2274.3%22%20cy%3D%22215.7%22%20r%3D%221.41%22%20fill%3D%22%23ffffff%22%20opacity%3D%220.59%22%2F%3E%3Ccircle%20cx%3D%2222.9%22%20cy%3D%22322.8%22%20r%3D%220.79%22%20fill%3D%22%23ffffff%22%20opacity%3D%220.53%22%2F%3E%3Ccircle%20cx%3D%22310.1%22%20cy%3D%22319.5%22%20r%3D%220.73%22%20fill%3D%22%23cfe0ff%22%20opacity%3D%220.81%22%2F%3E%3Ccircle%20cx%3D%22278.9%22%20cy%3D%22154.4%22%20r%3D%221.19%22%20fill%3D%22%23ffffff%22%20opacity%3D%220.61%22%2F%3E%3Ccircle%20cx%3D%2261.7%22%20cy%3D%2245.5%22%20r%3D%220.68%22%20fill%3D%22%23ffe6c8%22%20opacity%3D%220.71%22%2F%3E%3Ccircle%20cx%3D%22237.9%22%20cy%3D%2282.5%22%20r%3D%220.94%22%20fill%3D%22%23ffffff%22%20opacity%3D%220.85%22%2F%3E%3Ccircle%20cx%3D%22164.0%22%20cy%3D%22141.2%22%20r%3D%220.70%22%20fill%3D%22%23ffffff%22%20opacity%3D%220.81%22%2F%3E%3Ccircle%20cx%3D%229.6%22%20cy%3D%22150.8%22%20r%3D%220.75%22%20fill%3D%22%23cfe0ff%22%20opacity%3D%220.44%22%2F%3E%3C%2Fsvg%3E")';
+
+// 우주 배경 — '행성 우주' 영역에만 적용(별밭+성운). 나머지는 홈/시뮬레이션과 같은 평범한 배경.
+const SPACE_SCENE_STYLE = {
+  backgroundColor: "#0B1423",
+  backgroundImage: [
+    "radial-gradient(60% 45% at 18% 8%, rgba(94,143,255,.22), transparent 60%)",
+    "radial-gradient(55% 45% at 86% 26%, rgba(143,92,246,.18), transparent 60%)",
+    "radial-gradient(60% 50% at 66% 88%, rgba(232,92,180,.12), transparent 62%)",
+    "radial-gradient(50% 45% at 6% 82%, rgba(52,200,190,.10), transparent 60%)",
+    STAR_TILE,
+    STAR_TILE,
+    "radial-gradient(140% 100% at 50% 0%, transparent 60%, rgba(0,0,0,.38) 100%)",
+    "linear-gradient(180deg,#0B1526 0%,#08111F 60%,#0B1728 100%)",
+  ].join(", "),
+  backgroundSize: "auto, auto, auto, auto, 360px 520px, 560px 760px, auto, auto",
+  backgroundPosition: "0 0, 0 0, 0 0, 0 0, 0 0, 190px 130px, 0 0, 0 0",
+  backgroundRepeat: "no-repeat, no-repeat, no-repeat, no-repeat, repeat, repeat, no-repeat, no-repeat",
+};
+
 // 저장 카드 배경 그라디언트(순번용) — 데이터가 아니라 표시용 색.
 const SLOT_GRADIENTS = [
   ["#3a2a6d", "#6d4aa0"],
@@ -158,14 +180,7 @@ export default function MyUniverse() {
   }
 
   return (
-    <div
-      className="universe-scene relative min-h-full overflow-hidden rounded-[28px] border border-white/10 px-4 pb-8 shadow-[0_20px_55px_rgba(0,0,0,.3)] [&>.bg-card]:my-0 [&>.bg-card]:rounded-none [&>.bg-card]:border-t [&>.bg-card]:border-white/[.07] [&>.bg-card]:bg-transparent [&>.bg-card]:px-0 [&>.bg-card]:py-6"
-      style={{
-        backgroundColor: "#0A1322",
-        backgroundImage: "radial-gradient(circle at 18% 12%, rgba(94,143,255,.2), transparent 25%), radial-gradient(circle at 82% 38%, rgba(143,92,246,.14), transparent 28%), radial-gradient(circle, rgba(255,255,255,.42) 0 1px, transparent 1.3px), linear-gradient(180deg,#0D1728 0%,#091321 58%,#0C1626 100%)",
-        backgroundSize: "auto, auto, 73px 73px, auto",
-      }}
-    >
+    <div className="relative pb-2">
       <h1 className="mb-1 mt-2 text-[24px] font-bold leading-[1.2]">나의 우주</h1>
       <p className="mb-3 text-[13px] text-sub">
         하루에 별 하나. {STARS_PER_CONSTELLATION}개가 모이면 별자리가 됩니다.
@@ -406,8 +421,8 @@ export default function MyUniverse() {
       {/* 전체 리포트 — 5개 영역을 한눈에(균형·흐름). 세부는 아래 행성 우주에서. */}
       <AllDomainsReport state={u.state} onPick={choosePlanet} planet={planet} />
 
-      {/* 행성 우주 — 도메인별 지구본(옛 행성 선택 대체). 칩이 곧 행성 선택. */}
-      <Card>
+      {/* 행성 우주 — 별 배경은 이 영역에만. 나머지는 홈/시뮬레이션과 같은 평범한 배경. */}
+      <div className="relative my-2.5 overflow-hidden rounded-[18px] border border-white/10 p-4" style={SPACE_SCENE_STYLE}>
         <div className="mb-1 text-base font-semibold">🪐 행성 우주</div>
         <p className="mb-2 text-[11px] text-mut">행성은 당신의 삶의 영역입니다 · 눌러서 그 영역을 봐요</p>
         <div className="mb-1 flex flex-wrap gap-1.5">
@@ -476,7 +491,7 @@ export default function MyUniverse() {
             <MiniStat label="완성한 별자리" value={u.completed} center />
           </div>
         </div>
-      </Card>
+      </div>
 
       {constellationSheetOpen && group && (
         <div className="fixed inset-0 z-[70] flex animate-backdrop-in items-end justify-center bg-[#02050C]/70 backdrop-blur-[4px]" onClick={() => setConstellationSheetOpen(false)}>
