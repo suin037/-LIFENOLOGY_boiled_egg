@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Card, Caption } from "./ui.jsx";
 import { addCheckin, setDomains, todayKey } from "../data/myUniverse.js";
 import { composeDiary, chatTurn, chatClosing } from "../data/dispositionApi.js";
-import { buildChatContext, needsComfort } from "../data/chatContext.js";
+import { buildChatContext, needsComfort, markEventsAsked, closeEvents } from "../data/chatContext.js";
 import { todayQuestions } from "../data/questions.js";
 import { useResult } from "../data/ResultContext.jsx";
 import Mascot from "./Mascot.jsx";
@@ -85,6 +85,7 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
   const [editText, setEditText] = useState("");
   const [typing, setTyping] = useState(false); // 봇 응답 대기(타이핑 인디케이터)
   const threadRef = useRef(null);
+  const askedRef = useRef([]); // 직전 턴에 되물은 '열린 고리' — 사용자가 답하면 닫는다
 
   const mascot = AREAS.find((a) => a.key === area)?.mascot || "nova";
   const hasUser = msgs.some((m) => m.role === "user");
@@ -163,15 +164,26 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
     }
 
     if (persona) {
-      // 노바(일상 되묻기) / 코스모(힘든점·위로): 최근 기록 컨텍스트로 LLM 응답. 실패 시 고정질문 폴백.
+      // 노바(일상 되묻기) / 코스모(마음 살피기): 기억 + 열린 고리로 LLM 응답. 실패 시 고정질문 폴백.
+      const ctx = buildChatContext();
+      // 사용자가 답을 했으니, 직전에 되물었던 사건은 '얘기된' 것으로 닫는다.
+      if (askedRef.current.length) {
+        closeEvents(askedRef.current);
+        askedRef.current = [];
+      }
       setTyping(true);
       let reply = null;
       try {
-        reply = await chatTurn(base, persona, buildChatContext());
+        reply = await chatTurn(base, persona, ctx);
       } catch {
         reply = null;
       }
       setTyping(false);
+      // 이번 턴에 열린 고리를 넘겼다면 '물어봤다'로 적어둔다(2번까지만 묻게).
+      if (reply && ctx.openEvents?.length) {
+        markEventsAsked(ctx.openEvents);
+        askedRef.current = ctx.openEvents;
+      }
       setMsgs((m) => [...m, { role: "bot", text: reply || qs[next].text }]);
     } else {
       // 건강 = 고정 문진(수면·활동 수치)

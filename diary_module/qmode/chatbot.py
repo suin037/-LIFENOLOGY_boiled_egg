@@ -75,10 +75,17 @@ def _client():
         return None
 
 
+MAX_TURNS = 16      # 누적 대화 상한 — 길어져도 최근 흐름만 보낸다(비용·집중력).
+
+
 def _to_anthropic(messages):
-    """[{role,text}] → anthropic messages. 선두 assistant(오프너) 제거, user부터 시작."""
+    """[{role,text}] → anthropic messages. 선두 assistant(오프너) 제거, user부터 시작.
+
+    LLM 은 stateless 라 매 턴 대화를 다시 보내야 한다. 대신 최근 MAX_TURNS 만 보내
+    길어진 대화에서도 입력이 무한정 늘지 않게 한다(날짜를 넘는 기억은 context 가 맡는다).
+    """
     out = []
-    for m in messages or []:
+    for m in (messages or [])[-MAX_TURNS:]:
         t = (m.get("text") or "").strip()
         if not t:
             continue
@@ -137,10 +144,12 @@ def context_to_memory(context):
         entries.append({"date": r.get("date"), "text": text,
                         "emotion": (r.get("emotion") or "").strip()})
     entries.reverse()      # 최신순으로 왔으니 옛것부터 나열되게
-    if not entries:
+    events = [e for e in (context.get("openEvents") or []) if (e or {}).get("keyword")]
+    if not entries and not events:
         return None
     return {"entries": entries, "disposition": None,
-            "hard_streak": int(context.get("hardStreak") or 0)}
+            "hard_streak": int(context.get("hardStreak") or 0),
+            "open_events": events}
 
 
 def _memory_block(mem):
@@ -160,6 +169,13 @@ def _memory_block(mem):
     summary = (mem.get("disposition") or {}).get("summary")
     if summary:
         block += f"[성향 메모] {summary}\n"
+    # 열린 고리 — 전에 적었는데 결말이 아직 없는 사건. 하나만 골라 되묻는다.
+    events = mem.get("open_events") or []
+    if events:
+        block += ("[아직 결말을 못 들은 일 — 대화 초반에 이 중 하나만 골라 자연스럽게 되물어라. "
+                  "나열하지 말고, 이미 아는 척 단정하지도 마라]\n")
+        for e in events[:2]:
+            block += f"- {e.get('date') or '?'} '{e.get('keyword')}' : {(e.get('text') or '')[:70]}\n"
     streak = mem.get("hard_streak") or 0
     if streak >= 3:
         block += (f"[상태] 힘든 기록이 {streak}일 연속이다. 톤을 낮추고 먼저 알아준 뒤 묻되, "
