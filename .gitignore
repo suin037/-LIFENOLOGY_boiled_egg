@@ -45,11 +45,23 @@ frontend/dist/
 Thumbs.db
 ~$*.xlsx
 
-# ===== �߰� =====
 *.pt
 *.pth
+ckpt/
+ckpt_*/
+raw/
+data_backup/
+*.parquet
+*.zip
+diary_eval.py
+__pycache__/
+*.pyc
+.env
+
+*.pt
 *.pkl
 *.parquet
+*.csv
 *.log
 data/clean/
 data_backup/
@@ -58,6 +70,10 @@ ckpt/
 ckpt_*/
 diary_eval.py
 tempCodeRunnerFile.py
+__pycache__/
+.env
 aihubshell
 python
 scp
+# 빌드 산출물(용량) — 필요하면 preprocess/build_psych_cards_db.py 로 재생성
+data/vectordb/
