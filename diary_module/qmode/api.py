@@ -392,45 +392,28 @@ _CHAT_ROLE = {
 
 @app.post("/chat")
 def chat(req: ChatReq):
-    """가이드 페르소나 + 최근 기록으로 한 턴 대화. 키 없으면 reply=None(프론트가 고정질문 폴백)."""
+    """가이드 페르소나 + 기억(context)으로 한 턴 대화.
+
+    실제 대화는 qmode.chatbot 이 맡는다 — 기억 주입(최근 기록·힘든 연속),
+    단계 전략(열기→구체화→정리), 질문 유형 회전, 무거운 말엔 질문 중단.
+    키 없으면 reply=None (프론트가 고정 질문으로 폴백).
+    """
     import os
     R1._load_dotenv()
     if not os.getenv("ANTHROPIC_API_KEY"):
         return {"reply": None, "reason": "no_api_key"}
-    role = _CHAT_ROLE.get(req.persona, _CHAT_ROLE["lumi"])
-    ctx = req.context or {}
-    recent = ctx.get("recent") or []
-    hard = int(ctx.get("hardStreak") or 0)
-    ctx_lines = "\n".join(
-        f"- {r.get('date','')}: {(r.get('emotion') or '')} · {r.get('text','')}"
-        for r in recent[:5]
-    ) or "(최근 기록 없음)"
-    convo = "\n".join(
-        f"{'나' if m.get('role') == 'user' else '너'}: {m.get('text', '')}"
-        for m in req.messages[-8:]
-    )
-    extra = ""
-    if req.persona == "cosmo" and hard >= 2:
-        extra = f"\n[중요] 최근 힘든 기록이 {hard}번 연속이야. 이번엔 질문 말고, 먼저 짧게 공감·위로 한마디만 건네."
-    system = (
-        f"{role}\n\n한국어로 1~2문장, 담백하게. 과한 리액션·이모지 남발 금지. "
-        f"자연스러운 반말 톤 유지. 진단·조언 강요 금지.{extra}"
-    )
-    user = (
-        f"[사용자 최근 기록]\n{ctx_lines}\n\n[지금까지 대화]\n{convo}\n\n"
-        "다음에 네가 건넬 말 딱 한 마디:"
-    )
+    from qmode import chatbot as CB
+    hard = int((req.context or {}).get("hardStreak") or 0)
     try:
-        from anthropic import Anthropic
-        resp = Anthropic().messages.create(
-            model="claude-sonnet-5", max_tokens=200, thinking={"type": "disabled"},
-            system=system, messages=[{"role": "user", "content": user}],
+        reply = CB.chat(
+            req.messages, persona=req.persona, context=req.context,
+            role=_CHAT_ROLE.get(req.persona, _CHAT_ROLE["lumi"]),
         )
-        reply = "".join(b.text for b in resp.content if b.type == "text").strip()
-        kind = "comfort" if (req.persona == "cosmo" and hard >= 2) else "followup"
-        return {"reply": reply or None, "kind": kind}
     except Exception as e:      # noqa: BLE001
         return {"reply": None, "reason": f"error: {e}"}
+    info = CB.stage_info(req.messages)
+    kind = "comfort" if (req.persona == "cosmo" and hard >= 2) else "followup"
+    return {"reply": reply or None, "kind": kind, **info}
 
 
 # ── 제3의 제안 — A/B 외에 성향·일기신호에 근거한 '생각 못한 제3의 길' ──────
@@ -515,37 +498,22 @@ def tag_domain(req: TagReq):
     return DT.tag(req.text)
 
 
-# ── 마스코트 대화형 일기 ────────────────────────────────────────────────
-class ChatMsg(BaseModel):
-    role: str            # "user" | "bot"
-    text: str
-
-
-class ChatReq(BaseModel):
-    messages: list[ChatMsg] = []
-    persona: Optional[str] = "lumi"   # lumi(공감)/cosmo(분석)/nova(재미)
-
-
-@app.post("/chat")
-def chat_turn(req: ChatReq):
-    """대화 한 턴 → 마스코트 답변."""
-    from qmode import chatbot as CB
-    msgs = [m.model_dump() for m in req.messages]
-    return {"reply": CB.chat(msgs, persona=req.persona or "lumi")}
-
-
+# ── 대화 → 일기 정리 ────────────────────────────────────────────────────
+# 대화 자체는 위쪽 /chat 하나가 맡는다(중복 정의 제거 — 예전엔 여기 두 번째 /chat 이
+# 있었지만 FastAPI 는 먼저 등록된 라우트를 쓰므로 죽은 코드였다).
 @app.post("/diary/compose")
 def diary_compose(req: ChatReq):
     """대화 전체 → 1인칭 일기 + 기분 + 감정 + 영역(domains). 체크인 저장용."""
     from qmode import chatbot as CB
-    msgs = [m.model_dump() for m in req.messages]
-    return CB.compose(msgs)
+    return CB.compose(req.messages)
 
 
-@app.get("/chat/opener")
-def chat_opener(persona: str = "lumi"):
+@app.post("/chat/opener")
+def chat_opener(req: ChatReq):
+    """첫 인사 — 기억(context)이 있으면 지난 기록을 잇는 인사."""
     from qmode import chatbot as CB
-    return {"opener": CB.opener(persona), "persona": persona}
+    return {"opener": CB.opener(req.persona or "lumi", context=req.context),
+            "persona": req.persona or "lumi"}
 
 
 # ── 감정 모델(로컬 파인튜닝 klue/roberta) — 감정 미선택 시 일기에서 추론 ──
