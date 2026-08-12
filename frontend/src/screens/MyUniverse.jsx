@@ -10,6 +10,7 @@ import { listUniverses } from "../data/savedUniverses.js";
 import { chosenChoice } from "../data/actionBridge.js";
 import { domainAnalysis, domainReport, analyzeStars } from "../data/diarySignals.js";
 import { seedDemoYear } from "../data/demoYear.js";
+import { seedDemoEunwoo } from "../data/demoEunwoo.js";
 import {
   universeSummary,
   constellationGroups,
@@ -182,6 +183,7 @@ export default function MyUniverse() {
     resetViews();
     resetUniverse();
     if (kind === "1y") seedDemoYear();
+    else if (kind === "eunwoo") seedDemoEunwoo(); // minjub 1년치 페르소나(워라밸 이직러)
     else seedDemoCheckins();
     refresh();
   }
@@ -257,9 +259,10 @@ export default function MyUniverse() {
           </p>
         </div>
         {(u.stars === 0 || isDemo(u.state)) && (
-          <div className="mt-0.5 flex shrink-0 gap-1.5">
+          <div className="mt-0.5 flex shrink-0 flex-wrap justify-end gap-1.5">
             <DemoBtn onClick={() => runDemo("6w")}>{isDemo(u.state) ? "6주" : "6주 데모"}</DemoBtn>
             <DemoBtn onClick={() => runDemo("1y")}>{isDemo(u.state) ? "1년" : "1년 데모"}</DemoBtn>
+            <DemoBtn onClick={() => runDemo("eunwoo")}>{isDemo(u.state) ? "은우" : "은우 데모"}</DemoBtn>
             {isDemo(u.state) && <DemoBtn onClick={clearDemo}>비우기</DemoBtn>}
           </div>
         )}
@@ -280,10 +283,10 @@ export default function MyUniverse() {
             <div className="text-base font-semibold">🌌 나의 우주</div>
             <span className="text-[10px] text-mut">가운데 12달의 별 · 둘레 5개 행성</span>
           </div>
-          {/* 지도는 항상 깔려 있고, 행성 도착 시 3D 지구본이 그 위로 크로스페이드로 얹힌다 —
-              카메라 비행(0.8s)이 끝나갈 무렵(0.55s) 페이드가 시작돼 이어지는 느낌을 만든다.
-              확장(PC) 레이아웃은 /my 가 와이드(1120px)라 지도가 뻥튀기되지 않게 폭을 캡. */}
-          <div className="relative mx-auto w-full max-w-[540px]">
+          {/* 지도는 항상 깔려 있고, 행성 도착 시 3D 지구본이 그 위로 크로스페이드로 얹힌다.
+              확장(PC): /my 는 와이드(1120px) — 지도 왼쪽(폭 캡) + 정보 오른쪽 2컬럼. */}
+          <div className="lg:flex lg:items-start lg:gap-7">
+          <div className="relative mx-auto w-full max-w-[540px] lg:mx-0 lg:w-[470px] lg:shrink-0">
           <UniverseMap
             monthGroups={monthGroups}
             weeksByMonth={weeksByMonth}
@@ -307,12 +310,18 @@ export default function MyUniverse() {
             }}
             onWeekOpen={openWeekFromMap}
           />
-          {!isAll && globeReady && (
+          {/* 지구본은 행성 클릭 즉시 '투명하게' 마운트(캔버스 초기화를 비행 중에 미리) —
+              550ms에 투명도만 올려 순수 크로스페이드. 마운트 히치로 인한 멈칫거림 제거. */}
+          {!isAll && (
             <div
               className="absolute inset-0 overflow-hidden"
-              style={{ background: "#0A1322", animation: "pm-fade .6s ease both" }}
+              style={{
+                background: "#0A1322",
+                opacity: globeReady ? 1 : 0,
+                pointerEvents: globeReady ? "auto" : "none",
+                transition: "opacity .55s ease",
+              }}
             >
-              <style>{`@keyframes pm-fade { from { opacity: 0 } to { opacity: 1 } }`}</style>
               <PlanetGlobe
                 fill
                 planet={selectedPlanet}
@@ -332,6 +341,7 @@ export default function MyUniverse() {
           )}
           </div>
 
+          <div className="min-w-0 lg:flex-1 lg:pt-1">
           {focusMonth ? (
             (() => {
               const mg = monthGroups.find((m) => m.monthKey === focusMonth);
@@ -394,6 +404,8 @@ export default function MyUniverse() {
             <button onClick={() => navigate("/archive")} className="tap text-[11px] font-semibold text-cyan">
               전체 기록 →
             </button>
+          </div>
+          </div>
           </div>
         </Card>
       ) : (
