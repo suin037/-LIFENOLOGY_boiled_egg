@@ -34,9 +34,6 @@ export default function HomeHub() {
         비춰볼까요?
       </h1>
 
-      {/* 🧸 귀염둥이 육성 — 기록하면 간식, 쓰다듬고 먹이면 친밀도↑ */}
-      <PetMascot />
-
       {/* 가이드 캐러셀 + 이번 주 기록 + 오늘 체크인 */}
       <div className="lg:mt-6 lg:grid lg:grid-cols-[minmax(0,1.45fr)_minmax(300px,.75fr)] lg:items-start lg:gap-7">
         <DiaryToday />
@@ -97,6 +94,9 @@ export default function HomeHub() {
         </span>
         <ChevronRight size={18} className="text-mut" />
       </button>
+
+      {/* 생활 관리 친구 — 우주 요약 아래의 보조 기능으로 배치 */}
+      <PetMascot rumination={rumination} onCompare={startJobCompare} />
         </aside>
       </div>
     </div>
