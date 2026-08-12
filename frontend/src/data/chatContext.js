@@ -2,6 +2,7 @@
 //  · recent: 최근 n개 {date, emotion, text(마스킹·120자)}
 //  · hardStreak: 최신부터 '힘든 기록(valence<0 또는 낮은 mood)'이 몇 번 연속인지 → 코스모 위로 트리거
 import { loadUniverse } from "./myUniverse.js";
+import { computeDiarySignals } from "./diarySignals.js";
 import { redactPII } from "./piiRedact.js";
 
 export function buildChatContext(n = 5) {
@@ -32,5 +33,21 @@ export function buildChatContext(n = 5) {
     else break;
   }
 
-  return { recent, hardStreak };
+  // 같은 고민이 반복되는가 — 최근 14일 안에 이직·진로 신호가 몇 번 나왔는지.
+  let ruminationDays = 0;
+  try {
+    ruminationDays = computeDiarySignals({ windowDays: 14 }, loadUniverse()).jobChangeDays || 0;
+  } catch {
+    ruminationDays = 0;
+  }
+
+  return { recent, hardStreak, ruminationDays };
+}
+
+/** 위로(LLM 마무리 인사)를 발동할까 — 힘든 날이 이어지거나 같은 고민이 쌓였을 때만.
+ *  평소엔 고정 인사로 끝낸다(매번 부르면 비용도 들고 위로가 상투적으로 느껴진다). */
+export function needsComfort(ctx = buildChatContext()) {
+  const hard = ctx?.hardStreak || 0;
+  const rum = ctx?.ruminationDays || 0;
+  return hard >= 3 || rum >= 3;
 }

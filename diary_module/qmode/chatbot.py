@@ -162,8 +162,9 @@ def _memory_block(mem):
         block += f"[성향 메모] {summary}\n"
     streak = mem.get("hard_streak") or 0
     if streak >= 3:
-        block += (f"[상태] 힘든 기록이 {streak}일 연속이다. 오늘은 캐묻지 말고 먼저 알아주고, "
-                  "잘 버텨온 걸 짚어줘라. 해결책·조언은 사용자가 원할 때만.\n")
+        block += (f"[상태] 힘든 기록이 {streak}일 연속이다. 톤을 낮추고 먼저 알아준 뒤 묻되, "
+                  "부담 없는 질문 하나로 이어가라('말하기 어려우면 넘어가도 돼' 같은 여지를 "
+                  "남겨도 좋다). 위로만 길게 하는 건 마지막 인사에서 한다.\n")
     if block:
         block += ("규칙: 위 기억은 네가 이 사용자를 계속 알아온 근거다. 이야기와 닿을 때만 "
                   "자연스럽게 한 번 슬쩍 잇는다(예: 지난번 그 일은 그 뒤로 어때?). "
@@ -192,7 +193,9 @@ _CRAFT = (
     "②감정에 이름 붙이기(서운함인지 억울함인지 허탈함인지) ③그게 마음에 남은 이유 "
     "④지난 기억과 잇기. 직전 턴과 같은 유형을 연속으로 쓰지 마라.\n"
     "4) 답이 짧거나 피하는 기색이면 캐묻지 말고 화제를 살짝 옮기거나 가볍게 받아라.\n"
-    "5) 무겁고 힘든 얘기엔 질문을 멈추고 먼저 마음을 알아줘라. 해결책·조언을 서두르지 마라.\n"
+    "5) 무겁고 힘든 얘기엔 먼저 마음을 알아준 뒤, 부담 없는 질문 하나로 이어가라. "
+    "대화 중간에 위로만 길게 늘어놓으면 상대가 답할 말이 없어진다 — 그건 마지막 인사의 몫이다. "
+    "해결책·조언을 서두르지 마라.\n"
     "6) 같은 말버릇('그랬구나' 등) 반복 금지. 반응 길이도 턴마다 조금씩 다르게.\n\n")
 
 _STAGE_HINT = {
@@ -232,6 +235,55 @@ _FALLBACK = {
 def _fallback_reply(info):
     pool = _FALLBACK[info["stage"]]
     return pool[info["n_user"] % len(pool)]
+
+
+def closing(messages, persona="lumi", context=None, uid=None, role=None,
+            model=None, max_tokens=220):
+    """대화를 닫는 마지막 인사 — 위로는 여기서 한다.
+
+    대화 중간에 위로만 건네면 사용자가 답할 말이 없어 흐름이 끊긴다. 그래서 질문 없는
+    위로·인정은 상담이 끝난 이 자리로 모았다. 힘든 날이 이어졌으면 그걸 짚어준다.
+    """
+    mem = context_to_memory(context) or load_memory(uid)
+    streak = (mem or {}).get("hard_streak") or 0
+    said = " / ".join(
+        (m.get("text") or "").strip()
+        for m in (messages or [])
+        if m.get("role") not in ("bot", "assistant") and (m.get("text") or "").strip()
+    )[:600]
+
+    client = _client()
+    if client is None:      # 폴백 — 담백한 고정 인사
+        return ("오늘 얘기 들려줘서 고마워. 요즘 계속 무거웠을 텐데, 그걸 매일 적어온 것만으로도 충분해."
+                if streak >= 3 else
+                "오늘 얘기 들려줘서 고마워. 여기까지 온 하루, 잘 지나온 거야.")
+
+    p = PERSONAS.get(persona, PERSONAS["lumi"])
+    system = (
+        p["system"] + "\n\n"
+        "지금은 대화를 닫는 마지막 인사다.\n"
+        "1) 질문하지 마라. 사용자가 답할 필요 없는 말이어야 한다.\n"
+        "2) 오늘 사용자가 실제로 한 말에서 한 가지를 구체적으로 짚어 인정하거나 알아줘라.\n"
+        "3) 2~3문장. 과장·미사여구·해결책·조언 금지. 담백하게.\n"
+        "4) 마지막은 기록으로 남는다는 안심으로 닫아라(예: 오늘 얘기는 잘 담아둘게).\n"
+    )
+    if role:
+        system += "\n[이번 대화의 역할] " + role
+    if streak >= 3:
+        system += (f"\n[상태] 힘든 기록이 {streak}일 연속이다. 버텨온 시간을 담담히 인정해주고, "
+                   "혼자 있는 게 아니라는 걸 한 줄로 전해라. 섣부른 희망·조언은 넣지 마라.")
+
+    model = model or "claude-sonnet-5"
+    try:
+        resp = client.messages.create(
+            model=model, max_tokens=max_tokens, system=system,
+            thinking={"type": "disabled"},
+            messages=[{"role": "user", "content":
+                       f"[오늘 사용자가 한 말]\n{said or '(내용 없음)'}\n\n마지막 인사만 출력."}])
+        txt = "".join(b.text for b in resp.content if b.type == "text").strip()
+        return txt or "오늘 얘기 들려줘서 고마워. 잘 담아둘게."
+    except Exception:      # noqa: BLE001
+        return "오늘 얘기 들려줘서 고마워. 잘 담아둘게."
 
 
 def opener(persona="lumi", uid=None, context=None):

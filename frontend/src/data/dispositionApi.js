@@ -39,6 +39,22 @@ export async function tagDomain(text) {
   }
 }
 
+// 대화 마무리 인사 — 상담이 끝난 뒤 건네는 위로 한마디(질문 없음).
+// 대화 중간엔 위로만 하면 답할 말이 없어지므로, 위로는 이 마지막 자리에서 한다.
+export async function chatClosing(messages, persona = "lumi", context = null) {
+  try {
+    const res = await fetch(`${BASE}/chat/closing`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages, persona, context }),
+    });
+    if (!res.ok) return null;
+    return (await res.json()).reply || null;
+  } catch {
+    return null;
+  }
+}
+
 // 마스코트 대화 한 턴 → 가이드별 역할 + 최근 기록 컨텍스트로 답장.
 // 키 없음/서버 없음/에러 → null 반환(호출부가 고정질문으로 폴백).
 export async function chatTurn(messages, persona = "lumi", context = null) {

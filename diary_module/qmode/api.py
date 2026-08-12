@@ -516,6 +516,24 @@ def chat_opener(req: ChatReq):
             "persona": req.persona or "lumi"}
 
 
+@app.post("/chat/closing")
+def chat_closing(req: ChatReq):
+    """대화 마무리 인사 — 질문 없는 위로·인정 한마디.
+
+    위로를 대화 중간에 넣으면 사용자가 답할 말이 없어 흐름이 끊긴다. 그래서
+    상담(코스모=고민과 선택)이 끝난 이 자리에서 건넨다. 키 없으면 담백한 고정 인사.
+    """
+    from qmode import chatbot as CB
+    hard = int((req.context or {}).get("hardStreak") or 0)
+    try:
+        reply = CB.closing(req.messages, persona=req.persona or "lumi",
+                           context=req.context,
+                           role=_CHAT_ROLE.get(req.persona, _CHAT_ROLE["lumi"]))
+    except Exception as e:      # noqa: BLE001
+        return {"reply": None, "reason": f"error: {e}"}
+    return {"reply": reply, "kind": "comfort" if hard >= 2 else "closing"}
+
+
 # ── 감정 모델(로컬 파인튜닝 klue/roberta) — 감정 미선택 시 일기에서 추론 ──
 _EMO = None
 _MOOD_BY_EMO = {"기쁨": 5, "당황": 3, "분노": 2, "불안": 2, "슬픔": 2, "상처": 2}

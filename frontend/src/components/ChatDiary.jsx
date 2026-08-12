@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { Card, Caption } from "./ui.jsx";
 import { addCheckin, setDomains, todayKey } from "../data/myUniverse.js";
-import { composeDiary, chatTurn } from "../data/dispositionApi.js";
-import { buildChatContext } from "../data/chatContext.js";
+import { composeDiary, chatTurn, chatClosing } from "../data/dispositionApi.js";
+import { buildChatContext, needsComfort } from "../data/chatContext.js";
 import { todayQuestions } from "../data/questions.js";
 import { useResult } from "../data/ResultContext.jsx";
 import Mascot from "./Mascot.jsx";
@@ -136,13 +136,32 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
     setQi(next);
     setInput("");
 
-    // 다 답함 → 마무리 멘트
+    const persona = LLM_PERSONA[area];
+
+    // 다 답함 → 마무리. 위로는 대화 중간이 아니라 여기서 한다(중간에 하면 답할 말이 없어 끊긴다).
+    // 단, 매번은 아니고 힘든 날이 이어지거나 같은 고민이 쌓였을 때만 LLM 위로를 부른다.
     if (next >= qs.length) {
-      setMsgs((m) => [...m, { role: "bot", text: "다 답해줘서 고마워! 아래 ‘기록 저장’을 누르면 오늘 일기로 정리할게." }]);
+      const ctx = buildChatContext();
+      if (persona && needsComfort(ctx)) {
+        setTyping(true);
+        let bye = null;
+        try {
+          bye = await chatClosing(base, persona, ctx);
+        } catch {
+          bye = null;
+        }
+        setTyping(false);
+        setMsgs((m) => [
+          ...m,
+          { role: "bot", text: bye || "다 답해줘서 고마워! 오늘 얘기 잘 담아둘게." },
+          { role: "bot", text: "아래 ‘기록 저장’을 누르면 오늘 일기로 정리할게." },
+        ]);
+      } else {
+        setMsgs((m) => [...m, { role: "bot", text: "다 답해줘서 고마워! 아래 ‘기록 저장’을 누르면 오늘 일기로 정리할게." }]);
+      }
       return;
     }
 
-    const persona = LLM_PERSONA[area];
     if (persona) {
       // 노바(일상 되묻기) / 코스모(힘든점·위로): 최근 기록 컨텍스트로 LLM 응답. 실패 시 고정질문 폴백.
       setTyping(true);
