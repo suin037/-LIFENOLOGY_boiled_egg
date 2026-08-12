@@ -399,11 +399,24 @@ export default function MyUniverse() {
             skin={planetSkin()}
             onMonthPick={(mk) => {
               if (!isAll) choosePlanet("all");
+              closeDetail(); // 열려 있던 상세(성단·주간·리포트)는 새 포커스로 정리
               setFocusMonth((prev) => (prev === mk ? null : mk));
             }}
             onPlanetPick={(key) => {
               setFocusMonth(null);
-              choosePlanet(planet === key ? "all" : key);
+              // 다른 행성으로 갈아타면 낡은 성단·주간 상세는 비운다.
+              // 리포트 패널은 유지 — 새 행성 내용으로 자동 갱신된다.
+              setClusterOpen(null);
+              setClusterPicked(null);
+              setConstellationSheetOpen(false);
+              setPicked(null);
+              setShowReport(false);
+              if (planet === key) {
+                setReportSheet(false);
+                choosePlanet("all");
+              } else {
+                choosePlanet(key);
+              }
             }}
             onClusterOpen={(g) => {
               setClusterPicked(null);
@@ -437,7 +450,10 @@ export default function MyUniverse() {
                 }))}
                 onOpen={() => navigate("/input")}
                 onConstellationOpen={openClusterFromGlobe}
-                onPlanetTap={() => choosePlanet("all")}
+                onPlanetTap={() => {
+                  closeDetail();
+                  choosePlanet("all");
+                }}
               />
             </div>
           )}
@@ -455,7 +471,7 @@ export default function MyUniverse() {
                       🌙 {parseInt(focusMonth.slice(5), 10)}월 · 기록 {mg?.n || 0}일
                       {mg?.avgMood != null && ` · 평균 ${mg.avgMood.toFixed(1)}`}
                     </span>
-                    <button onClick={() => setFocusMonth(null)} className="tap text-[11px] text-mut">
+                    <button onClick={() => { closeDetail(); setFocusMonth(null); }} className="tap text-[11px] text-mut">
                       ← 우주로
                     </button>
                   </div>
@@ -490,7 +506,7 @@ export default function MyUniverse() {
                   <button onClick={() => setReportSheet(true)} className="tap text-[11px] font-semibold text-cyan">
                     📖 리포트
                   </button>
-                  <button onClick={() => choosePlanet("all")} className="tap text-[11px] text-mut">
+                  <button onClick={() => { closeDetail(); choosePlanet("all"); }} className="tap text-[11px] text-mut">
                     ← 우주로
                   </button>
                 </span>
