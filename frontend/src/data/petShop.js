@@ -7,13 +7,13 @@
 import { totalXp } from "./myUniverse.js";
 
 const KEY = "pm.petShop.v1";
-// 가구(furniture)는 배열 — 여러 개 동시 배치. 배경·소품은 단일.
-const DEF = { spent: 0, owned: [], equipped: { background: null, accessory: null, furniture: [] } };
+// 가구(furniture)는 배열 — 여러 개 동시 배치. 배경·소품·행성스킨은 단일.
+const DEF = { spent: 0, owned: [], equipped: { background: null, accessory: null, furniture: [], planet: null } };
 
 export const COIN_PER_XP = 100; // 100 XP = 1 coin
 
-export const CAT_LABELS = { background: "배경", accessory: "소품", snack: "간식" };
-export const CATS = ["background", "accessory", "snack"];
+export const CAT_LABELS = { background: "배경", accessory: "소품", snack: "간식", planet: "행성" };
+export const CATS = ["background", "accessory", "snack", "planet"];
 
 // 아이템 카탈로그. render: 배경=CSS background 문자열 / 그 외=이모지.
 export const CATALOG = [
@@ -33,7 +33,16 @@ export const CATALOG = [
   { id: "snack_fish",   cat: "snack", name: "생선",       price: 1, render: "🐟", bond: 7 },
   { id: "snack_cake",   cat: "snack", name: "케이크",     price: 2, render: "🍰", bond: 10 },
   { id: "snack_star",   cat: "snack", name: "특별간식 별", price: 4, render: "⭐", bond: 15 },
+  // 행성 스킨 (나의 우주 지도) — 미장착 = 기본 민무늬 행성. skin 값은 UniverseMap이 읽는다.
+  { id: "planet_glow",   cat: "planet", name: "빛나는 구체",     price: 10, render: "🪐", skin: "glow" },
+  { id: "planet_stripe", cat: "planet", name: "줄무늬 가스행성", price: 15, render: "🌀", skin: "stripe" },
 ];
+
+// 장착된 행성 스킨 — 없으면 "basic"(민무늬).
+export function planetSkin(x = loadShop()) {
+  const it = equippedItem("planet", x);
+  return (it && it.skin) || "basic";
+}
 
 export function itemById(id) {
   return CATALOG.find((it) => it.id === id) || null;

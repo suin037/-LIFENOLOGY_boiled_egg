@@ -6,7 +6,7 @@ import { useRef, useEffect, useState } from "react";
 //   groups     : constellationGroups() 결과(도메인 필터된 것). group.stars[7] = { date, valence, mood, empty }
 //   scenarios  : [{ date, title, dateLabel, br:[A,B], id }] — 그 날짜 별에 ◆ 표식
 //   onOpen(sc) : ◆/목록 클릭 시 시나리오 다시 열기 콜백
-const PAL = ["#D9534F", "#D9834F", "#D9B84F", "#5DBE9B", "#4F8FD9"];
+const PAL = ["#E24B4A", "#D85A30", "#EDA100", "#5DCAA5", "#378ADD"]; // Constellation COL과 동일
 
 function hexToHsl(hex) {
   const m = hex.replace("#", "");
@@ -36,7 +36,7 @@ function level(s) {
   return 3;
 }
 
-export default function PlanetGlobe({ planet, groups, scenarios = [], onOpen, onConstellationOpen }) {
+export default function PlanetGlobe({ planet, groups, scenarios = [], skin = "basic", fill = false, onOpen, onConstellationOpen, onPlanetTap }) {
   const cvRef = useRef(null);
   const dataRef = useRef({});
   const [sel, setSel] = useState(null);
@@ -49,7 +49,7 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], onOpen, on
   scenarios.forEach((s) => (scByDate[s.date] = s));
   const tone = planet ? hexToHsl(planet.from) : { h: 262, s: 46 };
 
-  dataRef.current = { disp, scByDate, tone, label: planet?.label || "관계", onConstellationOpen };
+  dataRef.current = { disp, scByDate, tone, skin, label: planet?.label || "관계", onConstellationOpen, onPlanetTap };
 
   useEffect(() => {
     const cv = cvRef.current;
@@ -93,7 +93,7 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], onOpen, on
       ctx.restore();
     }
     function planetOrb(cx, cy, pr) {
-      const { tone, label } = dataRef.current;
+      const { tone, label, skin } = dataRef.current;
       const H = tone.h,
         S = tone.s;
       const c = (l) => `hsl(${H},${S}%,${l}%)`;
@@ -108,20 +108,30 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], onOpen, on
       ctx.beginPath();
       ctx.arc(cx, cy, pr, 0, Math.PI * 2);
       ctx.clip();
-      let bg = ctx.createLinearGradient(0, cy - pr, 0, cy + pr);
-      [
-        [0, 82],
-        [0.14, 71],
-        [0.27, 85],
-        [0.4, 70],
-        [0.5, 88],
-        [0.6, 70],
-        [0.74, 84],
-        [0.88, 71],
-        [1, 83],
-      ].forEach(([p, l]) => bg.addColorStop(p, c(l)));
-      ctx.fillStyle = bg;
-      ctx.fillRect(cx - pr, cy - pr, 2 * pr, 2 * pr);
+      // 구체 표면 — 지도의 행성 스킨과 일치: 줄무늬 스킨일 때만 가스 밴드, 아니면 민무늬 구체.
+      if (skin === "stripe") {
+        let bg = ctx.createLinearGradient(0, cy - pr, 0, cy + pr);
+        [
+          [0, 82],
+          [0.14, 71],
+          [0.27, 85],
+          [0.4, 70],
+          [0.5, 88],
+          [0.6, 70],
+          [0.74, 84],
+          [0.88, 71],
+          [1, 83],
+        ].forEach(([p, l]) => bg.addColorStop(p, c(l)));
+        ctx.fillStyle = bg;
+        ctx.fillRect(cx - pr, cy - pr, 2 * pr, 2 * pr);
+      } else {
+        let bg = ctx.createRadialGradient(cx - pr * 0.35, cy - pr * 0.32, pr * 0.1, cx, cy, pr * 1.08);
+        bg.addColorStop(0, c(80));
+        bg.addColorStop(0.55, c(66));
+        bg.addColorStop(1, c(56));
+        ctx.fillStyle = bg;
+        ctx.fillRect(cx - pr, cy - pr, 2 * pr, 2 * pr);
+      }
       const spx = cx + pr * 0.3,
         spy = cy + pr * 0.24;
       let sp = ctx.createRadialGradient(spx, spy, 1, spx, spy, pr * 0.19);
@@ -179,7 +189,7 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], onOpen, on
         cy = h / 2,
         Rsky = Math.min(w, h) * 0.35,
         scale = Math.min(w, h) * 0.12,
-        pr = Math.min(w, h) * 0.086;
+        pr = Math.min(w, h) * 0.115; // 지도 줌인 행성과 크기 연속성 — 전환 시 덜 튀게
       const C = disp.length;
       const PH = [0.3, -0.22, 0.24, -0.32, 0.16];
       ctx.beginPath();
@@ -194,23 +204,26 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], onOpen, on
         const th = (g / C) * Math.PI * 2 + st.rot,
           ph = PH[g % PH.length];
         const A = rotateX([Math.cos(ph) * Math.sin(th), Math.sin(ph), Math.cos(ph) * Math.cos(th)], st.tilt);
-        const up = Math.abs(A[1]) > 0.95 ? [1, 0, 0] : [0, 1, 0];
-        const u = nrm(crs(up, A)),
-          v = crs(A, u),
-          ct = [A[0] * Rsky, A[1] * Rsky, A[2] * Rsky],
-          stars = [];
+        // 빌보드 — 별자리를 접평면에 눕히지 않고 화면과 평행하게 그린다.
+        // 시트(Constellation)와 같은 모양이 유지되고, 깊이는 크기·투명도로만 표현.
+        const scx = cx + A[0] * Rsky;
+        const scy = cy - A[1] * Rsky * 0.92;
+        const depF = (A[2] + 1) / 2;
+        const S = scale * (0.72 + 0.42 * depF);
+        const stars = [];
         const grp = disp[g].stars;
         for (let j = 0; j < grp.length; j++) {
           const lv = level(grp[j]),
             mn = lv ? (lv - 1) / 4 : 0,
-            lr = 0.35 + mn * 0.95;
-          const ang = (-90 + j * (360 / grp.length)) * (Math.PI / 180),
-            lx = Math.cos(ang) * lr,
-            ly = Math.sin(ang) * lr;
-          const px = ct[0] + (lx * u[0] + ly * v[0]) * scale,
-            py = ct[1] + (lx * u[1] + ly * v[1]) * scale,
-            pz = ct[2] + (lx * u[2] + ly * v[2]) * scale;
-          stars.push({ sx: cx + px, sy: cy - py * 0.92, z: pz, lv, date: grp[j].date });
+            lr = 0.21 + mn * 0.79; // 시트의 R_MIN(16)/R_SPREAD(60) 비율 그대로
+          const ang = (-90 + j * (360 / 7)) * (Math.PI / 180);
+          stars.push({
+            sx: scx + Math.cos(ang) * lr * S,
+            sy: scy + Math.sin(ang) * lr * S,
+            z: A[2] * Rsky,
+            lv,
+            date: grp[j].date,
+          });
         }
         cl.push({ c: g, z: A[2], stars });
       }
@@ -327,7 +340,15 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], onOpen, on
           const distance = Math.hypot(hit.x - mx, hit.y - my);
           if (distance < 52 && (!nearest || distance < nearest.distance)) nearest = { ...hit, distance };
         }
-        if (nearest?.group) dataRef.current.onConstellationOpen?.(nearest.group);
+        if (nearest?.group) {
+          dataRef.current.onConstellationOpen?.(nearest.group);
+          return;
+        }
+        // 가운데 행성 탭 — 우주 전경으로 복귀(지도의 토글과 동일한 제스처).
+        const pcx = cv.clientWidth / 2,
+          pcy = cv.clientHeight / 2,
+          ppr = Math.min(cv.clientWidth, cv.clientHeight) * 0.115;
+        if (Math.hypot(mx - pcx, my - pcy) <= ppr + 8) dataRef.current.onPlanetTap?.();
       }
     };
     cv.addEventListener("pointerdown", onDown);
@@ -346,10 +367,10 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], onOpen, on
   }, []);
 
   return (
-    <div>
+    <div className={fill ? "h-full" : undefined}>
       <canvas
         ref={cvRef}
-        style={{ width: "100%", height: "320px", display: "block", touchAction: "none", cursor: "grab" }}
+        style={{ width: "100%", height: fill ? "100%" : "320px", display: "block", touchAction: "none", cursor: "grab" }}
       />
       {disp.length === 0 && (
         <div className="pointer-events-none -mt-[178px] mb-[128px] text-center">

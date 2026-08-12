@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, Caption } from "../components/ui.jsx";
 import Constellation from "../components/Constellation.jsx";
+import UniverseMap from "../components/UniverseMap.jsx";
 import PlanetGlobe from "../components/PlanetGlobe.jsx";
 import { useResult } from "../data/ResultContext.jsx";
 import { PLANETS } from "../data/result.js";
@@ -12,8 +13,8 @@ import { seedDemoYear } from "../data/demoYear.js";
 import {
   universeSummary,
   constellationGroups,
-  groupsByPlanet,
   adaptiveGroups,
+  groupsByPlanet,
   scenariosByPlanet,
   setPlanet as persistPlanet,
   seedDemoCheckins,
@@ -36,6 +37,7 @@ import {
   REPORT_UID,
 } from "../data/dispositionApi.js";
 import { nextReward, unlockedRewards } from "../data/unlocks.js";
+import { planetSkin } from "../data/petShop.js";
 
 // 저장 카드 배경 그라디언트(순번용) — 데이터가 아니라 표시용 색.
 const SLOT_GRADIENTS = [
@@ -43,9 +45,6 @@ const SLOT_GRADIENTS = [
   ["#12324d", "#1f6fa0"],
   ["#4d1230", "#a01f5a"],
 ];
-
-// '전체' 선택 — 특정 영역이 아니라 전체 일기 기반 종합(별자리 만들기 성격).
-const ALL_PLANET = { key: "all", label: "전체", from: "#5A6B8C", to: "#AEB9D0" };
 
 // 나의 우주 = 개인화 대시보드. 레벨/XP · 별자리 · 행성 · 평행우주 저장 · 통계.
 // 수치는 전부 localStorage 의 실제 활동 기록(pm.myuniverse.v1)에서 파생된다.
@@ -70,26 +69,95 @@ export default function MyUniverse() {
   const [weekBack, setWeekBack] = useState(0); // 0 = 이번 주, 1 = 지난주 …
   const [showReport, setShowReport] = useState(false); // 주간 리포트 펼침
   const [constellationSheetOpen, setConstellationSheetOpen] = useState(false);
+  const [focusMonth, setFocusMonth] = useState(null); // 우주 지도에서 줌인한 달(YYYY-MM)
+  const [clusterOpen, setClusterOpen] = useState(null); // 행성 줌에서 누른 성단(별자리 묶음)
+  const [clusterPicked, setClusterPicked] = useState(null); // 성단 시트에서 고른 별
+  const [reportSheet, setReportSheet] = useState(false); // 행성 리포트 시트
   const [reportCache, setReportCache] = useState({}); // weekKey → { report, actions }
   const [reportBusy, setReportBusy] = useState(false);
   const [reportErr, setReportErr] = useState(null);
 
   const planet = u.state.planet;
-  const isAll = planet === "all"; // '전체' = 특정 영역 아닌 전체 일기 기반(별자리 만들기)
+  const isAll = planet === "all"; // '전체' = 궤도 개요(은하 카드가 시간축을 맡는다)
   const selectedPlanet = PLANETS.find((p) => p.key === planet) || PLANETS[0];
-  const viewPlanet = isAll ? ALL_PLANET : selectedPlanet;
   // 영역별(또는 전체) 분석 — 전체면 모든 일기 기반, 도메인이면 그 영역만.
   const domainAnal = useMemo(() => domainAnalysis(isAll ? "all" : planet, u.state), [isAll, planet, u.state]);
-  // 별자리 브라우저는 적응형(기록 수 맞춰 묶음) — 전체 52개 문제·희박영역 텅빔 문제 해결.
-  const domainGroups = useMemo(() => adaptiveGroups(isAll ? null : planet, u.state), [isAll, planet, u.state]);
-  const planetCounts = useMemo(
-    () => Object.fromEntries(PLANETS.map((p) => [p.key, domainAnalysis(p.key, u.state).n || 0])),
+  // 행성별 성단(적응형 별자리 묶음) — 우주 지도 줌인 때 행성 둘레에 뿌려진다.
+  const clustersByPlanet = useMemo(
+    () => Object.fromEntries(PLANETS.map((p) => [p.key, adaptiveGroups(p.key, u.state)])),
     [u.state],
   );
+  // 궤도 개요 재료 — 영역별 분석 1회 계산해 칩 뱃지·행성 크기·요약에 공유.
+  const orbitRows = useMemo(
+    () => PLANETS.map((p) => ({ ...p, a: domainAnalysis(p.key, u.state) })),
+    [u.state],
+  );
+  const orbitMaxN = Math.max(1, ...orbitRows.map((r) => r.a.n || 0));
+
+  // 월별 묶음 — 우주 지도의 '12달의 별' 재료(최근 12개월).
+  const monthGroups = useMemo(() => {
+    const by = {};
+    for (const c of u.state.checkins || []) {
+      if (!c.date) continue;
+      const mk = c.date.slice(0, 7);
+      (by[mk] ||= []).push(c);
+    }
+    return Object.entries(by)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([monthKey, entries]) => {
+        const moods = entries
+          .map((c) => (c.mood != null ? c.mood : c.valence != null ? c.valence * 2 + 3 : null))
+          .filter((v) => v != null);
+        return {
+          monthKey,
+          entries,
+          n: entries.length,
+          avgMood: moods.length ? moods.reduce((x, y) => x + y, 0) / moods.length : null,
+        };
+      });
+  }, [u.state]);
 
   const groups = useMemo(() => constellationGroups(u.state), [u.state]);
   const idx = Math.max(0, groups.length - 1 - weekBack);
   const group = groups[idx] || null;
+
+  // 달 → 그 달에 걸친 달력 주 그룹들(주간 별자리 재료). 지도 줌 때 펼쳐질 모양.
+  const weeksByMonth = useMemo(() => {
+    const map = {};
+    for (const m of monthGroups) {
+      map[m.monthKey] = groups.filter((g) =>
+        g.stars.some((s) => !s.empty && s.date.slice(0, 7) === m.monthKey),
+      );
+    }
+    return map;
+  }, [monthGroups, groups]);
+
+  // 지도에서 주간 별자리 열기 — 기존 주간 시트 재사용.
+  function openWeekFromMap(w) {
+    setWeekBack(Math.max(0, groups.length - 1 - w.index));
+    setPicked(null);
+    setShowReport(false);
+    setConstellationSheetOpen(true);
+  }
+
+  // 3D 지구본의 별자리 클릭 — 지구본에 보이는 '그 필터된 묶음' 그대로 성단 시트로.
+  // (달력 원본 주를 열면 다른 도메인 별까지 섞여 모양이 달라진다 — 데이터 일치가 핵심.)
+  function openClusterFromGlobe(selectedGroup) {
+    if (!selectedGroup) return;
+    setClusterPicked(null);
+    setClusterOpen(selectedGroup);
+  }
+
+  // 행성 클릭 → 카메라 비행(0.85s) 후 3D 지구본으로 전환.
+  const [globeReady, setGlobeReady] = useState(false);
+  useEffect(() => {
+    if (isAll) {
+      setGlobeReady(false);
+      return undefined;
+    }
+    const t = setTimeout(() => setGlobeReady(true), 550); // 카메라 비행 끝나갈 때 크로스페이드 시작
+    return () => clearTimeout(t);
+  }, [isAll, planet]);
 
   const constellation = useMemo(
     () => (group ? classifyConstellation(group, profile?.value_ranking) : null),
@@ -101,27 +169,28 @@ export default function MyUniverse() {
     refresh();
   }
 
-  function toggleDemoRecords() {
+  // 데모 시드/비우기 — 컨트롤은 헤더 한 곳에만 둔다(중복 방지).
+  function resetViews() {
     clearSavedReports(REPORT_UID);
     setReportCache({});
     setWeekBack(0);
     setPicked(null);
     setShowReport(false);
     setConstellationSheetOpen(false);
-
-    if (isDemo(u.state)) resetUniverse();
-    else if (u.stars === 0) seedDemoCheckins();
-
+  }
+  function runDemo(kind) {
+    resetViews();
+    resetUniverse();
+    if (kind === "1y") seedDemoYear();
+    else seedDemoCheckins();
+    refresh();
+  }
+  function clearDemo() {
+    resetViews();
+    resetUniverse();
     refresh();
   }
 
-  function openPlanetConstellation(selectedGroup) {
-    const targetIndex = groups.findIndex((item) => item.weekStart === selectedGroup?.weekStart);
-    if (targetIndex >= 0) setWeekBack(Math.max(0, groups.length - 1 - targetIndex));
-    setPicked(null);
-    setShowReport(false);
-    setConstellationSheetOpen(true);
-  }
 
   // 완성된 주의 리포트를 가져온다.
   //  1) DB 저장본 먼저 조회(즉시) → 있으면 그대로 사용
@@ -188,74 +257,160 @@ export default function MyUniverse() {
           </p>
         </div>
         {(u.stars === 0 || isDemo(u.state)) && (
-          <button
-            type="button"
-            onClick={toggleDemoRecords}
-            className="tap mt-0.5 shrink-0 rounded-full border border-white/15 bg-white/[.06] px-2.5 py-1.5 text-[10px] font-semibold text-sub transition-colors hover:border-cyan/50 hover:text-cyan"
-          >
-            {isDemo(u.state) ? "데모 비우기" : "6주 데모 보기"}
-          </button>
+          <div className="mt-0.5 flex shrink-0 gap-1.5">
+            <DemoBtn onClick={() => runDemo("6w")}>{isDemo(u.state) ? "6주" : "6주 데모"}</DemoBtn>
+            <DemoBtn onClick={() => runDemo("1y")}>{isDemo(u.state) ? "1년" : "1년 데모"}</DemoBtn>
+            {isDemo(u.state) && <DemoBtn onClick={clearDemo}>비우기</DemoBtn>}
+          </div>
         )}
-      </div>
-
-      {isDemo(u.state) && (
-        <div className="mb-3 flex items-center gap-1.5 rounded-xl border border-cyan/20 bg-cyan/[.07] px-3 py-2 text-[10px] text-cyan">
-          <span aria-hidden="true">✦</span>
-          6주 예시 기록을 보고 있어요. 실제 사용자 기록에는 포함되지 않습니다.
-        </div>
-      )}
-
-      {/* 데모 확인용 — 예시 데이터로 즉시 채우기(옛 리포트도 함께 정리). */}
-      <div className="mb-3 grid grid-cols-2 gap-2">
-        <button
-          onClick={() => {
-            clearSavedReports(REPORT_UID);
-            resetUniverse();
-            seedDemoCheckins();
-            setReportCache({});
-            setPicked(null);
-            setWeekBack(0);
-            refresh();
-          }}
-          className="tap rounded-2xl border border-dashed border-gold/50 bg-[#241d10] py-2.5 text-[12px] font-bold text-gold"
-        >
-          🧪 예시 6주
-        </button>
-        <button
-          onClick={() => {
-            clearSavedReports(REPORT_UID);
-            seedDemoYear();
-            setReportCache({});
-            setPicked(null);
-            setWeekBack(0);
-            refresh();
-          }}
-          className="tap rounded-2xl border border-dashed border-cyan/50 bg-[#12203a] py-2.5 text-[12px] font-bold text-cyan"
-        >
-          🧪 예시 1년치 (개인화 데모)
-        </button>
       </div>
 
       {/* 예시 기록이 들어있는 동안은 항상 밝힌다 — 남의 기록을 내 기록처럼 보여주지 않는다. */}
       {isDemo(u.state) && (
-        <div className="flex items-center justify-between rounded-xl border border-gold/40 bg-[#241d10] px-3 py-2">
-          <span className="text-[11px] text-gold">
-            예시 데이터로 둘러보는 중 — 내 기록이 아닙니다
-          </span>
-          <button
-            onClick={() => {
-              resetUniverse();
-              clearSavedReports(REPORT_UID); // 저장된 주간 리포트도 함께 비움
-              setReportCache({});
-              setWeekBack(0);
-              setPicked(null);
-              refresh();
-            }}
-            className="tap shrink-0 rounded-lg border border-line px-2 py-1 text-[10px] text-sub"
-          >
-            비우기
-          </button>
+        <div className="mb-3 flex items-center gap-1.5 rounded-xl border border-cyan/20 bg-cyan/[.07] px-3 py-2 text-[10px] text-cyan">
+          <span aria-hidden="true">✦</span>
+          예시 기록을 보고 있어요 — 실제 내 기록이 아닙니다.
         </div>
+      )}
+
+      {/* 🌌 우주 지도 — 은하(12달의 별)와 행성(영역)을 한 화면에. 달=월간 펼침, 행성=영역 줌인. */}
+      {u.stars > 0 ? (
+        <Card>
+          <div className="flex items-center justify-between">
+            <div className="text-base font-semibold">🌌 나의 우주</div>
+            <span className="text-[10px] text-mut">가운데 12달의 별 · 둘레 5개 행성</span>
+          </div>
+          {/* 지도는 항상 깔려 있고, 행성 도착 시 3D 지구본이 그 위로 크로스페이드로 얹힌다 —
+              카메라 비행(0.8s)이 끝나갈 무렵(0.55s) 페이드가 시작돼 이어지는 느낌을 만든다.
+              확장(PC) 레이아웃은 /my 가 와이드(1120px)라 지도가 뻥튀기되지 않게 폭을 캡. */}
+          <div className="relative mx-auto w-full max-w-[540px]">
+          <UniverseMap
+            monthGroups={monthGroups}
+            weeksByMonth={weeksByMonth}
+            planets={orbitRows}
+            maxPlanetN={orbitMaxN}
+            clustersByPlanet={clustersByPlanet}
+            focus={isAll ? null : planet}
+            focusMonth={focusMonth}
+            skin={planetSkin()}
+            onMonthPick={(mk) => {
+              if (!isAll) choosePlanet("all");
+              setFocusMonth((prev) => (prev === mk ? null : mk));
+            }}
+            onPlanetPick={(key) => {
+              setFocusMonth(null);
+              choosePlanet(planet === key ? "all" : key);
+            }}
+            onClusterOpen={(g) => {
+              setClusterPicked(null);
+              setClusterOpen(g);
+            }}
+            onWeekOpen={openWeekFromMap}
+          />
+          {!isAll && globeReady && (
+            <div
+              className="absolute inset-0 overflow-hidden"
+              style={{ background: "#0A1322", animation: "pm-fade .6s ease both" }}
+            >
+              <style>{`@keyframes pm-fade { from { opacity: 0 } to { opacity: 1 } }`}</style>
+              <PlanetGlobe
+                fill
+                planet={selectedPlanet}
+                skin={planetSkin()}
+                groups={groupsByPlanet(planet)}
+                scenarios={scenariosByPlanet(planet).map((s) => ({
+                  date: s.date,
+                  title: s.title,
+                  dateLabel: s.date,
+                  br: s.br,
+                }))}
+                onOpen={() => navigate("/input")}
+                onConstellationOpen={openClusterFromGlobe}
+                onPlanetTap={() => choosePlanet("all")}
+              />
+            </div>
+          )}
+          </div>
+
+          {focusMonth ? (
+            (() => {
+              const mg = monthGroups.find((m) => m.monthKey === focusMonth);
+              const a = mg ? analyzeStars(mg.entries) : null;
+              return (
+                <>
+                  <div className="mt-2 flex items-center justify-between rounded-xl border border-line bg-[#0E1424] px-3 py-2.5">
+                    <span className="text-[12px] font-bold text-cyan">
+                      🌙 {parseInt(focusMonth.slice(5), 10)}월 · 기록 {mg?.n || 0}일
+                      {mg?.avgMood != null && ` · 평균 ${mg.avgMood.toFixed(1)}`}
+                    </span>
+                    <button onClick={() => setFocusMonth(null)} className="tap text-[11px] text-mut">
+                      ← 우주로
+                    </button>
+                  </div>
+                  <p className="mt-1.5 text-[10px] leading-relaxed text-mut">
+                    뭉쳐 있던 별들이 이 달의 주간 별자리 모양으로 펼쳐졌어요 — 별자리를 누르면 그 주
+                    기록이 열려요.
+                    {a?.ok && a.topEmotions.length > 0 && ` 자주 남긴 감정: ${a.topEmotions.join("·")}.`}
+                  </p>
+                </>
+              );
+            })()
+          ) : isAll ? (
+            <>
+              <p className="mt-1 text-[10px] leading-relaxed text-mut">
+                달 성단을 누르면 그 달의 별자리들이 펼쳐지고, 행성을 누르면 그 행성으로 날아가요. 별
+                색=기분 · 성단 크기=기록량.
+              </p>
+              <div className="mt-2 grid grid-cols-3 gap-2">
+                <MiniStat label="수집한 별" value={`${u.stars}개`} center />
+                <MiniStat label="연속 기록" value={`${u.streak}일`} center />
+                <MiniStat label="완성 별자리" value={`${u.completed}개`} center />
+              </div>
+              <OrbitSummary rows={orbitRows} />
+            </>
+          ) : (
+            <>
+              <div className="mt-2 flex items-center justify-between rounded-xl border border-line bg-[#0E1424] px-3 py-2.5">
+                <span className="text-[12px] font-bold text-cyan">
+                  🪐 {selectedPlanet.label} 행성 · 기록 {domainAnal.n || 0}개
+                </span>
+                <span className="flex items-center gap-2.5">
+                  <button onClick={() => setReportSheet(true)} className="tap text-[11px] font-semibold text-cyan">
+                    📖 리포트
+                  </button>
+                  <button onClick={() => choosePlanet("all")} className="tap text-[11px] text-mut">
+                    ← 우주로
+                  </button>
+                </span>
+              </div>
+              <p className="mt-1.5 text-[10px] leading-relaxed text-mut">
+                행성 둘레의 성단이 이 영역의 별자리예요 — 성단을 누르면 그 시기의 기록이 열려요.
+              </p>
+            </>
+          )}
+
+          <div className="mt-4 flex items-center justify-between border-t border-white/[.07] pt-3">
+            <span className="text-[10px] text-mut">시뮬레이션 {u.stats.simulations}회 · 탐험 기록 전체는 보관함에</span>
+            <button onClick={() => navigate("/archive")} className="tap text-[11px] font-semibold text-cyan">
+              전체 기록 →
+            </button>
+          </div>
+        </Card>
+      ) : (
+        <Card>
+          <div className="mb-1 text-base font-semibold">🌌 나의 우주</div>
+          <p className="py-4 text-center text-[12px] leading-relaxed text-mut">
+            일기를 쓰면 그 달의 별이 자라나고, 영역 행성이 하나씩 깨어나요.
+            <br />
+            1년이면 나만의 우주가 완성됩니다 ✦
+          </p>
+          <button
+            onClick={() => navigate("/home")}
+            className="tap w-full rounded-2xl border border-cyan bg-[#12203a] py-2.5 text-[13px] font-semibold text-cyan"
+          >
+            첫 별 남기러 가기
+          </button>
+        </Card>
       )}
 
       {/* 레벨 / XP */}
@@ -437,80 +592,72 @@ export default function MyUniverse() {
         )}
       </Card>
 
-      {/* 전체 리포트 — 5개 영역을 한눈에(균형·흐름). 세부는 아래 행성 우주에서. */}
-      <AllDomainsReport state={u.state} onPick={choosePlanet} planet={planet} />
-
-      {/* 행성 우주 — 도메인별 지구본(옛 행성 선택 대체). 칩이 곧 행성 선택. */}
-      <Card>
-        <div className="mb-1 text-base font-semibold">🪐 행성 우주</div>
-        <p className="mb-2 text-[11px] text-mut">행성은 당신의 삶의 영역입니다 · 눌러서 그 영역을 봐요</p>
-        <div className="mb-1 flex flex-wrap gap-1.5">
-          {/* 전체 = 전체 일기 기반 종합(별자리 만들기) */}
-          <button
-            onClick={() => choosePlanet("all")}
-            className={`tap flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] ${
-              isAll ? "border-cyan text-cyan" : "border-line text-sub"
-            }`}
-          >
-            전체
-            {u.stars > 0 && <span className="rounded-full bg-cyan/15 px-1 text-[9px] text-cyan">{u.stars}</span>}
-          </button>
-          {PLANETS.map((p) => {
-            const n = planetCounts[p.key] || 0;
-            return (
-              <button
-                key={p.key}
-                onClick={() => choosePlanet(p.key)}
-                className={`tap flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] ${
-                  planet === p.key ? "border-cyan text-cyan" : n > 0 ? "border-line text-sub" : "border-line text-mut opacity-60"
-                }`}
-              >
-                {p.label}
-                {n > 0 && <span className="rounded-full bg-cyan/15 px-1 text-[9px] text-cyan">{n}</span>}
-              </button>
-            );
-          })}
-        </div>
-        <PlanetGlobe
-          planet={viewPlanet}
-          groups={groupsByPlanet(isAll ? null : planet)}
-          scenarios={(isAll ? (u.state.scenarios || []) : scenariosByPlanet(planet)).map((s) => ({
-            date: s.date,
-            title: s.title,
-            dateLabel: s.date,
-            br: s.br,
-          }))}
-          onOpen={() => navigate("/input")}
-          onConstellationOpen={openPlanetConstellation}
-        />
-        <p className="mt-2 rounded-xl border border-line bg-[#0E1424] px-3 py-2.5 text-[12px] text-sub">
-          {isAll
-            ? "전체 일기를 기반으로 한 종합 흐름·별자리예요. 특정 영역은 위에서 골라 자세히 볼 수 있어요."
-            : <>선택된 행성: <span className="font-bold text-ink">{viewPlanet.label}</span> — 일기를 저장하면 이 영역으로 자동 분류돼 별로 쌓이고, 갈림길을 시뮬레이션합니다.</>}
-        </p>
-
-        {/* 리포트 — 전체(별자리 만들기) 또는 그 영역의 연속 흐름 + 요약. 로컬, API 0. */}
-        <PlanetDomainReport analysis={domainAnal} planet={viewPlanet} />
-        {/* 별자리들 — 유형(순항/기복형…) + 별 하나 클릭해 그 날 기록 보기. */}
-        <PlanetConstellations key={planet} groups={domainGroups} valueRanking={profile?.value_ranking} />
-
-        <div className="mt-4 border-t border-white/[.07] pt-4">
-          <div className="mb-2 flex items-center justify-between">
-            <div>
-              <div className="text-[12px] font-semibold text-ink">나의 우주 기록</div>
-              <p className="mt-0.5 text-[10px] text-mut">지금까지 발견한 별과 탐험 기록이에요.</p>
+      {/* 성단 시트 — 행성 줌에서 누른 별자리 묶음의 기록. */}
+      {clusterOpen && (
+        <div className="fixed inset-0 z-[70] flex animate-backdrop-in items-end justify-center bg-[#02050C]/70 backdrop-blur-[4px]" onClick={() => setClusterOpen(null)}>
+          <div className="mb-[68px] flex max-h-[calc(100dvh-88px)] w-full max-w-phone animate-sheet-up flex-col overflow-hidden rounded-t-[34px] border border-white/10 bg-[#0D1727] shadow-[0_-24px_70px_rgba(0,0,0,.55)]" onClick={(e) => e.stopPropagation()}>
+            <div className="shrink-0 px-5 pb-3 pt-3">
+              <div className="mx-auto mb-3 h-1 w-11 rounded-full bg-white/25" />
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-[11px] font-bold text-cyan">{selectedPlanet.label} 행성 · 성단</div>
+                  <h2 className="mt-1 text-[20px] font-bold">
+                    {clusterOpen.label || (clusterOpen.weekStart ? `${clusterOpen.weekStart} 주` : `별자리 ${(clusterOpen.index ?? 0) + 1}`)}
+                  </h2>
+                </div>
+                <button type="button" onClick={() => setClusterOpen(null)} className="tap flex h-10 w-10 items-center justify-center rounded-full bg-white/[.07] text-[22px] text-sub" aria-label="성단 상세 닫기">×</button>
+              </div>
             </div>
-            <button onClick={() => navigate("/archive")} className="tap text-[11px] font-semibold text-cyan">
-              전체 기록 →
-            </button>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            <MiniStat label="시뮬레이션" value={u.stats.simulations} center />
-            <MiniStat label="수집한 별" value={u.stats.stars} center />
-            <MiniStat label="완성한 별자리" value={u.completed} center />
+            <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-10">
+              <div className="rounded-[24px] border border-white/10 bg-[#091321] p-3">
+                <Constellation
+                  size={292}
+                  stars={clusterOpen.stars}
+                  todayDate={todayKey()}
+                  selectedDate={clusterPicked?.date}
+                  onSelect={(s) => (s.empty ? null : setClusterPicked((c) => (c?.date === s.date ? null : s)))}
+                />
+                <p className="mt-1 text-center text-[11px] text-mut">별을 누르면 그날의 기록을 볼 수 있어요.</p>
+              </div>
+              {(() => {
+                const a = analyzeStars(clusterOpen.stars);
+                const c = classifyConstellation(clusterOpen, profile?.value_ranking);
+                if (!a.ok) return null;
+                return (
+                  <p className="mt-2 rounded-xl border border-line bg-[#0E1424] px-3 py-2.5 text-[11.5px] leading-relaxed text-sub">
+                    <span className="mr-1 rounded-md border border-line px-1.5 py-0.5 text-[10px]">{badgeLabel(c)}</span>
+                    기록 {a.n}개 · 기분 평균 {a.moodAvg}.
+                    {a.trend != null && (a.trend > 0.1 ? " 뒤로 갈수록 나아졌어요." : a.trend < -0.1 ? " 뒤로 갈수록 가라앉았어요." : " 큰 기복은 없었어요.")}
+                    {a.topEmotions.length > 0 && ` 자주 남긴 감정: ${a.topEmotions.join("·")}.`}
+                  </p>
+                );
+              })()}
+              {clusterPicked && <StarDetail star={clusterPicked} />}
+            </div>
           </div>
         </div>
-      </Card>
+      )}
+
+      {/* 행성 리포트 시트 — 그 영역 누적 흐름·요약·대표 기록. */}
+      {reportSheet && !isAll && (
+        <div className="fixed inset-0 z-[70] flex animate-backdrop-in items-end justify-center bg-[#02050C]/70 backdrop-blur-[4px]" onClick={() => setReportSheet(false)}>
+          <div className="mb-[68px] flex max-h-[calc(100dvh-88px)] w-full max-w-phone animate-sheet-up flex-col overflow-hidden rounded-t-[34px] border border-white/10 bg-[#0D1727] shadow-[0_-24px_70px_rgba(0,0,0,.55)]" onClick={(e) => e.stopPropagation()}>
+            <div className="shrink-0 px-5 pb-3 pt-3">
+              <div className="mx-auto mb-3 h-1 w-11 rounded-full bg-white/25" />
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-[11px] font-bold text-cyan">나의 우주 · 행성 리포트</div>
+                  <h2 className="mt-1 text-[20px] font-bold">🪐 {selectedPlanet.label} 행성</h2>
+                </div>
+                <button type="button" onClick={() => setReportSheet(false)} className="tap flex h-10 w-10 items-center justify-center rounded-full bg-white/[.07] text-[22px] text-sub" aria-label="행성 리포트 닫기">×</button>
+              </div>
+            </div>
+            <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-10">
+              <PlanetDomainReport analysis={domainAnal} planet={selectedPlanet} />
+            </div>
+          </div>
+        </div>
+      )}
 
       {constellationSheetOpen && group && (
         <div className="fixed inset-0 z-[70] flex animate-backdrop-in items-end justify-center bg-[#02050C]/70 backdrop-blur-[4px]" onClick={() => setConstellationSheetOpen(false)}>
@@ -519,7 +666,7 @@ export default function MyUniverse() {
               <div className="mx-auto mb-3 h-1 w-11 rounded-full bg-white/25" />
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-[11px] font-bold text-cyan">{selectedPlanet.label} 행성의 별자리</div>
+                  <div className="text-[11px] font-bold text-cyan">나의 우주 · 주간 별자리</div>
                   <h2 className="mt-1 text-[20px] font-bold">{weekBack === 0 ? "이번 주 기록" : `${weekBack}주 전 기록`}</h2>
                 </div>
                 <button type="button" onClick={() => setConstellationSheetOpen(false)} className="tap flex h-10 w-10 items-center justify-center rounded-full bg-white/[.07] text-[22px] text-sub" aria-label="별자리 상세 닫기">×</button>
@@ -631,107 +778,42 @@ export default function MyUniverse() {
   );
 }
 
-// 그 영역의 별자리들 — 7별 청크마다 유형(순항/기복형…) 배지 + 별 클릭 시 그 날 리포트.
-function PlanetConstellations({ groups, valueRanking }) {
-  const filled = (groups || []).filter((g) => g.filled > 0);
-  const [idx, setIdx] = useState(Math.max(0, filled.length - 1));
-  const [picked, setPicked] = useState(null);
-  if (!filled.length) return null;
-
-  const i = Math.min(idx, filled.length - 1);
-  const group = filled[i];
-  const c = classifyConstellation(group, valueRanking);
-  const a = analyzeStars(group.stars); // 이 묶음(별자리)의 리포트
-  const trendTxt = a.trend == null ? "" : a.trend > 0.1 ? " 뒤로 갈수록 나아졌어요." : a.trend < -0.1 ? " 뒤로 갈수록 가라앉았어요." : " 큰 기복은 없었어요.";
-
-  return (
-    <div className="mt-2 rounded-xl border border-line bg-[#0E1424] px-3.5 py-3">
-      <div className="flex items-center justify-between">
-        <span className="inline-block rounded-lg border border-line px-2.5 py-1 text-[11px] text-sub">
-          {badgeLabel(c)}
-        </span>
-        {filled.length > 1 && (
-          <div className="flex items-center gap-1 text-[11px] text-mut">
-            <PagerBtn disabled={i <= 0} onClick={() => { setIdx(i - 1); setPicked(null); }}>‹</PagerBtn>
-            <span className="min-w-[92px] text-center">{group.label || `별자리 ${i + 1}`}</span>
-            <PagerBtn disabled={i >= filled.length - 1} onClick={() => { setIdx(i + 1); setPicked(null); }}>›</PagerBtn>
-          </div>
-        )}
-      </div>
-
-      <div className="mt-2">
-        <Constellation
-          stars={group.stars}
-          todayDate={todayKey()}
-          selectedDate={picked?.date}
-          onSelect={(s) => (s.empty ? null : setPicked((p) => (p?.date === s.date ? null : s)))}
-        />
-      </div>
-
-      {/* 이 별자리(묶음) 리포트 */}
-      {a.ok && (
-        <p className="mt-1.5 text-[11.5px] leading-relaxed text-sub">
-          이 별자리는 기록 {a.n}개 · 기분 평균 {a.moodAvg}.{trendTxt}
-          {a.topEmotions.length > 0 && ` 자주 남긴 감정: ${a.topEmotions.join("·")}.`}
-        </p>
-      )}
-      {picked ? (
-        <StarDetail star={picked} />
-      ) : (
-        <p className="mt-1.5 text-[10px] text-mut">별을 누르면 그 날의 기록이 열려요.</p>
-      )}
-    </div>
-  );
-}
-
-// 🌌 전체 리포트 — 5개 영역을 한눈에(균형·흐름). 세부는 행성 우주에서. 로컬, API 0.
-function AllDomainsReport({ state, onPick, planet }) {
-  const rows = PLANETS.map((p) => ({ ...p, a: domainAnalysis(p.key, state) }));
+// 궤도 요약 한 줄 — 균형·흐름. 미탐사 행성은 탐사 유도로 잇는다.
+function OrbitSummary({ rows }) {
   const active = rows.filter((r) => r.a.ok);
-  if (!active.length) return null;
-
-  const totalN = active.reduce((s, r) => s + r.a.n, 0);
-  const maxN = Math.max(...active.map((r) => r.a.n));
+  if (!active.length) {
+    return (
+      <p className="mt-2 rounded-xl border border-dashed border-line bg-[#0E1424] px-3 py-2.5 text-[11px] leading-relaxed text-mut">
+        아직 탐사된 행성이 없어요. 일기를 쓰면 영역이 자동 분류돼 행성이 자라나요.
+      </p>
+    );
+  }
   const top = [...active].sort((a, b) => b.a.n - a.a.n)[0];
   const rising = active.filter((r) => r.a.trend != null && r.a.trend > 0.1).map((r) => r.label);
   const falling = active.filter((r) => r.a.trend != null && r.a.trend < -0.1).map((r) => r.label);
   const empty = rows.filter((r) => !r.a.ok).map((r) => r.label);
-  const trendCol = (t) => (t == null ? "#67A3FF" : t > 0.1 ? "#5DCAA5" : t < -0.1 ? "#F0736F" : "#8895AF");
-  const trendTxt = (t) => (t == null ? "—" : t > 0.1 ? "↗" : t < -0.1 ? "↘" : "→");
-
   return (
-    <Card>
-      <div className="flex items-center justify-between">
-        <div className="text-base font-semibold">🌌 전체 리포트</div>
-        <span className="text-[10px] text-mut">최근 기록 {totalN}개 · {active.length}개 영역</span>
-      </div>
-      <p className="mt-1 text-[11px] leading-relaxed text-sub">
-        가장 많이 기록한 영역: <b className="text-ink">{top.label}</b>.
-        {rising.length > 0 && <> 회복세: <b style={{ color: "#5DCAA5" }}>{rising.join("·")}</b>.</>}
-        {falling.length > 0 && <> 하강세: <b style={{ color: "#F0736F" }}>{falling.join("·")}</b>.</>}
-        {empty.length > 0 && <> <span className="text-mut">{empty.join("·")}</span>은(는) 기록이 적어 균형을 살펴봐요.</>}
-      </p>
+    <p className="mt-2 rounded-xl border border-line bg-[#0E1424] px-3 py-2.5 text-[11px] leading-relaxed text-sub">
+      가장 큰 행성: <b className="text-ink">{top.label}</b>({top.a.n}개).
+      {rising.length > 0 && <> 회복세 <b style={{ color: "#5DCAA5" }}>{rising.join("·")}</b>.</>}
+      {falling.length > 0 && <> 하강세 <b style={{ color: "#F0736F" }}>{falling.join("·")}</b>.</>}
+      {empty.length > 0 && (
+        <> <span className="text-mut">{empty.join("·")}</span>은(는) 아직 미탐사 — 행성을 눌러 탐험을 시작해요.</>
+      )}
+    </p>
+  );
+}
 
-      <div className="mt-3 space-y-1.5">
-        {rows.map((r) => (
-          <button
-            key={r.key}
-            onClick={() => onPick?.(r.key)}
-            className={`tap flex w-full items-center gap-2 rounded-lg px-1.5 py-1 text-left ${planet === r.key ? "bg-white/[.05]" : ""}`}
-          >
-            <span className="w-[52px] shrink-0 text-[11px] text-sub">{r.label}</span>
-            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#223047]">
-              <div className="h-full rounded-full" style={{ width: `${maxN ? Math.round(((r.a.n || 0) / maxN) * 100) : 0}%`, background: `linear-gradient(90deg, ${r.from}, ${r.to})` }} />
-            </div>
-            <span className="w-[26px] shrink-0 text-right text-[10px] tabular-nums text-mut">{r.a.n || 0}</span>
-            <span className="w-[16px] shrink-0 text-center text-[11px]" style={{ color: trendCol(r.a.ok ? r.a.trend : null) }}>
-              {r.a.ok ? trendTxt(r.a.trend) : "·"}
-            </span>
-          </button>
-        ))}
-      </div>
-      <p className="mt-2 text-[9px] leading-relaxed text-mut">막대=기록량, 화살표=기분 흐름. 영역을 누르면 세부 분석으로 이동해요.</p>
-    </Card>
+// 헤더 데모 버튼 — 기록이 없거나 데모일 때만 보인다.
+function DemoBtn({ onClick, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="tap rounded-full border border-white/15 bg-white/[.06] px-2.5 py-1.5 text-[10px] font-semibold text-sub transition-colors hover:border-cyan/50 hover:text-cyan"
+    >
+      {children}
+    </button>
   );
 }
 
