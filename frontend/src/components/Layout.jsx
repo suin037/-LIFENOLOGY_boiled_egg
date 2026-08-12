@@ -58,6 +58,9 @@ export default function Layout() {
         </main>
 
         {showTabBar && <TabBar />}
+
+        {/* 오버레이(상점 등) 포탈 루트 — 폰 프레임 전체를 덮는다 */}
+        <div id="pm-overlay-root" />
       </div>
     </div>
   );

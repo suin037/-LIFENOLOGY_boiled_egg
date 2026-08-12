@@ -48,6 +48,14 @@ export function feedMascot(p = loadPet()) {
   if (p.snacks <= 0) return p;
   return savePet({ ...p, snacks: p.snacks - 1, happiness: Math.min(100, p.happiness + 16), bond: Math.min(100, p.bond + 7) });
 }
+// 상점 간식 먹이기 — 호감도(+행복) 임의량 적립.
+export function addBond(p = loadPet(), amount = 0) {
+  return savePet({
+    ...p,
+    bond: Math.min(100, p.bond + amount),
+    happiness: Math.min(100, p.happiness + Math.round(amount * 1.2)),
+  });
+}
 export function setWhich(which, p = loadPet()) {
   return savePet({ ...p, which });
 }
