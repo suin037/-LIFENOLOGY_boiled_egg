@@ -254,7 +254,24 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], skin = "ba
             date: grp[j].date,
           });
         }
-        cl.push({ c: g, z: A[2], stars });
+        cl.push({ c: g, z: A[2], stars, cxs: scx, cys: scy });
+      }
+      // 시간의 실 — 성단들을 오래된 순서대로 잇는다(순서 표현). 실이 끊긴 곳이 시작↔최근.
+      const centers = cl.map((k) => ({ x: k.cxs, y: k.cys, z: k.z }));
+      if (centers.length > 1) {
+        for (let i = 0; i < centers.length - 1; i++) {
+          const p1 = centers[i],
+            p2 = centers[i + 1];
+          const dep2 = ((p1.z + p2.z) / 2 + 1) / 2;
+          ctx.beginPath();
+          ctx.moveTo(p1.x, p1.y);
+          ctx.lineTo(p2.x, p2.y);
+          ctx.strokeStyle = `rgba(159,176,206,${(0.05 + 0.14 * dep2).toFixed(3)})`;
+          ctx.lineWidth = 0.7;
+          ctx.setLineDash([3, 5]);
+          ctx.stroke();
+        }
+        ctx.setLineDash([]);
       }
       cl.sort((a, b) => a.z - b.z);
       const focus = st.pinned != null ? st.pinned : (cl.length ? cl[cl.length - 1].c : null);
@@ -314,7 +331,22 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], skin = "ba
         if (visibleStars.length && grp.z > -0.35) {
           const gx = visibleStars.reduce((sum, star) => sum + star.sx, 0) / visibleStars.length;
           const gy = visibleStars.reduce((sum, star) => sum + star.sy, 0) / visibleStars.length;
-          st.groupHit.push({ x: gx, y: gy, group: disp[grp.c] });
+          st.groupHit.push({ x: gx, y: gy, z: grp.z, group: disp[grp.c] });
+        }
+        // 순번·기간 라벨 — 몇 번째 시기의 별자리인지. 최근 성단은 시안색으로 강조.
+        const src = disp[grp.c];
+        if (src && grp.stars.length) {
+          const gx2 = grp.stars.reduce((sum, star) => sum + star.sx, 0) / grp.stars.length;
+          const gyMax = Math.max(...grp.stars.map((star) => star.sy));
+          const isLatest = grp.c === disp.length - 1;
+          const first = String(src.label || (src.weekStart ? src.weekStart.slice(5) : "")).split("~")[0];
+          ctx.font = "500 9px sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "top";
+          ctx.fillStyle = isLatest
+            ? `rgba(127,212,255,${(0.5 + 0.5 * dep).toFixed(2)})`
+            : `rgba(159,176,206,${(0.22 + 0.42 * dep).toFixed(2)})`;
+          ctx.fillText(`${grp.c + 1}·${first}~${isLatest ? " 최근" : ""}`, gx2, gyMax + 6);
         }
       }
       for (let i = 0; i < cl.length; i++) if (cl[i].z < 0) paint(cl[i]);
@@ -382,13 +414,15 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], skin = "ba
         const r = cv.getBoundingClientRect(),
           mx = e.clientX - r.left,
           my = e.clientY - r.top;
-        // 1) 가운데 행성 탭 = 우주 전경 복귀 — 제일 먼저, 넉넉하게 판정한다.
-        //    (별자리 판정 반경이 커서 행성 탭을 자꾸 가로채던 문제 해결)
-        const pcx = cv.clientWidth / 2,
-          pcy = cv.clientHeight / 2,
-          ppr = Math.min(cv.clientWidth, cv.clientHeight) * 0.115;
-        if (Math.hypot(mx - pcx, my - pcy) <= ppr + 14) {
-          dataRef.current.onPlanetTap?.();
+        // 1) 탭 지점에 '아주 가까운' 앞쪽 별자리 — 행성 위를 지나는 성단도 정확히 겨누면 열린다.
+        let tight = null;
+        for (const hit of st.groupHit) {
+          const distance = Math.hypot(hit.x - mx, hit.y - my);
+          const front = (hit.z ?? 1) > -0.1;
+          if (distance < 28 && front && (!tight || distance < tight.distance)) tight = { ...hit, distance };
+        }
+        if (tight?.group) {
+          dataRef.current.onConstellationOpen?.(tight.group);
           return;
         }
         // 2) 시나리오 ◆
@@ -398,7 +432,15 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], skin = "ba
             return;
           }
         }
-        // 3) 별자리(성단)
+        // 3) 가운데 행성 탭 = 우주 전경 복귀 — 넉넉하게.
+        const pcx = cv.clientWidth / 2,
+          pcy = cv.clientHeight / 2,
+          ppr = Math.min(cv.clientWidth, cv.clientHeight) * 0.115;
+        if (Math.hypot(mx - pcx, my - pcy) <= ppr + 14) {
+          dataRef.current.onPlanetTap?.();
+          return;
+        }
+        // 4) 느슨한 별자리 판정 — 행성 밖 빈 하늘을 눌러도 가까운 성단이 열린다.
         let nearest = null;
         for (const hit of st.groupHit) {
           const distance = Math.hypot(hit.x - mx, hit.y - my);
