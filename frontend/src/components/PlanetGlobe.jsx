@@ -36,7 +36,7 @@ function level(s) {
   return 3;
 }
 
-export default function PlanetGlobe({ planet, groups, scenarios = [], skin = "basic", fill = false, onOpen, onConstellationOpen, onPlanetTap }) {
+export default function PlanetGlobe({ planet, groups, scenarios = [], skin = "basic", trait = {}, fill = false, onOpen, onConstellationOpen, onPlanetTap }) {
   const cvRef = useRef(null);
   const dataRef = useRef({});
   const [sel, setSel] = useState(null);
@@ -49,7 +49,7 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], skin = "ba
   scenarios.forEach((s) => (scByDate[s.date] = s));
   const tone = planet ? hexToHsl(planet.from) : { h: 262, s: 46 };
 
-  dataRef.current = { disp, scByDate, tone, skin, label: planet?.label || "관계", onConstellationOpen, onPlanetTap };
+  dataRef.current = { disp, scByDate, scList: scenarios, tone, skin, trait, label: planet?.label || "관계", onConstellationOpen, onPlanetTap };
 
   useEffect(() => {
     const cv = cvRef.current;
@@ -93,10 +93,24 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], skin = "ba
       ctx.restore();
     }
     function planetOrb(cx, cy, pr) {
-      const { tone, label, skin } = dataRef.current;
+      const { tone, label, skin, trait } = dataRef.current;
       const H = tone.h,
         S = tone.s;
       const c = (l) => `hsl(${H},${S}%,${l}%)`;
+      const deco = skin !== "basic";
+      // 행성 특징: 기울어진 고리 — 별자리를 가리지 않게 행성 바로 둘레(반경 1.5pr)만.
+      function ringHalf(back) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate((-18 * Math.PI) / 180);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, pr * 1.5, pr * 0.48, 0, back ? Math.PI : 0, back ? Math.PI * 2 : Math.PI);
+        ctx.strokeStyle = `hsla(${H},${S}%,72%,${back ? 0.35 : 0.7})`;
+        ctx.lineWidth = pr * (back ? 0.1 : 0.13);
+        ctx.stroke();
+        ctx.restore();
+      }
+      if (deco && trait?.ring) ringHalf(true);
       let ag = ctx.createRadialGradient(cx, cy, pr * 0.9, cx, cy, pr * 1.7);
       ag.addColorStop(0, `hsla(${H},${S}%,72%,0.18)`);
       ag.addColorStop(1, `hsla(${H},${S}%,72%,0)`);
@@ -172,6 +186,21 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], skin = "ba
       ctx.strokeStyle = `hsla(${H},${S}%,40%,0.2)`;
       ctx.lineWidth = 0.5;
       ctx.stroke();
+      // 고리 앞쪽 반 + 위성 — 지도의 행성 특징을 3D에서도. 작게 유지해 별자리를 안 가린다.
+      if (deco && trait?.ring) ringHalf(false);
+      if (deco && trait?.moon) {
+        const ma = st.rot * 1.6 + 1.1; // 천천히 행성을 도는 작은 달
+        const mx2 = cx + Math.cos(ma) * pr * 1.45;
+        const my2 = cy - Math.sin(ma) * pr * 0.6;
+        ctx.beginPath();
+        ctx.arc(mx2, my2, pr * 0.14, 0, Math.PI * 2);
+        ctx.fillStyle = c(78);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(mx2 + pr * 0.04, my2 + pr * 0.05, pr * 0.14, 0, Math.PI * 2);
+        ctx.fillStyle = `hsla(${H},30%,12%,0.35)`;
+        ctx.fill();
+      }
       ctx.fillStyle = "rgba(245,240,232,0.8)";
       ctx.font = "500 11px sans-serif";
       ctx.textAlign = "center";
@@ -289,8 +318,32 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], skin = "ba
         }
       }
       for (let i = 0; i < cl.length; i++) if (cl[i].z < 0) paint(cl[i]);
+      // 시나리오 궤도(뒤쪽 선) — 시뮬레이션 = 이 영역의 '추가 별'(◆).
+      const scs = dataRef.current.scList || [];
+      const Rsc = Math.min(w, h) * 0.205;
+      if (scs.length) {
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, Rsc, Rsc * 0.5, 0, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(242,221,176,0.16)";
+        ctx.lineWidth = 0.6;
+        ctx.setLineDash([2, 5]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
       planetOrb(cx, cy, pr);
       for (let i = 0; i < cl.length; i++) if (cl[i].z >= 0) paint(cl[i]);
+      // 시나리오 ◆ 들 — 앞궤도를 돌며, 누르면 내용(sel)이 열린다.
+      for (let i = 0; i < scs.length; i++) {
+        const a2 = (i / scs.length) * Math.PI * 2 + st.rot * 1.35 + 0.7;
+        const sx = cx + Math.cos(a2) * Rsc;
+        const sy = cy - Math.sin(a2) * Rsc * 0.5;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 9, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(225,190,140,0.14)";
+        ctx.fill();
+        diamond(sx, sy, 4);
+        st.hit.push({ x: sx, y: sy, sc: scs[i] });
+      }
     }
     function loop() {
       if (st.auto && !st.dragging && st.pinned == null) st.rot += 0.005;

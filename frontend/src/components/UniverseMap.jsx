@@ -54,7 +54,7 @@ const PLANET_POS = {
 };
 
 // 행성 개성 — 고리/위성(기본 스킨). 추후 XP 상점에서 스킨으로 확장할 자리.
-const PLANET_TRAIT = {
+export const PLANET_TRAIT = {
   career: { moon: true },
   life: { ring: true },
   relation: { moon: true },
@@ -84,6 +84,7 @@ export default function UniverseMap({
   planets,
   maxPlanetN,
   clustersByPlanet,
+  scenarioCounts, // {planetKey: 시뮬레이션 수} — 행성 옆 ◆ 뱃지
   focus, // 행성 key | null
   focusMonth, // "YYYY-MM" | null
   skin = "basic", // 행성 스킨(XP 상점): basic=민무늬 | glow=빛나는 구체 | stripe=줄무늬
@@ -448,6 +449,22 @@ export default function UniverseMap({
                 <text x={p.x} y={p.y + p.size + 21} textAnchor="middle" fontSize="7.5" fill="#677595">
                   {unexplored ? "미탐사" : `${p.n}개`}
                 </text>
+                {/* 시뮬레이션 ◆ 뱃지 — 이 영역에서 돌린 갈림길 수 */}
+                {!unexplored && (scenarioCounts?.[p.key] || 0) > 0 && (
+                  <>
+                    <rect
+                      x={p.x - p.size * 0.95 - 2.6}
+                      y={p.y - p.size * 0.85 - 2.6}
+                      width={5.2}
+                      height={5.2}
+                      fill="#F2DDB0"
+                      transform={`rotate(45 ${p.x - p.size * 0.95} ${p.y - p.size * 0.85})`}
+                    />
+                    <text x={p.x - p.size * 0.95 - 6} y={p.y - p.size * 0.85 + 2.5} textAnchor="end" fontSize="7" fill="#F2DDB0">
+                      {scenarioCounts[p.key]}
+                    </text>
+                  </>
+                )}
               </g>
             </g>
           );

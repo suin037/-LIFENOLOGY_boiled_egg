@@ -6,7 +6,7 @@
 // 텍스트(가장 긴 답변)의 질문 영역을 따른다. 정직선: 합성 데이터 배지 유지.
 // n = 시작일 기준 오프셋. 시드 시 마지막 기록일이 오늘이 되도록 평행이동한다.
 // ─────────────────────────────────────────────────────────────
-import { addCheckin, resetUniverse, todayKey } from "./myUniverse.js";
+import { addCheckin, recordScenario, resetUniverse, todayKey } from "./myUniverse.js";
 
 const LAST_N = 364;
 
@@ -232,6 +232,9 @@ export function seedDemoEunwoo() {
     const date = addDays(today, r.n - LAST_N);
     addCheckin({ date, mood: r.m, valence: +(((r.m - 3) / 2).toFixed(3)), keyword: r.e, text: r.t, domains: [r.dm] });
   }
+  // 은우의 시뮬레이션 발자국 — 시도·재정렬 국면의 갈림길 2회(진로 행성의 '추가 별' ◆).
+  recordScenario({ domain: "career", title: "이직 vs 유지", date: addDays(today, 200 - LAST_N) });
+  recordScenario({ domain: "career", title: "워라밸 회사로 이직 vs 잔류", date: addDays(today, 320 - LAST_N) });
   try {
     const s = JSON.parse(localStorage.getItem("pm.myuniverse.v1") || "{}");
     s.demo = true;

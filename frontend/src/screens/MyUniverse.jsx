@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, Caption } from "../components/ui.jsx";
 import Constellation from "../components/Constellation.jsx";
-import UniverseMap from "../components/UniverseMap.jsx";
+import UniverseMap, { PLANET_TRAIT } from "../components/UniverseMap.jsx";
 import PlanetGlobe from "../components/PlanetGlobe.jsx";
 import { useResult } from "../data/ResultContext.jsx";
 import { PLANETS } from "../data/result.js";
@@ -93,6 +93,11 @@ export default function MyUniverse() {
     [u.state],
   );
   const orbitMaxN = Math.max(1, ...orbitRows.map((r) => r.a.n || 0));
+  // 영역별 시뮬레이션 수 — 행성 ◆ 뱃지 재료.
+  const scenarioCounts = useMemo(
+    () => Object.fromEntries(PLANETS.map((p) => [p.key, scenariosByPlanet(p.key, u.state).length])),
+    [u.state],
+  );
 
   // 월별 묶음 — 우주 지도의 '12달의 별' 재료(최근 12개월).
   const monthGroups = useMemo(() => {
@@ -155,7 +160,7 @@ export default function MyUniverse() {
       setGlobeReady(false);
       return undefined;
     }
-    const t = setTimeout(() => setGlobeReady(true), 550); // 카메라 비행 끝나갈 때 크로스페이드 시작
+    const t = setTimeout(() => setGlobeReady(true), 120); // 클릭 거의 즉시 3D로 — 밑의 카메라가 잔상만 이어준다
     return () => clearTimeout(t);
   }, [isAll, planet]);
 
@@ -388,6 +393,7 @@ export default function MyUniverse() {
             planets={orbitRows}
             maxPlanetN={orbitMaxN}
             clustersByPlanet={clustersByPlanet}
+            scenarioCounts={scenarioCounts}
             focus={isAll ? null : planet}
             focusMonth={focusMonth}
             skin={planetSkin()}
@@ -414,13 +420,14 @@ export default function MyUniverse() {
                 background: "#0A1322",
                 opacity: globeReady ? 1 : 0,
                 pointerEvents: globeReady ? "auto" : "none",
-                transition: "opacity .55s ease",
+                transition: "opacity .4s ease",
               }}
             >
               <PlanetGlobe
                 fill
                 planet={selectedPlanet}
                 skin={planetSkin()}
+                trait={PLANET_TRAIT[planet] || {}}
                 groups={clustersByPlanet[planet] || []}
                 scenarios={scenariosByPlanet(planet).map((s) => ({
                   date: s.date,
