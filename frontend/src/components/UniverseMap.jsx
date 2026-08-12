@@ -87,6 +87,7 @@ export default function UniverseMap({
   scenarioCounts, // {planetKey: 시뮬레이션 수} — 행성 옆 ◆ 뱃지
   focus, // 행성 key | null
   focusMonth, // "YYYY-MM" | null
+  selectedWeek, // 오른쪽 패널에서 보고 있는 주(weekStart) — 지도에서 하이라이트
   skin = "basic", // 행성 스킨(XP 상점): basic=민무늬 | glow=빛나는 구체 | stripe=줄무늬
   onPlanetPick,
   onMonthPick,
@@ -315,7 +316,12 @@ export default function UniverseMap({
                       <circle key={`e${vi}`} cx={v.x} cy={v.y} r="0.7" fill="none"
                         stroke="#39435F" strokeWidth="0.3" strokeDasharray="0.5 0.7" opacity="0.6" />
                     ))}
-                    <text x={wx} y={wy + 14.5} textAnchor="middle" fontSize="4.6" fill="#8895AF">
+                    {/* 패널에서 보고 있는 주 — 지도에서도 링으로 표시 */}
+                    {selectedWeek === g.weekStart && (
+                      <circle cx={wx} cy={wy} r={13.5} fill="none" stroke="#7FD4FF" strokeWidth="0.6" strokeOpacity="0.85" />
+                    )}
+                    <text x={wx} y={wy + 14.5} textAnchor="middle" fontSize="4.6"
+                      fill={selectedWeek === g.weekStart ? "#7FD4FF" : "#8895AF"}>
                       {g.weekStart.slice(5).replace("-", ".")}~ · {g.filled}일
                     </text>
                     <circle cx={wx} cy={wy} r={13} fill="transparent" className="cursor-pointer"

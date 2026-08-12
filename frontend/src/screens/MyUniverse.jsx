@@ -207,6 +207,12 @@ export default function MyUniverse() {
     setShowReport(false);
   }
 
+  // 성단 목록 안에서 현재 성단의 위치 — 패널 페이저·지구본 회전 동기화 재료.
+  const clusterList = clustersByPlanet[planet] || [];
+  const clusterIdx = clusterOpen
+    ? clusterList.findIndex((g) => g === clusterOpen || (g.label && g.label === clusterOpen.label))
+    : -1;
+
   // 상세 본문 — 모바일 시트와 데스크톱 사이드 패널이 같은 내용을 공유한다.
   function renderClusterDetail() {
     if (!clusterOpen) return null;
@@ -214,6 +220,32 @@ export default function MyUniverse() {
     const c = classifyConstellation(clusterOpen, profile?.value_ranking);
     return (
       <>
+        {/* 성단 넘기기 — 넘기면 왼쪽 지구본도 그 성단으로 회전한다 */}
+        {clusterList.length > 1 && clusterIdx >= 0 && (
+          <div className="mb-2 flex items-center justify-between rounded-full border border-white/10 bg-black/10 px-2 py-1.5">
+            <PagerBtn
+              disabled={clusterIdx <= 0}
+              onClick={() => {
+                setClusterPicked(null);
+                setClusterOpen(clusterList[clusterIdx - 1]);
+              }}
+            >
+              ‹
+            </PagerBtn>
+            <span className="text-[11px] text-sub">
+              {clusterIdx + 1}/{clusterList.length} · {clusterOpen.label || `별자리 ${clusterIdx + 1}`}
+            </span>
+            <PagerBtn
+              disabled={clusterIdx >= clusterList.length - 1}
+              onClick={() => {
+                setClusterPicked(null);
+                setClusterOpen(clusterList[clusterIdx + 1]);
+              }}
+            >
+              ›
+            </PagerBtn>
+          </div>
+        )}
         <div className="rounded-[24px] border border-white/10 bg-[#091321] p-3">
           <Constellation
             size={isDesktop ? 240 : 292}
@@ -418,6 +450,7 @@ export default function MyUniverse() {
             scenarioCounts={scenarioCounts}
             focus={isAll ? null : planet}
             focusMonth={focusMonth}
+            selectedWeek={weekDetailOpen ? group?.weekStart : null}
             skin={planetSkin()}
             onMonthPick={(mk) => {
               if (!isAll) choosePlanet("all");
@@ -448,6 +481,7 @@ export default function MyUniverse() {
                 planet={selectedPlanet}
                 skin={planetSkin()}
                 trait={PLANET_TRAIT[planet] || {}}
+                focusIndex={clusterIdx >= 0 ? clusterIdx : null}
                 groups={clustersByPlanet[planet] || []}
                 scenarios={scenariosByPlanet(planet).map((s) => ({
                   date: s.date,

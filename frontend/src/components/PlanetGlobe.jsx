@@ -36,7 +36,7 @@ function level(s) {
   return 3;
 }
 
-export default function PlanetGlobe({ planet, groups, scenarios = [], skin = "basic", trait = {}, fill = false, onOpen, onConstellationOpen, onPlanetTap }) {
+export default function PlanetGlobe({ planet, groups, scenarios = [], skin = "basic", trait = {}, focusIndex = null, fill = false, onOpen, onConstellationOpen, onPlanetTap }) {
   const cvRef = useRef(null);
   const dataRef = useRef({});
   const [sel, setSel] = useState(null);
@@ -50,7 +50,7 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], skin = "ba
   scenarios.forEach((s) => (scByDate[s.date] = s));
   const tone = planet ? hexToHsl(planet.from) : { h: 262, s: 46 };
 
-  dataRef.current = { disp, scByDate, scList: scenarios, tone, skin, trait, label: planet?.label || "관계", onConstellationOpen, onPlanetTap };
+  dataRef.current = { disp, scByDate, scList: scenarios, tone, skin, trait, focusIndex, label: planet?.label || "관계", onConstellationOpen, onPlanetTap };
 
   useEffect(() => {
     const cv = cvRef.current;
@@ -275,7 +275,14 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], skin = "ba
         ctx.setLineDash([]);
       }
       cl.sort((a, b) => a.z - b.z);
-      const focus = st.pinned != null ? st.pinned : (cl.length ? cl[cl.length - 1].c : null);
+      const focus =
+        dataRef.current.focusIndex != null
+          ? dataRef.current.focusIndex
+          : st.pinned != null
+            ? st.pinned
+            : cl.length
+              ? cl[cl.length - 1].c
+              : null;
       function paint(grp) {
         const dep = (grp.z + 1) / 2,
           foc = grp.c === focus;
@@ -379,7 +386,16 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], skin = "ba
       }
     }
     function loop() {
-      if (st.auto && !st.dragging && st.pinned == null) st.rot += 0.005;
+      // 패널에서 성단을 넘기면 지구본이 그 성단을 정면으로 데려온다(짧은 경로 회전).
+      const fi = dataRef.current.focusIndex;
+      const C2 = (dataRef.current.disp || []).length;
+      if (fi != null && C2 > 0 && !st.dragging) {
+        const target = -(fi / C2) * Math.PI * 2;
+        let dd = (target - st.rot) % (Math.PI * 2);
+        if (dd > Math.PI) dd -= Math.PI * 2;
+        if (dd < -Math.PI) dd += Math.PI * 2;
+        st.rot += dd * 0.12;
+      } else if (st.auto && !st.dragging && st.pinned == null) st.rot += 0.005;
       // Canvas animation errors must not escape into Vite's full-screen runtime overlay.
       // The rest of My Universe remains usable even if a malformed legacy record is found.
       try {
