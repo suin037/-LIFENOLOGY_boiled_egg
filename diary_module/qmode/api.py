@@ -63,6 +63,8 @@ class AnalyzeReq(BaseModel):
     entries: list[Entry] = []
     uid: Optional[str] = None                # 있으면 결과를 주별로 DB 저장
     week_key: Optional[str] = None           # 주 식별자(예: 그 주 월요일 날짜)
+    health: Optional[dict] = None            # 건강 자기보고 {sleep,stress,low_mood,...} (health_input PANEL 키)
+    is_youth: Optional[bool] = True          # 청년(≤34) 여부 — youth_only 항목 처리용
 
 
 def _entries_to_sessions(entries):
@@ -133,6 +135,16 @@ def analyze(req: AnalyzeReq):
     prof = _MODEL.analyze(req.ranked_cards, sessions, mbti=req.mbti,
                           span_label="(웹 요청)")
 
+    # 건강 자기보고 → 구조화(또래 병치 재료 + 안전게이트). 예측 모델은 안 건드림(범위 A).
+    health_res = None
+    if req.health:
+        try:
+            from qmode import health_input as HI       # noqa: E402
+            health_res = HI.process_health(
+                req.health, is_youth=(req.is_youth if req.is_youth is not None else True))
+        except Exception:      # noqa: BLE001
+            health_res = None
+
     # 주간 리포트 서사 (report.py)
     narrative, nerr = None, None
     try:
@@ -144,6 +156,8 @@ def analyze(req: AnalyzeReq):
         pblock = _psych_block(req.entries)   # minjub 심리 RAG 근거(출처는 본문에 안 씀)
         if pblock:
             prompt += "\n\n" + pblock
+        if health_res and health_res.get("prompt_block"):   # 건강 자기보고 → 또래 병치 재료
+            prompt += "\n\n" + health_res["prompt_block"]
         narrative, nerr = RPT.generate_narrative(prompt)
     except Exception as e:      # noqa: BLE001
         nerr = str(e)
@@ -190,6 +204,8 @@ def analyze(req: AnalyzeReq):
 
     return {"disposition": disposition, "persona_block": prof.get("jobchange_material"),
             "report": report, "actions": actions, "report_error": nerr,
+            "health": ({"items": health_res["items"],
+                        "safety": health_res["safety"]} if health_res else None),
             "saved": bool(req.uid and req.week_key)}
 
 
@@ -214,6 +230,14 @@ def _db():
         con.execute("ALTER TABLE week_reports ADD COLUMN actions TEXT")
     except sqlite3.OperationalError:
         pass  # 이미 있음
+    # 관계 스냅샷 — (uid, relation_tag) 로 스레딩, snapshot_time 으로 시계열.
+    # 같은 태그로 2개+ 쌓이면 변화 추적((나) 모드)이 자동 활성화된다.
+    con.execute(
+        "CREATE TABLE IF NOT EXISTS relationship_snapshots("
+        "uid TEXT, relation_tag TEXT, snapshot_time TEXT, label TEXT, "
+        "signals TEXT, narrative TEXT, created_at TEXT, "
+        "PRIMARY KEY(uid, relation_tag, snapshot_time))"
+    )
     return con
 
 
@@ -363,6 +387,221 @@ def scenario(req: ScenarioReq):
         return {"narrative": narr, "persona_used": bool(pb)}
     except Exception as e:      # noqa: BLE001
         return {"narrative": f"(서사 생성 오류: {e})", "persona_used": bool(pb)}
+
+
+# ── 관계 도메인 서사 (카톡 × 성향 → 선택지형 분기) ─────────────────────
+class RelAnalyzeReq(BaseModel):
+    uid: Optional[str] = None            # 있으면 관계 스냅샷 저장·시계열 추적
+    relation_tag: Optional[str] = None   # 관계 상대 태그(연인/엄마/친구A) — 시계열 스레드 키
+    label: Optional[str] = None          # 사람이 붙인 시간 라벨("오늘 카톡", "지난주 카톡")
+    transcript: Optional[str] = None     # 텍스트 대화(이미지 없이도 가능)
+    images: Optional[list] = None        # [{"media_type","data"(base64)}] 카톡 스크린샷
+    snapshot_time: Optional[str] = None  # 시계열 정렬용(없으면 서버 시각)
+
+
+def _load_disposition(uid):
+    """저장된 성향(일기 기반) 로드 — 관계 서사 개인화 재료."""
+    if not uid:
+        return None
+    con = _db()
+    row = con.execute("SELECT disposition FROM users WHERE uid=?", (uid,)).fetchone()
+    con.close()
+    return json.loads(row[0]) if row and row[0] else None
+
+
+def _rel_history(uid, relation_tag):
+    """같은 상대의 과거 스냅샷(시간순) — 있으면 (나) 변화추적 모드."""
+    con = _db()
+    rows = con.execute(
+        "SELECT snapshot_time, label, signals FROM relationship_snapshots"
+        " WHERE uid=? AND relation_tag=? ORDER BY snapshot_time",
+        (uid, relation_tag),
+    ).fetchall()
+    con.close()
+    return [{"snapshot_time": r[0], "label": r[1],
+             "signals": json.loads(r[2]) if r[2] else {}} for r in rows]
+
+
+@app.post("/relationship/analyze")
+def relationship_analyze(req: RelAnalyzeReq):
+    """카톡 스크린샷/텍스트 → 관계 신호 추출 → 성향과 결합해 선택지형 서사.
+
+    (가)/(나) 자동 판별: uid+relation_tag 로 과거 스냅샷이 있으면 변화추적(나),
+    없으면 일회성(가). 저장은 uid+relation_tag 가 있을 때만.
+    """
+    from qmode import relationship as REL
+
+    # 1) 안전 게이트 — 위기 신호면 서사 대신 지원 안내
+    safe = REL.safety_check(req.transcript or "")
+    if safe["block"]:
+        return {"blocked": True, "support": safe["support"], "level": safe["level"]}
+
+    # 2) 관계 신호 추출(비전/텍스트)
+    signals, serr = REL.extract_signals(
+        images=req.images, transcript=req.transcript, relation_tag=req.relation_tag)
+    if signals is None:
+        return {"error": serr}
+
+    # 3) 성향 + 히스토리 결합
+    disposition = _load_disposition(req.uid)
+    history = _rel_history(req.uid, req.relation_tag) if (req.uid and req.relation_tag) else []
+    mode = "track" if history else "single"      # 과거 스냅샷 있으면 (나) 추적
+
+    # 4) 선택지형 분기 서사
+    narr, nerr = REL.generate_narrative(signals, disposition, history=history)
+
+    # 5) 저장 — uid+relation_tag 있을 때만 시계열로 적립
+    saved = False
+    if req.uid and req.relation_tag:
+        st = req.snapshot_time or _now()
+        con = _db()
+        con.execute(
+            "INSERT OR REPLACE INTO relationship_snapshots"
+            "(uid, relation_tag, snapshot_time, label, signals, narrative, created_at)"
+            " VALUES(?,?,?,?,?,?,?)",
+            (req.uid, req.relation_tag, st, req.label,
+             json.dumps(signals, ensure_ascii=False),
+             json.dumps(narr, ensure_ascii=False) if narr else None, _now()),
+        )
+        con.commit(); con.close()
+        saved = True
+
+    return {"mode": mode, "signals": signals, "narrative": narr,
+            "error": nerr, "saved": saved,
+            "support": safe.get("support") or None,
+            "history_count": len(history)}
+
+
+@app.get("/relationship/{uid}/{relation_tag}")
+def relationship_timeline(uid: str, relation_tag: str):
+    """한 상대의 관계 스냅샷 시계열 — 변화 추적 화면용."""
+    hist = _rel_history(uid, relation_tag)
+    if not hist:
+        return {"found": False, "count": 0, "snapshots": []}
+    con = _db()
+    rows = con.execute(
+        "SELECT snapshot_time, label, signals, narrative FROM relationship_snapshots"
+        " WHERE uid=? AND relation_tag=? ORDER BY snapshot_time",
+        (uid, relation_tag),
+    ).fetchall()
+    con.close()
+    snaps = [{"snapshot_time": r[0], "label": r[1],
+              "signals": json.loads(r[2]) if r[2] else {},
+              "narrative": json.loads(r[3]) if r[3] else None} for r in rows]
+    return {"found": True, "count": len(snaps), "snapshots": snaps}
+
+
+@app.delete("/relationship/{uid}/{relation_tag}")
+def clear_relationship(uid: str, relation_tag: str):
+    """한 상대의 관계 스냅샷 전체 삭제(데모 재시드·프라이버시)."""
+    con = _db()
+    n = con.execute(
+        "DELETE FROM relationship_snapshots WHERE uid=? AND relation_tag=?",
+        (uid, relation_tag),
+    ).rowcount
+    con.commit(); con.close()
+    return {"deleted": n}
+
+
+# ── 도메인(행성) 자동 태깅 — 일기 저장 시 영역 분류 ────────────────────
+class TagReq(BaseModel):
+    text: str
+
+
+@app.post("/tag")
+def tag_domain(req: TagReq):
+    """일기 텍스트 → 인생 영역(관계/경제/건강/성장/일상). 행성 렌즈가 이 태그로 필터.
+
+    LLM 분류(키 없으면 키워드 폴백). 저장은 프론트가 체크인에 domains로 함께 보관.
+    """
+    from qmode import domain_tag as DT
+    return DT.tag(req.text)
+
+
+# ── 마스코트 대화형 일기 ────────────────────────────────────────────────
+class ChatMsg(BaseModel):
+    role: str            # "user" | "bot"
+    text: str
+
+
+class ChatReq(BaseModel):
+    messages: list[ChatMsg] = []
+    persona: Optional[str] = "lumi"   # lumi(공감)/cosmo(분석)/nova(재미)
+    uid: Optional[str] = None         # 있으면 서버 DB(SQLite)에서 지난 일기·성향을 꺼낸다
+    context: Optional[dict] = None    # 프론트가 보낸 기억 — {recent:[{date,emotion,text}], hardStreak}
+                                      # 로컬 우선 설계라 PII 마스킹된 이 경로가 기본이다.
+
+
+@app.post("/chat")
+def chat_turn(req: ChatReq):
+    """대화 한 턴 → 마스코트 답변 + 진행 단계(stage/suggest_compose)."""
+    from qmode import chatbot as CB
+    msgs = [m.model_dump() for m in req.messages]
+    reply = CB.chat(msgs, persona=req.persona or "lumi", uid=req.uid, context=req.context)
+    return {"reply": reply, **CB.stage_info(msgs)}
+
+
+@app.post("/diary/compose")
+def diary_compose(req: ChatReq):
+    """대화 전체 → 1인칭 일기 + 기분(mood) + 감정 + 영역(domains). 체크인 저장용."""
+    from qmode import chatbot as CB
+    msgs = [m.model_dump() for m in req.messages]
+    return CB.compose(msgs)
+
+
+@app.get("/chat/opener")
+def chat_opener(persona: str = "lumi", uid: Optional[str] = None):
+    """첫 인사 — uid 주면 지난 일기를 잇는 기억 오프너(GET, 서버 DB 경로)."""
+    from qmode import chatbot as CB
+    return {"opener": CB.opener(persona, uid=uid), "persona": persona}
+
+
+@app.post("/chat/opener")
+def chat_opener_ctx(req: ChatReq):
+    """첫 인사 — 프론트 기억(context)으로 지난 일기를 잇는다."""
+    from qmode import chatbot as CB
+    return {"opener": CB.opener(req.persona or "lumi", uid=req.uid, context=req.context),
+            "persona": req.persona or "lumi"}
+
+
+# ── 감정 모델(로컬 파인튜닝 klue/roberta) — 감정 미선택 시 일기에서 추론 ──
+_EMO = None
+_MOOD_BY_EMO = {"기쁨": 5, "당황": 3, "분노": 2, "불안": 2, "슬픔": 2, "상처": 2}
+
+
+def _emotion_analyzer():
+    global _EMO
+    if _EMO is None:
+        try:
+            import infer  # diary_module/infer.py (sys.path 우선)
+            _EMO = infer.DiaryAnalyzer(
+                ckpt=str(ROOT / "model_v3_e6.pt"),
+                taxonomy=str(DIARY / "emotion_taxonomy.json"))
+        except Exception:
+            _EMO = False
+    return _EMO or None
+
+
+class EmotionReq(BaseModel):
+    text: str
+
+
+@app.post("/emotion")
+def emotion_infer(req: EmotionReq):
+    """일기 텍스트 → 감정모델 추론(감정·기분·위기). 감정 미선택 시 폴백용."""
+    an = _emotion_analyzer()
+    if an is None or not (req.text or "").strip():
+        return {"ok": False}
+    try:
+        r = an.analyze(req.text)
+        dom = r.get("dominant") or {}
+        return {"ok": True, "emotion": dom.get("display") or dom.get("coarse"),
+                "fine": dom.get("fine"),
+                "mood": _MOOD_BY_EMO.get(dom.get("coarse"), 3),
+                "crisis_level": r.get("crisis_level", 0),
+                "block": bool(r.get("block_report"))}
+    except Exception:
+        return {"ok": False}
 
 
 if __name__ == "__main__":
