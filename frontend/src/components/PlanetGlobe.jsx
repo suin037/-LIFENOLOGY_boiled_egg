@@ -378,30 +378,33 @@ export default function PlanetGlobe({ planet, groups, scenarios = [], skin = "ba
     };
     const onUp = (e) => {
       st.dragging = false;
-      if (st.moved < 5) {
+      if (st.moved < 10) {
         const r = cv.getBoundingClientRect(),
           mx = e.clientX - r.left,
           my = e.clientY - r.top;
+        // 1) 가운데 행성 탭 = 우주 전경 복귀 — 제일 먼저, 넉넉하게 판정한다.
+        //    (별자리 판정 반경이 커서 행성 탭을 자꾸 가로채던 문제 해결)
+        const pcx = cv.clientWidth / 2,
+          pcy = cv.clientHeight / 2,
+          ppr = Math.min(cv.clientWidth, cv.clientHeight) * 0.115;
+        if (Math.hypot(mx - pcx, my - pcy) <= ppr + 14) {
+          dataRef.current.onPlanetTap?.();
+          return;
+        }
+        // 2) 시나리오 ◆
         for (let i = 0; i < st.hit.length; i++) {
           if (Math.hypot(st.hit[i].x - mx, st.hit[i].y - my) < 14) {
             setSel(st.hit[i].sc);
             return;
           }
         }
+        // 3) 별자리(성단)
         let nearest = null;
         for (const hit of st.groupHit) {
           const distance = Math.hypot(hit.x - mx, hit.y - my);
           if (distance < 52 && (!nearest || distance < nearest.distance)) nearest = { ...hit, distance };
         }
-        if (nearest?.group) {
-          dataRef.current.onConstellationOpen?.(nearest.group);
-          return;
-        }
-        // 가운데 행성 탭 — 우주 전경으로 복귀(지도의 토글과 동일한 제스처).
-        const pcx = cv.clientWidth / 2,
-          pcy = cv.clientHeight / 2,
-          ppr = Math.min(cv.clientWidth, cv.clientHeight) * 0.115;
-        if (Math.hypot(mx - pcx, my - pcy) <= ppr + 8) dataRef.current.onPlanetTap?.();
+        if (nearest?.group) dataRef.current.onConstellationOpen?.(nearest.group);
       }
     };
     cv.addEventListener("pointerdown", onDown);
