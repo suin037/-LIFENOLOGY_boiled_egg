@@ -225,8 +225,14 @@ def compare(req: CompareRequest) -> dict:
     # 발표 카드용 수치 + 영역 라우팅/근거수준(항목3·4)을 함께 반환.
     # 프론트가 화면 수치를 /compare 에서 읽으므로 여기에도 실어야 표시된다.
     cmp = build_comparison(req).model_dump()
-    routed_a = route_domains(getattr(req, "choice_a_domains", None), cmp["profile"])
-    routed_b = route_domains(getattr(req, "choice_b_domains", None), cmp["profile"])
+    routed_a = route_domains(
+        getattr(req, "choice_a_domains", None), cmp["profile"],
+        getattr(req, "choice_a_detail", None) or req.choice_a,
+    )
+    routed_b = route_domains(
+        getattr(req, "choice_b_domains", None), cmp["profile"],
+        getattr(req, "choice_b_detail", None) or req.choice_b,
+    )
     cmp["domain_stats"] = {"A": routed_a, "B": routed_b}
     cmp["domain_coverage"] = {"A": _coverage_from_routes(routed_a),
                               "B": _coverage_from_routes(routed_b)}
@@ -382,8 +388,8 @@ def simulate(req: SimulateRequest) -> dict:
         narrative = {"a": f"(서사 생성 실패: {type(exc).__name__})", "b": "", "comparison": "", "_error": str(exc)[:300]}
 
     # 영역별 데이터 라우팅(항목3) — 각 선택의 삶의 영역 → 실측 집단통계 지표
-    routed_a = route_domains(req.choice_a_domains, cmp["profile"])
-    routed_b = route_domains(req.choice_b_domains, cmp["profile"])
+    routed_a = route_domains(req.choice_a_domains, cmp["profile"], req.choice_a_detail or req.choice_a)
+    routed_b = route_domains(req.choice_b_domains, cmp["profile"], req.choice_b_detail or req.choice_b)
 
     return {
         "profile": cmp["profile"],

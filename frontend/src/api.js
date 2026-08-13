@@ -186,6 +186,8 @@ export async function runCompareRaw(args) {
       profile: body.profile,
       choice_a: body.choice_a,
       choice_b: body.choice_b,
+      ...(body.choice_a_detail ? { choice_a_detail: body.choice_a_detail } : {}),
+      ...(body.choice_b_detail ? { choice_b_detail: body.choice_b_detail } : {}),
       // 삶의 영역(항목3·4) — /compare 도 영역지표·근거수준·그래프 가드를 반환하도록 함께 전송
       ...(body.choice_a_domains ? { choice_a_domains: body.choice_a_domains } : {}),
       ...(body.choice_b_domains ? { choice_b_domains: body.choice_b_domains } : {}),

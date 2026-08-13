@@ -30,31 +30,36 @@ function DomainStats({ a, b }) {
   const sides = [["A", a], ["B", b]];
   const rows = [];
   for (const [tag, s] of sides) {
-    for (const dom of Object.values(s.domain_stats || {})) {
-      if (dom.indicators?.length) rows.push({ tag, ...dom });
-    }
+    for (const dom of Object.values(s.domain_stats || {})) rows.push({ tag, ...dom });
   }
   if (!rows.length) return null;
   return (
     <Card>
-      <p className="text-[11px] font-bold text-cyan">삶의 영역 참고지표 <span className="text-mut">(집단통계 · 개인 예측 아님)</span></p>
+      <p className="text-[11px] font-bold text-cyan">9가지 삶의 영역 분석 <span className="text-mut">(근거가 있는 범위만 표시)</span></p>
       <div className="mt-2 space-y-2.5">
         {rows.map((r, i) => (
           <div key={i}>
-            <div className="text-[11px] font-semibold text-ink">{r.tag} · {r.label}
-              <span className="ml-1 text-[9px] text-mut">{r.indicators[0]?.source || ""}</span>
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-ink">{r.tag} · {r.label}
+              <span className={`rounded-full px-1.5 py-0.5 text-[8px] ${r.status === "available" ? "bg-cyan/10 text-cyan" : "bg-white/5 text-mut"}`}>
+                {r.status === "available" ? evidenceLabel(r.evidence) : "근거 부족"}
+              </span>
             </div>
-            <div className="mt-1 flex flex-wrap gap-1.5">
+            {r.indicators?.length ? <div className="mt-1 flex flex-wrap gap-1.5">
               {r.indicators.map((ind, j) => (
                 <span key={j} className="rounded-lg border border-line bg-[#0E1424] px-2 py-1 text-[11px] text-sub">
                   {ind.name} <span className="font-bold text-ink">{ind.value}{ind.unit}</span>
                 </span>
               ))}
-            </div>
+            </div> : <p className="mt-1 text-[10px] text-mut">{r.source_note || r.limitation || "현재 연결된 수치 데이터가 없습니다."}</p>}
+            {r.indicators?.length > 0 && r.limitation && <p className="mt-1 text-[9px] text-mut">{r.limitation}</p>}
           </div>
         ))}
       </div>
       <Caption>비슷한 조건의 사람들 집단 수치입니다. 이 선택의 개인 예측이 아니라 참고 맥락입니다.</Caption>
     </Card>
   );
+}
+
+function evidenceLabel(evidence) {
+  return ({ model: "모델·관측", group_stat: "집단통계", rag: "기록 해석" })[evidence] || evidence;
 }

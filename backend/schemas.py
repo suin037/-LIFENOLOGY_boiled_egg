@@ -70,6 +70,12 @@ class CompareRequest(BaseModel):
     choice_b_domains: Optional[list[str]] = Field(
         None, description="선택 B가 건드리는 삶의 영역 키 리스트(예: ['relationship'])"
     )
+    choice_a_detail: Optional[str] = Field(
+        None, max_length=500, description="A의 업종·규모·지역 등 구체적인 선택 조건"
+    )
+    choice_b_detail: Optional[str] = Field(
+        None, max_length=500, description="B의 업종·규모·지역 등 구체적인 선택 조건"
+    )
 
 
 class SimulateRequest(CompareRequest):
@@ -81,12 +87,6 @@ class SimulateRequest(CompareRequest):
 
     diary: Optional[str] = Field(
         None, description="사용자 일기 텍스트(선택). 있으면 감정신호로 개인화 + 서사 반영"
-    )
-    choice_a_detail: Optional[str] = Field(
-        None, max_length=500, description="같은 선택 유형을 구분하는 A의 구체적 상황"
-    )
-    choice_b_detail: Optional[str] = Field(
-        None, max_length=500, description="같은 선택 유형을 구분하는 B의 구체적 상황"
     )
     emotions: Optional[list[str]] = Field(
         None, description="감정 키워드(선택). 심리카드 검색·안전분기에 사용"

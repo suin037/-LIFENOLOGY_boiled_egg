@@ -50,8 +50,10 @@ function buildSide(scenario, choice, detail, profile, evidence, domainCov, domai
   const { rows: trajectory, isBaseline } = pickTrajectory(raw, choice);
   const wellbeing = raw.wellbeing_trajectory || [];
 
-  // 현재 개인단위 매칭·인과·생존 모델은 이직에만 학습되어 있다.
-  const hasIndividual = choice === "이직";
+  // 이직은 개인단위 모델, 창업은 artifact가 배포된 경우 개인단위 자영 이탈모델을 쓴다.
+  // artifact가 없더라도 창업 risk_timeline에는 업종·규모별 기업생멸 통계가 들어온다.
+  const hasIndividual = choice === "이직" || (choice === "창업" && raw.survival_months != null);
+  const hasRisk = choice === "창업" || hasIndividual;
 
   return {
     choice,
@@ -85,8 +87,8 @@ function buildSide(scenario, choice, detail, profile, evidence, domainCov, domai
     neighbors: hasIndividual ? raw.neighbors || [] : [],
     neighbor_changed_ratio: hasIndividual ? raw.neighbor_changed_ratio ?? null : null,
     down_ratio: null,
-    risk_timeline: hasIndividual ? raw.risk_timeline || {} : {},
-    risk_label: hasIndividual ? scenario?.regret_summary?.label ?? null : null,
+    risk_timeline: hasRisk ? raw.risk_timeline || {} : {},
+    risk_label: hasRisk ? scenario?.regret_summary?.label ?? null : null,
 
     // 근거 수준(항목4) — 이 갈래가 어떤 강도의 근거인지 + 수치그래프 표시 정당성.
     evidence_level: evidence?.level || null,      // model | group_stat | rag | insufficient
