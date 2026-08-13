@@ -43,7 +43,10 @@ export default function InputScreen() {
     talks, setTalks, analyzeTalks,
   } = useResult();
   // 두 선택지 중 하나라도 '관계'로 잡히면 관계 상담 흐름으로 전환한다.
-  const isRelationship = [...(scenarioDomains.a || []), ...(scenarioDomains.b || [])].includes("relationship");
+  // 선택지가 어느 영역인지에 따라 아래에 뜨는 입력이 통째로 바뀐다.
+  // 관계면 대화·연락 내역을, 직업이면 직업 정보·공고·가치관 검사를 한 묶음으로.
+  const allDomains = [...(scenarioDomains.a || []), ...(scenarioDomains.b || [])];
+  const isRelationship = allDomains.includes("relationship");
   const textA = scenarioTexts.a;
   const textB = scenarioTexts.b;
   const [domainAuto, setDomainAuto] = useState({ a: true, b: true });
@@ -85,7 +88,10 @@ export default function InputScreen() {
   const sameCategory = Boolean(normalizedA && normalizedB && choices.a === choices.b);
   const duplicate = sameCategory && normalizedA === normalizedB;
   const missingDomains = Boolean(normalizedA && normalizedB && (!scenarioDomains.a.length || !scenarioDomains.b.length));
-  const needJobDetails = choices.a === "이직" || choices.b === "이직";
+  // 직업 영역 인식 — '이직'으로 분류됐거나 커리어 영역으로 잡히면 직업 입력 묶음을 편다.
+  const isCareer = allDomains.includes("career")
+    || ["이직", "유지"].includes(choices.a) || ["이직", "유지"].includes(choices.b);
+  const needJobDetails = isCareer;
   // 직업정보가 없으면 전체 유사 집단으로 자동 완화한다. 입력 화면 진행을 막지는 않는다.
   const jobDetailsMissing = needJobDetails && profile.occupation_group == null;
   const blocked = !normalizedA || !normalizedB || duplicate;
@@ -106,7 +112,7 @@ export default function InputScreen() {
     }));
     // 담아둔 재료는 시뮬레이션과 함께 분석을 시작한다(결과 화면에서 확인).
     if (isRelationship) analyzeTalks(talks);
-    else analyzePostings(postings, textA || choices.a);
+    if (isCareer) analyzePostings(postings, textA || choices.a);
     navigate("/simulate");
   }
 
@@ -221,12 +227,16 @@ export default function InputScreen() {
           공고 수집은 약관 문제가 커서 크롤링 대신 붙여넣기로 받는다. */}
       {/* 선택지가 어느 영역인지에 따라 담는 재료가 달라진다.
           관계면 그 관계의 대화를, 그 밖이면 지원하려는 공고를. */}
-      {isRelationship
-        ? <RelationshipInput talks={talks} setTalks={setTalks} />
-        : <JobPostingInput postings={postings} setPostings={setPostings} />}
+      {/* 관계면 대화·연락 내역 하나만. */}
+      {isRelationship && <RelationshipInput talks={talks} setTalks={setTalks} />}
 
-      {/* 가치관 검사는 공고 분석 안에서도 권하지만, 공고가 없어도 할 수 있게 여기에도 둔다. */}
-      <ValueTestSection profile={profile} setProfile={setProfile} />
+      {/* 직업이면 공고 담기 + 직업가치관검사가 함께 뜬다(위의 직업 정보와 한 묶음). */}
+      {isCareer && (
+        <>
+          <JobPostingInput postings={postings} setPostings={setPostings} />
+          <ValueTestSection profile={profile} setProfile={setProfile} />
+        </>
+      )}
 
       <details className="mt-3 rounded-2xl border border-white/10 bg-[#0B1423]/80 px-3.5 py-3">
         <summary className="cursor-pointer text-[11px] font-semibold text-sub">지금 심정도 덧붙이기 · 선택</summary>
