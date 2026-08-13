@@ -432,6 +432,68 @@ def third_path(req: ThirdPathReq):
         return {"ok": False, "reason": str(e)}
 
 
+# ── 직무 분석 — 채용 공고 × 내 성향 ────────────────────────────────────
+# 공고에서 요구역량을 뽑는 건 누구나 한다. 우리가 더할 수 있는 건 '이 사람'의
+# 성향·가치순위와 대조해 맞는 지점과 부딪힐 지점을 짚는 것. 그래서 입력에
+# persona_block(일기에서 만든 성향 재료)을 함께 넣는다.
+class JobAnalyzeReq(BaseModel):
+    posting: str = ""                    # 공고 원문(붙여넣기)
+    uid: Optional[str] = None            # 저장된 성향 사용
+    persona_block: Optional[str] = None  # 직접 전달(우선)
+    choice: Optional[str] = None         # 이 공고가 걸린 선택지(예: "이직")
+
+
+_JOB_SCHEMA = (
+    '반드시 이 JSON만 출력:\n'
+    '{"role":"직무명(공고에서)","company":"회사명(없으면 빈 문자열)",'
+    '"requirements":["핵심 요구역량 3~5개, 공고 표현을 우리말로 정리"],'
+    '"fit":[{"point":"성향과 맞는 지점","why":"근거 한 문장"}],'
+    '"friction":[{"point":"부딪힐 수 있는 지점","why":"근거 한 문장"}],'
+    '"prep":["지원 전 준비할 것 3개, 구체적 행동으로"],'
+    '"questions":[{"q":"예상 면접 질문","angle":"이 사람 성향으로 답할 각도"}]}\n'
+    "fit·friction 은 각 2~3개. 공고에 없는 회사 사정을 지어내지 말고, 성향 재료가 "
+    "없으면 friction 을 비워라. 단정·진단 금지, 담백하게. 한국어만 쓰고 한자는 쓰지 마라. "
+    "설명·인사말 없이 JSON 하나만 출력한다."
+)
+
+
+@app.post("/job/analyze")
+def job_analyze(req: JobAnalyzeReq):
+    """채용 공고 + 내 성향 → 요구역량·맞는 지점·부딪힐 지점·준비·예상질문."""
+    import os
+    text = (req.posting or "").strip()
+    if len(text) < 30:
+        return {"ok": False, "reason": "too_short"}
+    pb = req.persona_block or (_fetch_persona(req.uid) if req.uid else None)
+    R1._load_dotenv()
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        return {"ok": False, "reason": "no_api_key"}
+    prompt = (
+        "[채용 공고]\n" + text[:6000] + "\n\n"
+        + (f"{pb}\n\n" if pb else "")
+        + (f"[맥락] 사용자는 지금 '{req.choice}' 선택을 저울질하는 중이다.\n\n" if req.choice else "")
+        + "위 공고를 지원자 관점에서 분석하라. 성향 재료가 있으면 그 사람과 이 일이 "
+          "만나는 지점과 부딪히는 지점을 반드시 구체적으로 짚어라.\n\n" + _JOB_SCHEMA
+    )
+    try:
+        from anthropic import Anthropic
+        resp = Anthropic().messages.create(
+            model="claude-sonnet-5", max_tokens=1200, thinking={"type": "disabled"},
+            messages=[{"role": "user", "content": prompt}],
+        )
+        txt = "".join(b.text for b in resp.content if b.type == "text").strip()
+        # 코드펜스든 설명이 앞에 붙든, 첫 '{' ~ 마지막 '}' 만 취한다.
+        s, e = txt.find("{"), txt.rfind("}")
+        if s < 0 or e <= s:
+            return {"ok": False, "reason": "no_json", "raw": txt[:200]}
+        data = json.loads(txt[s:e + 1])
+        data["ok"] = True
+        data["persona_used"] = bool(pb)
+        return data
+    except Exception as e:      # noqa: BLE001
+        return {"ok": False, "reason": str(e)}
+
+
 # ── 일기 신호 (직무불만·이직고민 등) — 예측 서사 재료 & 검증용 ──────────
 class SignalsReq(BaseModel):
     entries: list[Entry] = []

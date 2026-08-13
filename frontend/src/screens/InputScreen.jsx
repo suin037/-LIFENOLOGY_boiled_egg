@@ -4,6 +4,7 @@ import { useResult } from "../data/ResultContext.jsx";
 import { LIFE_DOMAINS, classifyChoice, detectLifeDomains, domainLabel, labelOf } from "../data/choices.js";
 import { detectEmotions } from "../data/DiaryContext.jsx";
 import { Caption } from "../components/ui.jsx";
+import { analyzeJobPosting, isPostingReady } from "../data/jobAnalysis.js";
 import Mascot from "../components/Mascot.jsx";
 import { BriefcaseBusiness, GraduationCap, Sprout, Wallet, HeartPulse, House, Users, Leaf, Compass, ArrowRight } from "lucide-react";
 
@@ -208,6 +209,10 @@ export default function InputScreen() {
         </div>
       )}
 
+      {/* 지원하려는 공고가 있으면 붙여넣기 → 요구역량 + 내 성향과의 접점·마찰점.
+          공고 수집은 약관 문제가 커서 크롤링 대신 붙여넣기로 받는다. */}
+      <JobPostingAnalysis choice={textA || choices.a} profile={profile} />
+
       <details className="mt-3 rounded-2xl border border-white/10 bg-[#0B1423]/80 px-3.5 py-3">
         <summary className="cursor-pointer text-[11px] font-semibold text-sub">지금 심정도 덧붙이기 · 선택</summary>
         <input value={diary} onChange={(event) => setDiary(event.target.value)} placeholder="왜 이 선택이 망설여지는지 한 줄로 적어보세요" className="mt-3 w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-xs text-ink outline-none focus:border-cyan" />
@@ -218,6 +223,130 @@ export default function InputScreen() {
         두 미래 비교 시작하기 <ArrowRight size={17} />
       </button>
       <p className="mt-2 text-center text-[10px] text-mut">두 길을 채우면 코스모가 같은 조건으로 결과를 비교해요.</p>
+    </div>
+  );
+}
+
+// 채용 공고 붙여넣기 → 직무 분석. 요구역량은 공고에서, 접점·마찰점은 내 성향과 대조해서.
+function JobPostingAnalysis({ choice, profile }) {
+  const [posting, setPosting] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const [result, setResult] = useState(null);
+  const ready = isPostingReady(posting);
+
+  async function run() {
+    if (!ready || busy) return;
+    setBusy(true); setErr(null); setResult(null);
+    try {
+      const data = await analyzeJobPosting({ posting, choice, profile });
+      if (data.ok) setResult(data);
+      else setErr(data.reason === "no_api_key" ? "분석 서버에 API 키가 없어요" : "분석에 실패했어요");
+    } catch {
+      setErr("분석 서버에 연결하지 못했어요 (로컬 API가 켜져 있나요?)");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <details className="mt-3 rounded-2xl border border-white/10 bg-[#0B1423]/80 px-3.5 py-3">
+      <summary className="cursor-pointer text-[11px] font-semibold text-sub">
+        지원하려는 공고 붙여넣기 · 선택
+      </summary>
+      <p className="mt-2 text-[10px] leading-relaxed text-mut">
+        공고 본문을 붙여넣으면 요구 역량과 함께, 당신의 기록에서 만든 성향과 <b className="text-sub">맞는 지점·부딪힐 지점</b>을 짚어드려요.
+      </p>
+      <textarea
+        value={posting}
+        onChange={(event) => setPosting(event.target.value)}
+        rows={4}
+        placeholder="채용 공고 본문을 붙여넣어 주세요 (주요 업무·자격 요건 포함)"
+        className="mt-2 w-full resize-none rounded-xl border border-line bg-bg px-3 py-2.5 text-[11px] leading-relaxed text-ink outline-none placeholder:text-mut focus:border-cyan"
+      />
+      <button
+        type="button"
+        onClick={run}
+        disabled={!ready || busy}
+        className={`tap mt-2 w-full rounded-xl py-2.5 text-[12px] font-bold transition-colors ${
+          ready && !busy ? "bg-[#8B6CCF] text-white" : "bg-white/10 text-mut"
+        }`}
+      >
+        {busy ? "공고를 읽는 중…" : "이 공고 분석하기"}
+      </button>
+      {err && <p className="mt-2 text-[10px] leading-relaxed text-[#F0736F]">{err}</p>}
+
+      {result && (
+        <div className="mt-3 space-y-2.5">
+          <div className="rounded-xl border border-[#8B6CCF]/25 bg-[#8B6CCF]/[.07] px-3 py-2.5">
+            <b className="text-[12px] text-[#C7B5F2]">{result.role || "이 직무"}</b>
+            {result.company && <span className="ml-1.5 text-[10px] text-mut">{result.company}</span>}
+            {!result.persona_used && (
+              <p className="mt-1 text-[9px] text-mut">일기 기록이 쌓이면 성향과 대조한 분석까지 나와요.</p>
+            )}
+          </div>
+
+          {result.requirements?.length > 0 && (
+            <JobBlock title="요구 역량">
+              {result.requirements.map((item, i) => (
+                <li key={i} className="text-[11px] leading-relaxed text-sub">· {item}</li>
+              ))}
+            </JobBlock>
+          )}
+
+          {result.fit?.length > 0 && (
+            <JobBlock title="나와 맞는 지점" tone="#5DCAA5">
+              {result.fit.map((item, i) => (
+                <li key={i} className="text-[11px] leading-relaxed text-sub">
+                  <b className="text-ink">{item.point}</b> — {item.why}
+                </li>
+              ))}
+            </JobBlock>
+          )}
+
+          {result.friction?.length > 0 && (
+            <JobBlock title="부딪힐 수 있는 지점" tone="#F0A45E">
+              {result.friction.map((item, i) => (
+                <li key={i} className="text-[11px] leading-relaxed text-sub">
+                  <b className="text-ink">{item.point}</b> — {item.why}
+                </li>
+              ))}
+            </JobBlock>
+          )}
+
+          {result.prep?.length > 0 && (
+            <JobBlock title="지원 전 준비">
+              {result.prep.map((item, i) => (
+                <li key={i} className="text-[11px] leading-relaxed text-sub">· {item}</li>
+              ))}
+            </JobBlock>
+          )}
+
+          {result.questions?.length > 0 && (
+            <JobBlock title="예상 면접 질문">
+              {result.questions.map((item, i) => (
+                <li key={i} className="text-[11px] leading-relaxed text-sub">
+                  <b className="text-ink">Q. {item.q}</b>
+                  <span className="mt-0.5 block text-[10px] text-mut">→ {item.angle}</span>
+                </li>
+              ))}
+            </JobBlock>
+          )}
+
+          <p className="text-[9px] leading-relaxed text-mut">
+            공고 원문과 당신의 기록만으로 정리한 것이며, 회사 내부 사정이나 합격 가능성을 예측하지 않습니다.
+          </p>
+        </div>
+      )}
+    </details>
+  );
+}
+
+function JobBlock({ title, tone = "#8B6CCF", children }) {
+  return (
+    <div className="rounded-xl border border-white/[.07] bg-black/15 px-3 py-2.5">
+      <p className="text-[10px] font-bold" style={{ color: tone }}>{title}</p>
+      <ul className="mt-1.5 space-y-1.5">{children}</ul>
     </div>
   );
 }
