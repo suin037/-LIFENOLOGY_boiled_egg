@@ -45,8 +45,11 @@ export default function InputScreen() {
   // 두 선택지 중 하나라도 '관계'로 잡히면 관계 상담 흐름으로 전환한다.
   // 선택지가 어느 영역인지에 따라 아래에 뜨는 입력이 통째로 바뀐다.
   // 관계면 대화·연락 내역을, 직업이면 직업 정보·공고·가치관 검사를 한 묶음으로.
+  // 단, choices 기본값이 {이직, 유지}라 아무것도 안 썼을 때 직업으로 오인된다 —
+  // 실제로 무언가 적었을 때만 영역 입력을 편다.
+  const typed = Boolean(scenarioTexts.a?.trim() || scenarioTexts.b?.trim());
   const allDomains = [...(scenarioDomains.a || []), ...(scenarioDomains.b || [])];
-  const isRelationship = allDomains.includes("relationship");
+  const isRelationship = typed && allDomains.includes("relationship");
   const textA = scenarioTexts.a;
   const textB = scenarioTexts.b;
   const [domainAuto, setDomainAuto] = useState({ a: true, b: true });
@@ -88,9 +91,11 @@ export default function InputScreen() {
   const sameCategory = Boolean(normalizedA && normalizedB && choices.a === choices.b);
   const duplicate = sameCategory && normalizedA === normalizedB;
   const missingDomains = Boolean(normalizedA && normalizedB && (!scenarioDomains.a.length || !scenarioDomains.b.length));
-  // 직업 영역 인식 — '이직'으로 분류됐거나 커리어 영역으로 잡히면 직업 입력 묶음을 편다.
-  const isCareer = allDomains.includes("career")
-    || ["이직", "유지"].includes(choices.a) || ["이직", "유지"].includes(choices.b);
+  // 직업 영역은 넓게 잡는다 — 좁게 걸면 '다른 직무 준비하기', '대학원 진학' 처럼
+  // 사실상 커리어 결정인데도 입력이 안 뜨는 일이 생긴다. 못 보여주는 쪽이 더 손해라서,
+  // '관계만' 잡힌 경우를 빼고는 직업 묶음을 열어둔다.
+  const onlyRelationship = allDomains.length > 0 && allDomains.every((d) => d === "relationship");
+  const isCareer = typed && !onlyRelationship;
   const needJobDetails = isCareer;
   // 직업정보가 없으면 전체 유사 집단으로 자동 완화한다. 입력 화면 진행을 막지는 않는다.
   const jobDetailsMissing = needJobDetails && profile.occupation_group == null;
