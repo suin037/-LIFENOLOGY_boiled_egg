@@ -3,7 +3,7 @@ import { zodiacOf, zodiacPoints, zodiacLines, zodiacGhost } from "../data/zodiac
 
 const COL=["#E24B4A","#D85A30","#EDA100","#5DCAA5","#378ADD"];
 const PASTEL=["#F0A3A2","#F2B48E","#F7DCA0","#AEE6CF","#A8CDF5"];
-const CALM="#C7B5F2";   // 평소 별빛 — 연보라. 기분 색은 '자세히 보기'에서만 드러난다.
+const CALM="#FFFFFF";   // 평소 별빛 — 흰색. 기분 색은 '자세히 보기'에서만 드러난다.
 // 캘린더는 모달(최대 820px)이라 넓게 써도 된다. 별자리끼리 겹치지 않게 간격을 벌렸다.
 const W=470,H=300,CX=W/2,CY=H/2,ZOOM_MONTH=2.2,MINI_R_MIN=16,MINI_R_SPREAD=60;
 const ZR=16;   // 별자리 반지름 — 간격(STEP)보다 작아야 이웃과 안 겹친다
