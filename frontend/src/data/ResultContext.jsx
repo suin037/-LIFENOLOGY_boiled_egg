@@ -62,6 +62,30 @@ export function ResultProvider({ children }) {
     ({ ...getPredictionPair({ profile: DEFAULT_PROFILE, choiceA: "이직", choiceB: "유지" }), dataMode: "demo" }),
   );
   const [onboarded, setOnboarded] = useState(false);
+  // 관계 선택지일 때 담아두는 대화(카톡 붙여넣기·스크린샷). 공고와 같은 흐름:
+  // 입력에서 담고, 시뮬레이션 후 결과에서 분석을 본다.
+  const [talks, setTalks] = useState([]);              // [{id, tag, transcript, images, label}]
+  const [relResults, setRelResults] = useState([]);
+  const [relBusy, setRelBusy] = useState(false);
+
+  async function analyzeTalks(list = talks) {
+    if (!list.length) { setRelResults([]); return; }
+    setRelBusy(true);
+    try {
+      const { analyzeRelationship } = await import("./relationshipApi.js");
+      const results = [];
+      // 대화는 이미지 포함이라 무거워서 하나씩 — 동시에 던지면 타임아웃이 잦다.
+      for (const t of list) {
+        // eslint-disable-next-line no-await-in-loop
+        const data = await analyzeRelationship(t).catch(() => ({ error: "network", label: t.label }));
+        results.push({ ...data, label: t.label, tag: t.tag });
+        setRelResults([...results]);
+      }
+    } finally {
+      setRelBusy(false);
+    }
+  }
+
   // 공고는 입력 화면에서 '담기만' 하고(원문), 분석은 시뮬레이션을 돌린 뒤 결과 화면에서 보여준다.
   const [postings, setPostings] = useState([]);        // [{id, text, label}]
   const [jobAnalyses, setJobAnalyses] = useState([]);  // 분석 결과(순서 = postings)
@@ -235,9 +259,10 @@ export function ResultProvider({ children }) {
       runSimulation, retryVisuals, onboarded, setOnboarded,
       postings, setPostings,
       jobAnalyses, setJobAnalyses, jobBusy, analyzePostings,
+      talks, setTalks, relResults, relBusy, analyzeTalks,
     }),
     [profile, choices, scenarioTexts, scenarioDomains, diary, result, onboarded,
-     postings, jobAnalyses, jobBusy],
+     postings, jobAnalyses, jobBusy, talks, relResults, relBusy],
   );
 
   return <ResultContext.Provider value={value}>{children}</ResultContext.Provider>;

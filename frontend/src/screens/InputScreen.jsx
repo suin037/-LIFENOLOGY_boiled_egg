@@ -6,6 +6,7 @@ import { detectEmotions } from "../data/DiaryContext.jsx";
 import { Caption } from "../components/ui.jsx";
 import ValueDeepTest from "../components/ValueDeepTest.jsx";
 import JobPostingInput from "../components/JobPostingInput.jsx";
+import RelationshipInput from "../components/RelationshipInput.jsx";
 import Mascot from "../components/Mascot.jsx";
 import { BriefcaseBusiness, GraduationCap, Sprout, Wallet, HeartPulse, House, Users, Leaf, Compass, ArrowRight } from "lucide-react";
 
@@ -39,7 +40,10 @@ export default function InputScreen() {
     profile, setProfile, choices, setChoices,
     scenarioTexts, setScenarioTexts, scenarioDomains, setScenarioDomains,
     diary, setDiary, postings, setPostings, analyzePostings,
+    talks, setTalks, analyzeTalks,
   } = useResult();
+  // 두 선택지 중 하나라도 '관계'로 잡히면 관계 상담 흐름으로 전환한다.
+  const isRelationship = [...(scenarioDomains.a || []), ...(scenarioDomains.b || [])].includes("relationship");
   const textA = scenarioTexts.a;
   const textB = scenarioTexts.b;
   const [domainAuto, setDomainAuto] = useState({ a: true, b: true });
@@ -100,8 +104,9 @@ export default function InputScreen() {
       a: prev.a?.length ? prev.a : fallback(choices.a),
       b: prev.b?.length ? prev.b : fallback(choices.b),
     }));
-    // 담아둔 공고는 시뮬레이션과 함께 분석을 시작한다(결과 화면에서 확인).
-    analyzePostings(postings, textA || choices.a);
+    // 담아둔 재료는 시뮬레이션과 함께 분석을 시작한다(결과 화면에서 확인).
+    if (isRelationship) analyzeTalks(talks);
+    else analyzePostings(postings, textA || choices.a);
     navigate("/simulate");
   }
 
@@ -214,7 +219,11 @@ export default function InputScreen() {
 
       {/* 지원하려는 공고가 있으면 붙여넣기 → 요구역량 + 내 성향과의 접점·마찰점.
           공고 수집은 약관 문제가 커서 크롤링 대신 붙여넣기로 받는다. */}
-      <JobPostingInput postings={postings} setPostings={setPostings} />
+      {/* 선택지가 어느 영역인지에 따라 담는 재료가 달라진다.
+          관계면 그 관계의 대화를, 그 밖이면 지원하려는 공고를. */}
+      {isRelationship
+        ? <RelationshipInput talks={talks} setTalks={setTalks} />
+        : <JobPostingInput postings={postings} setPostings={setPostings} />}
 
       {/* 가치관 검사는 공고 분석 안에서도 권하지만, 공고가 없어도 할 수 있게 여기에도 둔다. */}
       <ValueTestSection profile={profile} setProfile={setProfile} />

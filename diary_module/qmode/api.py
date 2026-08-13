@@ -215,6 +215,14 @@ def _db():
         con.execute("ALTER TABLE week_reports ADD COLUMN actions TEXT")
     except sqlite3.OperationalError:
         pass  # 이미 있음
+    # 관계 스냅샷 — (uid, relation_tag) 로 스레딩, snapshot_time 으로 시계열.
+    # 같은 태그로 2개+ 쌓이면 변화 추적((나) 모드)이 자동 활성화된다.
+    con.execute(
+        "CREATE TABLE IF NOT EXISTS relationship_snapshots("
+        "uid TEXT, relation_tag TEXT, snapshot_time TEXT, label TEXT, "
+        "signals TEXT, narrative TEXT, created_at TEXT, "
+        "PRIMARY KEY(uid, relation_tag, snapshot_time))"
+    )
     return con
 
 
@@ -633,6 +641,121 @@ def career_value_report(req: ValueAnswerReq):
 
     return {"ok": True, "ranking": ranking, "answered": answered,
             "total": len(qs), "report_url": report_url}
+
+
+# ── 관계 도메인 서사 (카톡 × 성향 → 선택지형 분기) ─────────────────────
+class RelAnalyzeReq(BaseModel):
+    uid: Optional[str] = None            # 있으면 관계 스냅샷 저장·시계열 추적
+    relation_tag: Optional[str] = None   # 관계 상대 태그(연인/엄마/친구A) — 시계열 스레드 키
+    label: Optional[str] = None          # 사람이 붙인 시간 라벨("오늘 카톡", "지난주 카톡")
+    transcript: Optional[str] = None     # 텍스트 대화(이미지 없이도 가능)
+    images: Optional[list] = None        # [{"media_type","data"(base64)}] 카톡 스크린샷
+    snapshot_time: Optional[str] = None  # 시계열 정렬용(없으면 서버 시각)
+
+
+def _load_disposition(uid):
+    """저장된 성향(일기 기반) 로드 — 관계 서사 개인화 재료."""
+    if not uid:
+        return None
+    con = _db()
+    row = con.execute("SELECT disposition FROM users WHERE uid=?", (uid,)).fetchone()
+    con.close()
+    return CR.dec_json(row[0]) if row and row[0] else None
+
+
+def _rel_history(uid, relation_tag):
+    """같은 상대의 과거 스냅샷(시간순) — 있으면 (나) 변화추적 모드."""
+    con = _db()
+    rows = con.execute(
+        "SELECT snapshot_time, label, signals FROM relationship_snapshots"
+        " WHERE uid=? AND relation_tag=? ORDER BY snapshot_time",
+        (uid, relation_tag),
+    ).fetchall()
+    con.close()
+    return [{"snapshot_time": r[0], "label": r[1],
+             "signals": CR.dec_json(r[2]) if r[2] else {}} for r in rows]
+
+
+@app.post("/relationship/analyze")
+def relationship_analyze(req: RelAnalyzeReq):
+    """카톡 스크린샷/텍스트 → 관계 신호 추출 → 성향과 결합해 선택지형 서사.
+
+    (가)/(나) 자동 판별: uid+relation_tag 로 과거 스냅샷이 있으면 변화추적(나),
+    없으면 일회성(가). 저장은 uid+relation_tag 가 있을 때만.
+    """
+    from qmode import relationship as REL
+
+    # 1) 안전 게이트 — 위기 신호면 서사 대신 지원 안내
+    safe = REL.safety_check(req.transcript or "")
+    if safe["block"]:
+        return {"blocked": True, "support": safe["support"], "level": safe["level"]}
+
+    # 2) 관계 신호 추출(비전/텍스트)
+    signals, serr = REL.extract_signals(
+        images=req.images, transcript=req.transcript, relation_tag=req.relation_tag)
+    if signals is None:
+        return {"error": serr}
+
+    # 3) 성향 + 히스토리 결합
+    disposition = _load_disposition(req.uid)
+    history = _rel_history(req.uid, req.relation_tag) if (req.uid and req.relation_tag) else []
+    mode = "track" if history else "single"      # 과거 스냅샷 있으면 (나) 추적
+
+    # 4) 선택지형 분기 서사
+    narr, nerr = REL.generate_narrative(signals, disposition, history=history)
+
+    # 5) 저장 — uid+relation_tag 있을 때만 시계열로 적립
+    saved = False
+    if req.uid and req.relation_tag:
+        st = req.snapshot_time or _now()
+        con = _db()
+        con.execute(
+            "INSERT OR REPLACE INTO relationship_snapshots"
+            "(uid, relation_tag, snapshot_time, label, signals, narrative, created_at)"
+            " VALUES(?,?,?,?,?,?,?)",
+            (req.uid, req.relation_tag, st, req.label,
+             CR.enc_json(signals),                       # 대화 신호는 민감정보 — 암호화 저장
+             CR.enc_json(narr) if narr else None, _now()),
+        )
+        con.commit(); con.close()
+        saved = True
+
+    return {"mode": mode, "signals": signals, "narrative": narr,
+            "error": nerr, "saved": saved,
+            "support": safe.get("support") or None,
+            "history_count": len(history)}
+
+
+@app.get("/relationship/{uid}/{relation_tag}")
+def relationship_timeline(uid: str, relation_tag: str):
+    """한 상대의 관계 스냅샷 시계열 — 변화 추적 화면용."""
+    hist = _rel_history(uid, relation_tag)
+    if not hist:
+        return {"found": False, "count": 0, "snapshots": []}
+    con = _db()
+    rows = con.execute(
+        "SELECT snapshot_time, label, signals, narrative FROM relationship_snapshots"
+        " WHERE uid=? AND relation_tag=? ORDER BY snapshot_time",
+        (uid, relation_tag),
+    ).fetchall()
+    con.close()
+    snaps = [{"snapshot_time": r[0], "label": r[1],
+              "signals": CR.dec_json(r[2]) if r[2] else {},
+              "narrative": CR.dec_json(r[3]) if r[3] else None} for r in rows]
+    return {"found": True, "count": len(snaps), "snapshots": snaps}
+
+
+@app.delete("/relationship/{uid}/{relation_tag}")
+def clear_relationship(uid: str, relation_tag: str):
+    """한 상대의 관계 스냅샷 전체 삭제(데모 재시드·프라이버시)."""
+    con = _db()
+    n = con.execute(
+        "DELETE FROM relationship_snapshots WHERE uid=? AND relation_tag=?",
+        (uid, relation_tag),
+    ).rowcount
+    con.commit(); con.close()
+    return {"deleted": n}
+
 
 
 # ── 직무 분석 — 채용 공고 × 내 성향 ────────────────────────────────────

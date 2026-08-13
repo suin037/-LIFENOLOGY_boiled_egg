@@ -14,10 +14,11 @@ import ActionView from "../components/result/ActionView.jsx";
 import AvatarComparison from "../components/result/AvatarComparison.jsx";
 import DiarySignalCard from "../components/result/DiarySignalCard.jsx";
 import JobAnalysisView from "../components/result/JobAnalysisView.jsx";
+import RelationshipView from "../components/result/RelationshipView.jsx";
 
 export default function Result() {
   const navigate = useNavigate();
-  const { result, profile, scenarioDomains, retryVisuals, jobAnalyses, postings } = useResult();
+  const { result, profile, scenarioDomains, retryVisuals, jobAnalyses, postings, relResults, talks } = useResult();
   const { a, b } = result;
 
   const tabs = [
@@ -28,6 +29,10 @@ export default function Result() {
     // 입력에서 공고를 분석했을 때만 — 예측 수치 옆에서 그 공고를 다시 확인한다.
     ...(jobAnalyses?.length || postings?.length
       ? [{ key: "job", label: `공고 분석${(jobAnalyses?.length || postings?.length) > 1 ? ` ${jobAnalyses?.length || postings?.length}` : ""}`, View: JobAnalysisView }]
+      : []),
+    // 관계 선택지에서 대화를 담았을 때만.
+    ...(relResults?.length || talks?.length
+      ? [{ key: "rel", label: `관계 분석${(relResults?.length || talks?.length) > 1 ? ` ${relResults?.length || talks?.length}` : ""}`, View: RelationshipView }]
       : []),
   ];
 
