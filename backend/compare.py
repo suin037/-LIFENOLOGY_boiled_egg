@@ -195,9 +195,12 @@ def _choice_context(pr: PredictResponse, kind: str) -> list:
     return []
 
 
-def _scenario_view(profile_dict: dict, choice: str) -> ScenarioView:
+def _scenario_view(profile_dict: dict, choice: str, detail: str | None = None) -> ScenarioView:
     kind = choice_kind(choice)
-    req = PredictRequest(**profile_dict, choice=choice)
+    # UI의 choice는 "창업"처럼 정규화돼 있으므로 업종·규모는 자유입력 detail에서 읽는다.
+    # detail이 엉뚱한 유형이면 정규화 선택을 유지해 잘못된 모델 라우팅을 막는다.
+    model_choice = detail.strip() if detail and choice_kind(detail) == kind else choice
+    req = PredictRequest(**profile_dict, choice=model_choice)
     # 비교는 A/B 2회 호출 → 서사는 생략(3번 RAG가 최종 화면에서 담당)
     pr = run_prediction(req, with_narrative=False)
 
@@ -205,11 +208,12 @@ def _scenario_view(profile_dict: dict, choice: str) -> ScenarioView:
     income_path = _income_path(pr, kind)
 
     confidence: dict = {}
-    if kind == "이직":
-        mc = model_confidence(features)
+    if kind in {"이직", "창업"}:
+        treatment = "startup" if kind == "창업" else "move"
+        mc = model_confidence(features, treatment=treatment)
         if mc:
             confidence["survival_c_index"] = mc
-        ec = effect_confidence(features)
+        ec = effect_confidence(features, treatment=treatment)
         if ec:
             confidence["causal_effect_ci"] = ec
 
@@ -233,8 +237,8 @@ def _scenario_view(profile_dict: dict, choice: str) -> ScenarioView:
 
 def build_comparison(req: CompareRequest) -> CompareResponse:
     profile_dict = req.profile.model_dump()
-    a = _scenario_view(profile_dict, req.choice_a)
-    b = _scenario_view(profile_dict, req.choice_b)
+    a = _scenario_view(profile_dict, req.choice_a, getattr(req, "choice_a_detail", None))
+    b = _scenario_view(profile_dict, req.choice_b, getattr(req, "choice_b_detail", None))
 
     notes = []
     if a.kind == b.kind:

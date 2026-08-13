@@ -16,11 +16,13 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from functools import lru_cache
 from pathlib import Path
 
 import pandas as pd
 
+from choice_classifier import SCALE_ALL, classify, extract_startup_context
 from config import settings
 
 DATA = settings.goms_clean_abspath.parent          # <ROOT>/data
@@ -230,24 +232,40 @@ def _src_education(profile: dict) -> list[dict]:
     return out
 
 
-def _src_startup(profile: dict) -> list[dict]:
-    """창업 선택 시 — 창업 N년 생존율."""
-    if "창업" not in str(profile.get("choice", "")):
-        return []
+def bizsurv_rows(profile: dict):
+    """창업 문장에서 찾은 업종·규모에 맞는 최신 생존율 행을 반환한다."""
     df = _csv(str(BIZSURV))
     if df is None:
+        return None, None
+    ctx = extract_startup_context(str(profile.get("choice", "")))
+    fallbacks = (
+        (ctx.industry_or_all, ctx.scale, ctx),
+        (ctx.industry_or_all, SCALE_ALL, replace(ctx, scale=SCALE_ALL, scale_inferred=False)),
+        ("전체", ctx.scale, replace(ctx, ksic_section=None, industry=None)),
+        ("전체", SCALE_ALL, replace(ctx, ksic_section=None, industry=None, scale=SCALE_ALL, scale_inferred=False)),
+    )
+    for industry, scale, applied in fallbacks:
+        d = df[(df["industry"].astype(str) == industry) & (df["firm_size"].astype(str) == scale)]
+        if not d.empty:
+            return d[d["ref_year"] == d["ref_year"].max()], applied
+    return None, None
+
+
+def _src_startup(profile: dict) -> list[dict]:
+    """창업 선택 시 — 업종·규모별 창업 생존율."""
+    if classify(profile.get("choice", ""), record=False).kind != "창업":
         return []
-    d = df[(df["industry"] == "전체") & (df["ksic_section"] == "전체") & (df["firm_size"] == "계")]
-    if d.empty:
+    d, ctx = bizsurv_rows(profile)
+    if d is None or d.empty:
         return []
-    d = d[d["ref_year"] == d["ref_year"].max()]
+    year = int(d["ref_year"].iloc[0])
     out = []
     for h in (1, 3, 5):
         m = d[d["survival_horizon_yr"] == h]
         if not m.empty:
             out.append({"dimension": "창업", "indicator": f"창업 {h}년 생존율",
                         "value": round(float(m["survival_rate"].iloc[0]), 1), "unit": "%",
-                        "group": "전체 업종", "source": "기업생멸행정통계"})
+                        "group": f"{ctx.label()}·{year}", "source": "기업생멸행정통계"})
     return out
 
 
@@ -259,8 +277,9 @@ _SOURCES = [
     _src_qol,                 # 삶의질
     _src_youth,               # 청년 삶의질
     _src_education,           # 진학/취업 — 계열별 취업률·진학률 (KEDI)
-    _src_startup,             # 창업 (choice=창업)
 ]
+
+_CHOICE_SOURCES = [_src_startup]
 
 
 def query_life_indicators(profile: dict) -> list[dict]:
@@ -274,23 +293,36 @@ def query_life_indicators(profile: dict) -> list[dict]:
     return out
 
 
-def startup_closure_timeline(profile: dict, years=(1, 3, 5)) -> dict:
+def query_choice_indicators(profile: dict) -> list[dict]:
+    """A/B 선택에 따라 달라지는 지표. 공유 캐시에 섞지 않는다."""
+    out: list[dict] = []
+    for src in _CHOICE_SOURCES:
+        try:
+            out.extend(src(profile))
+        except Exception:
+            continue
+    return out
+
+
+def startup_closure_timeline(profile: dict, years=(1, 2, 3, 4, 5)) -> dict:
     """창업 폐업 누적확률 타임라인 (L4 '후회 리스크'의 창업판).
 
     창업은 개인단위 인과 데이터가 없어 이직의 L3/L4 를 못 쓴다.
     대신 기업생멸통계 생존율(전체 업종)을 폐업확률(=1-생존율)로 바꿔
     '시간이 지날수록 접을 확률' 타임라인을 제공한다.
     """
-    df = _csv(str(BIZSURV))
-    if df is None:
+    d, _ = bizsurv_rows(profile)
+    if d is None or d.empty:
         return {}
-    d = df[(df["industry"] == "전체") & (df["ksic_section"] == "전체") & (df["firm_size"] == "계")]
-    if d.empty:
-        return {}
-    d = d[d["ref_year"] == d["ref_year"].max()]
     out = {}
     for h in years:
         m = d[d["survival_horizon_yr"] == h]
         if not m.empty:
             out[h] = round(1 - float(m["survival_rate"].iloc[0]) / 100.0, 3)
     return out
+
+
+def startup_context_meta(profile: dict) -> dict:
+    """결과 화면에 실제 적용한 창업 업종·규모 기준을 노출한다."""
+    _, ctx = bizsurv_rows(profile)
+    return {} if ctx is None else {**ctx.as_dict(), "label": ctx.label()}

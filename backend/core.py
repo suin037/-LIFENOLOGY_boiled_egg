@@ -5,10 +5,14 @@
 """
 
 from schemas import PredictRequest, PredictResponse
+from choice_classifier import classify, extract_startup_context
 from models.knn_model import find_neighbors
 from models.econml_model import estimate_effect
 from models.lifelines_model import estimate_survival, risk_timeline
-from rulebase import query_life_indicators, startup_closure_timeline
+from rulebase import (
+    query_choice_indicators, query_life_indicators, startup_closure_timeline,
+    startup_context_meta,
+)
 from trajectory import (
     project_trajectory, project_wellbeing_trajectory, project_satisfaction_facets,
 )
@@ -18,16 +22,7 @@ from utils.claude_api import generate_narrative
 
 def choice_kind(choice: str) -> str:
     """자유입력을 근거가 있는 유형으로만 정규화한다."""
-    c = str(choice).strip().lower()
-    if any(k in c for k in ("창업", "사업", "자영", "startup")):
-        return "창업"
-    if any(k in c for k in ("진학", "대학원", "유학", "학업", "석사", "박사")):
-        return "진학"
-    if any(k in c for k in ("이직", "전직", "옮기", "다른 회사", "갈아타")):
-        return "이직"
-    if any(k in c for k in ("유지", "현상 유지", "현직", "잔류", "그대로", "계속 다니", "남기")):
-        return "유지"
-    return "기타"
+    return classify(choice).kind
 
 
 def run_prediction(req: PredictRequest, with_narrative: bool = True) -> PredictResponse:
@@ -39,8 +34,11 @@ def run_prediction(req: PredictRequest, with_narrative: bool = True) -> PredictR
     features = build_feature_vector(req)
     kind = choice_kind(req.choice)
 
+    if kind == "창업":
+        features["ksic_section"] = extract_startup_context(req.choice).ksic_section
+
     # Layer 1: 룰베이스 생활지표 패널 — 선택지 무관 항상 제공
-    life_indicators = query_life_indicators(features)
+    life_indicators = query_life_indicators(features) + query_choice_indicators(features)
 
     # Layer 5: 종단 궤적 — 비슷한 사람들의 향후 N년 실제 경로 분포
     trajectory = project_trajectory(features)                       # 소득(KLIPS, 10년)
@@ -61,7 +59,7 @@ def run_prediction(req: PredictRequest, with_narrative: bool = True) -> PredictR
         except (FileNotFoundError, RuntimeError):
             neighbors = []
         try:
-            effect = estimate_effect(features, choice=req.choice)
+            effect = estimate_effect(features, treatment="move")
             available_layers.append("인과(L3)")
         except (FileNotFoundError, RuntimeError):
             effect = None
@@ -93,9 +91,27 @@ def run_prediction(req: PredictRequest, with_narrative: bool = True) -> PredictR
             ]
             scenario_trajectories = {"유지": trajectory, "이직": move}
     elif kind == "창업":
-        timeline = startup_closure_timeline(features)      # 폐업 누적확률
-        coverage = ("창업: 생활지표(L1) + 창업 생존/폐업 통계. "
-                    "개인단위 인과·매칭은 창업 추적 데이터 부재로 미제공")
+        context = startup_context_meta(features)
+        available_layers = ["업종·규모별 기업생존통계(L1)"]
+        try:
+            effect = estimate_effect(features, treatment="startup")
+            available_layers.append("창업 소득 관측효과(L3·주의 필요)")
+        except (FileNotFoundError, RuntimeError):
+            effect = None
+        try:
+            survival = estimate_survival(features, treatment="startup")
+            timeline = risk_timeline(features, years=(1, 2, 3, 4, 5), treatment="startup")
+            available_layers.append("자영상태 이탈모델(L4)")
+        except (FileNotFoundError, RuntimeError):
+            survival = None
+            timeline = startup_closure_timeline(features)
+        coverage = "창업: " + "·".join(available_layers)
+        if context:
+            coverage += f". 적용 기준: {context['label']}"
+        if survival is None:
+            coverage += ". 개인단위 artifact 미배포로 업종별 기업생멸통계를 사용"
+        if effect is not None:
+            coverage += ". 소득은 임금과 사업소득의 개념이 달라 참고값으로만 해석"
     elif kind == "진학":
         coverage = ("진학: 생활지표(L1) + 계열별 취업률·진학률(KEDI). "
                     "개인단위 인과·매칭은 진학 추적 데이터 부재로 미제공")
