@@ -128,7 +128,7 @@ export function saveActionResponse(actionId, text) {
   return value;
 }
 
-// 저장된 우주의 결정(A/B) → 향해 가는 실제 선택. 보류면 null.
+// 저장된 우주의 결정(A/B) → 지금 탐험 중인 실제 선택. 보류면 null.
 export function chosenChoice(u) {
   if (u?.decision === "A") return u.choiceA;
   if (u?.decision === "B") return u.choiceB;

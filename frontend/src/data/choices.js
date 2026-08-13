@@ -7,16 +7,17 @@ export const SLOT_OPTIONS = [
 ];
 
 // 삶 전체 분류 정본. 한 선택지는 여러 영역에 동시에 속할 수 있다.
+// color = 그 영역의 행성 색. 보관함 카드·나의 우주가 같은 색으로 묶이도록 여기서 한 번만 정의한다.
 export const LIFE_DOMAINS = [
-  { key: "career", label: "직업", emoji: "💼", keywords: ["회사", "직장", "직업", "이직", "퇴사", "휴직", "취업", "프리랜서", "근무", "직무"] },
-  { key: "education", label: "교육", emoji: "🎓", keywords: ["대학", "대학원", "진학", "유학", "공부", "교육", "학위", "석사", "박사", "자격증", "전공"] },
-  { key: "business", label: "사업", emoji: "🌱", keywords: ["창업", "사업", "자영", "개업", "장사", "가게", "카페", "법인", "스타트업", "대표"] },
-  { key: "finance", label: "재무", emoji: "💰", keywords: ["돈", "소득", "월급", "연봉", "저축", "투자", "대출", "빚", "비용", "재무", "생활비", "수입", "프리랜서"] },
-  { key: "health", label: "건강", emoji: "🫶", keywords: ["건강", "운동", "치료", "병원", "수면", "스트레스", "우울", "불안", "번아웃", "회복", "마음"] },
-  { key: "housing", label: "주거", emoji: "🏠", keywords: ["이사", "이주", "독립", "집", "주거", "전세", "월세", "서울", "제주", "지방", "지역"] },
-  { key: "relationship", label: "관계", emoji: "🤝", keywords: ["결혼", "연애", "이별", "친구", "가족", "부모", "관계", "사람", "동료", "외로움", "남친", "여친", "남자친구", "여자친구", "애인", "연인", "헤어", "사귀", "데이트", "썸", "배우자", "남편", "아내"] },
-  { key: "lifestyle", label: "생활방식", emoji: "🌿", keywords: ["워라밸", "여가", "생활", "루틴", "시간", "여행", "취미", "재택", "자유", "삶", "프리랜서"] },
-  { key: "long_term_values", label: "장기 가치", emoji: "🧭", keywords: ["가치", "의미", "목표", "성장", "안정", "꿈", "미래", "자율", "보람", "장기"] },
+  { key: "career", label: "직업", emoji: "💼", color: "#4A90E2", keywords: ["회사", "직장", "직업", "이직", "퇴사", "휴직", "취업", "프리랜서", "근무", "직무"] },
+  { key: "education", label: "교육", emoji: "🎓", color: "#57C8E8", keywords: ["대학", "대학원", "진학", "유학", "공부", "교육", "학위", "석사", "박사", "자격증", "전공"] },
+  { key: "business", label: "사업", emoji: "🌱", color: "#35B98A", keywords: ["창업", "사업", "자영", "개업", "장사", "가게", "카페", "법인", "스타트업", "대표"] },
+  { key: "finance", label: "재무", emoji: "💰", color: "#E0954A", keywords: ["돈", "소득", "월급", "연봉", "저축", "투자", "대출", "빚", "비용", "재무", "생활비", "수입", "프리랜서"] },
+  { key: "health", label: "건강", emoji: "🫶", color: "#F2789C", keywords: ["건강", "운동", "치료", "병원", "수면", "스트레스", "우울", "불안", "번아웃", "회복", "마음"] },
+  { key: "housing", label: "주거", emoji: "🏠", color: "#C77FD6", keywords: ["이사", "이주", "독립", "집", "주거", "전세", "월세", "서울", "제주", "지방", "지역"] },
+  { key: "relationship", label: "관계", emoji: "🤝", color: "#8B5CF6", keywords: ["결혼", "연애", "이별", "친구", "가족", "부모", "관계", "사람", "동료", "외로움", "남친", "여친", "남자친구", "여자친구", "애인", "연인", "헤어", "사귀", "데이트", "썸", "배우자", "남편", "아내"] },
+  { key: "lifestyle", label: "생활방식", emoji: "🌿", color: "#8FBF3F", keywords: ["워라밸", "여가", "생활", "루틴", "시간", "여행", "취미", "재택", "자유", "삶", "프리랜서"] },
+  { key: "long_term_values", label: "장기 가치", emoji: "🧭", color: "#F5C86B", keywords: ["가치", "의미", "목표", "성장", "안정", "꿈", "미래", "자율", "보람", "장기"] },
 ];
 
 export function detectLifeDomains(text) {
@@ -29,6 +30,10 @@ export function detectLifeDomains(text) {
 
 export function domainLabel(key) {
   return LIFE_DOMAINS.find((domain) => domain.key === key)?.label || key;
+}
+
+export function domainColor(key) {
+  return LIFE_DOMAINS.find((domain) => domain.key === key)?.color || "#6E7C93";
 }
 
 export const labelOf = (c) => (c === "유지" ? "현상 유지" : c);
