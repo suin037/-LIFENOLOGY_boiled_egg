@@ -3,7 +3,8 @@ import { zodiacOf, zodiacPoints, zodiacLines, zodiacGhost } from "../data/zodiac
 
 const COL=["#E24B4A","#D85A30","#EDA100","#5DCAA5","#378ADD"];
 const PASTEL=["#F0A3A2","#F2B48E","#F7DCA0","#AEE6CF","#A8CDF5"];
-const CALM="#FFFFFF";   // 평소 별빛 — 흰색. 기분 색은 '자세히 보기'에서만 드러난다.
+// 평소 별빛 — 순백은 너무 쨍해서, 푸른 기 도는 은은한 별빛으로. (Constellation 반짝이와 같은 톤)
+const CALM="#CBD8EE";
 // 캘린더는 모달(최대 820px)이라 넓게 써도 된다. 별자리끼리 겹치지 않게 간격을 벌렸다.
 const W=470,H=300,CX=W/2,CY=H/2,ZOOM_MONTH=2.2,MINI_R_MIN=16,MINI_R_SPREAD=60;
 const ZR=16;   // 별자리 반지름 — 간격(STEP)보다 작아야 이웃과 안 겹친다
@@ -58,7 +59,7 @@ export default function JyConstellationArchive({monthGroups,weeksByMonth,focusMo
         {!active&&mo.zLines.map((ln,li)=><line key={`z${li}`} x1={mo.cx+ln[0]} y1={mo.cy+ln[1]} x2={mo.cx+ln[2]} y2={mo.cy+ln[3]} stroke="#9FB0CE" strokeWidth=".4" strokeOpacity=".38" style={{transition:"opacity .4s"}}/>)}
         {/* 평소엔 별을 연보라 하나로 — 12달이 한눈에 차분히 보인다.
             달을 눌러 자세히 볼 때만 그날 기분 색으로 갈라진다(색이 의미를 갖는 순간). */}
-        {mo.stars.map((s)=><g key={s.key} style={{transform:active?`translate(${s.zoomX}px,${s.zoomY}px)`:`translate(${s.blobX}px,${s.blobY}px)`,transition:"transform .8s cubic-bezier(.25,.9,.3,1)"}}><circle r={s.r+1.6} fill={active?s.c:CALM} opacity=".2" style={{transition:"fill .5s"}}/><circle r={s.r} fill={active?s.c:CALM} style={{transition:"fill .5s"}}/><circle r={s.r*.45} fill="#fff" opacity={active?0:.8} style={{transition:"opacity .5s"}}/></g>)}
+        {mo.stars.map((s)=><g key={s.key} style={{transform:active?`translate(${s.zoomX}px,${s.zoomY}px)`:`translate(${s.blobX}px,${s.blobY}px)`,transition:"transform .8s cubic-bezier(.25,.9,.3,1)"}}><circle r={s.r+1.6} fill={active?s.c:CALM} opacity=".2" style={{transition:"fill .5s"}}/><circle r={s.r} fill={active?s.c:CALM} style={{transition:"fill .5s"}}/><circle r={s.r*.45} fill="#fff" opacity={active?0:.45} style={{transition:"opacity .5s"}}/></g>)}
         {!active&&<g onClick={()=>onMonthPick(mo.m.monthKey)} style={{cursor:"pointer"}}>
           {mo.isNow&&<circle cx={mo.cx} cy={mo.cy} r={ZR+5} fill="none" stroke="#A8CDF5" strokeOpacity=".55"/>}
           <circle cx={mo.cx} cy={mo.cy} r={ZR+4} fill="transparent"/>
