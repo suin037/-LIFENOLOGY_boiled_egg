@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import Constellation from "./Constellation.jsx";
 import JyConstellationArchive from "./JyConstellationArchive.jsx";
-import { adaptiveGroups, loadUniverse, todayKey } from "../data/myUniverse.js";
+import { constellationGroups, loadUniverse, todayKey } from "../data/myUniverse.js";
+import { zodiacOf } from "../data/zodiac.js";
 
 export default function HomeCalendar() {
   const state = loadUniverse();
@@ -14,7 +15,9 @@ export default function HomeCalendar() {
   const [week,setWeek] = useState(null);
   const [star,setStar] = useState(null);
   const [report,setReport] = useState(null);
-  const groups = useMemo(() => adaptiveGroups(null,state),[state]);
+  // 주간 별자리는 '달력 한 주(7일)' 기준이어야 한다 — adaptiveGroups(기록 수에 맞춘 큰 묶음)를
+  // 쓰면 한 묶음이 32일이 되어 라벨·모양·리포트가 모두 깨진다.
+  const groups = useMemo(() => constellationGroups(state),[state]);
   const months = useMemo(() => Array.from({length:12},(_,index)=>{
     const key=`${year}-${String(index+1).padStart(2,"0")}`;
     const items=entries.filter((entry)=>entry.date.startsWith(key));
@@ -29,10 +32,10 @@ export default function HomeCalendar() {
 
   return <section className="mt-5 rounded-[24px] border border-white/[.08] bg-[#0B1322] p-4 lg:p-5">
     <div className="flex items-center justify-between gap-3"><div><p className="text-[10px] tracking-[.15em] text-[#9F85DD]">CONSTELLATION ARCHIVE</p><h2 className="mt-1 text-[17px] font-bold">나의 기록 별자리</h2></div><div className="flex items-center gap-1"><button onClick={()=>moveYear(-1)} className="tap flex h-9 w-9 items-center justify-center rounded-full border border-white/10"><ChevronLeft size={16}/></button><span className="min-w-[74px] text-center text-[13px] font-bold">{year}년</span><button onClick={()=>moveYear(1)} className="tap flex h-9 w-9 items-center justify-center rounded-full border border-white/10"><ChevronRight size={16}/></button></div></div>
-    <p className="mt-3 text-[10px] leading-relaxed text-mut">월 성단을 누르면 같은 별들이 그달의 주간 별자리로 펼쳐집니다.</p>
+    <p className="mt-3 text-[10px] leading-relaxed text-mut">달마다 그 달의 별자리(황도 12궁) 모양으로 기록이 모입니다. 성단을 누르면 같은 별들이 그달의 주간 별자리로 펼쳐집니다.</p>
     <div className="mt-4"><JyConstellationArchive monthGroups={populatedMonths} weeksByMonth={weeksByMonth} focusMonth={month} onMonthPick={(key)=>{setMonth(key);setWeek(null);setStar(null);}} onWeekOpen={(group)=>{setWeek(group);setStar(null);}}/></div>
     {month && <>
-      <div className="mt-4 flex items-center justify-between rounded-xl border border-[#8B6CCF]/20 bg-[#8B6CCF]/[.07] px-3 py-2.5"><div><b className="text-[12px] text-[#C7B5F2]">{Number(month.slice(5))}월의 별자리</b><p className="mt-0.5 text-[9px] text-mut">{months.find((item)=>item.key===month)?.count || 0}일 기록</p></div><button onClick={()=>{setMonth(null);setWeek(null);setStar(null);}} className="tap text-[10px] text-sub">12개월 보기</button></div>
+      <div className="mt-4 flex items-center justify-between rounded-xl border border-[#8B6CCF]/20 bg-[#8B6CCF]/[.07] px-3 py-2.5"><div><b className="text-[12px] text-[#C7B5F2]">{Number(month.slice(5))}월 · {zodiacOf(Number(month.slice(5))).ko}</b><p className="mt-0.5 text-[9px] text-mut">{months.find((item)=>item.key===month)?.count || 0}일 기록</p></div><button onClick={()=>{setMonth(null);setWeek(null);setStar(null);}} className="tap text-[10px] text-sub">12개월 보기</button></div>
       {week&&<div className="mt-3 rounded-[18px] border border-white/[.07] bg-black/15 p-4"><div className="flex items-center justify-between"><div><p className="text-[9px] text-[#A88BE8]">WEEK CONSTELLATION</p><b className="text-[12px]">별을 눌러 그날의 기록 보기</b></div><button onClick={()=>setReport(week)} className="tap rounded-full bg-[#8B6CCF] px-3 py-1.5 text-[10px] font-bold">주간 리포트</button></div><div className="mx-auto mt-2 max-w-[330px]"><Constellation size={230} stars={week.stars} todayDate={todayKey()} selectedDate={star?.date} onSelect={setStar}/></div>{star&&<div className="mt-3 rounded-xl bg-white/[.035] p-3"><div className="flex justify-between text-[10px]"><b>{star.date}</b><span className="text-[#BBA4ED]">기분 {star.mood || "-"}/5</span></div><p className="mt-2 text-[11px] leading-relaxed text-sub">{star.text||star.note||"간단한 체크인만 남긴 날입니다."}</p></div>}</div>}
     </>}
     {report&&<WeeklyReport group={report} onClose={()=>setReport(null)}/>} 
