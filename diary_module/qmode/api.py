@@ -971,6 +971,26 @@ def chat_turn(req: ChatReq):
     return {"reply": reply, **CB.stage_info(msgs)}
 
 
+class FutureReq(BaseModel):
+    """행성(삶의 영역) 하나의 'N년 뒤'. 일기 + 시뮬레이션 + 회고를 한 번에 읽는다."""
+    domain: Optional[str] = None
+    label: str = "이 영역"
+    years: int = 5
+    records: list[dict] = []          # [{date, text, mood, emotion}]
+    analysis: Optional[dict] = None   # {n, moodAvg, topEmotions, trend}
+    sims: list[dict] = []             # [{savedAt, choiceA, choiceB, headline, decision, reflection, doneActions}]
+    speech: Optional[str] = None
+
+
+@app.post("/future/scenario")
+def future_scenario(req: FutureReq):
+    """그 영역이 N년 뒤 어디에 가 있을지 — 기록에서만 끌어온 서사(예측 수치 아님)."""
+    from qmode import future as FU
+    years = max(1, min(30, int(req.years or 5)))
+    return FU.scenario(req.label or "이 영역", years, req.records,
+                       analysis=req.analysis, sims=req.sims, speech=req.speech)
+
+
 class ComfortReq(BaseModel):
     entries: list[dict] = []          # 그 주 기록 [{date, text, mood, emotion}]
     persona: Optional[str] = "lumi"

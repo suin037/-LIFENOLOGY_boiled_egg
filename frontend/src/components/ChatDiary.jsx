@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Card, Caption } from "./ui.jsx";
 import { addCheckin, setDomains, todayKey, loadUniverse, weekStartKey } from "../data/myUniverse.js";
-import { composeDiary, weeklyComfort } from "../data/dispositionApi.js";
+import { composeDiary, weeklyComfort, loadSpeech, SPEECH_KEY } from "../data/dispositionApi.js";
 import { todayQuestions } from "../data/questions.js";
 import { useResult } from "../data/ResultContext.jsx";
 import Mascot from "./Mascot.jsx";
@@ -15,18 +15,10 @@ const AREAS = [
   { key: "health", name: "건강", mascot: "lumi", role: "몸과 마음 상태를 살피는 건강 체크 대화다." },
 ];
 
-// ── 말투 — 사용자가 켜고 끈다. 질문지 자체가 존댓말·반말이 섞여 있어 여기서 하나로 맞춘다.
-const SPEECH_KEY = "pm.speech.v1";
-function loadSpeech() {
-  try {
-    const v = localStorage.getItem(SPEECH_KEY);
-    return v === "casual" ? "casual" : "polite"; // 기본은 존댓말
-  } catch {
-    return "polite";
-  }
-}
+// 말투(loadSpeech/SPEECH_KEY)는 dispositionApi 에서 온다 — 마스코트가 말하는 화면이
+// 여럿이라(대화·주간 위로·N년 뒤) 한 곳에서 정해야 어긋나지 않는다.
 
-// 질문 = { p(존댓말), c(반말), options? type? unit? skip? id? }.
+// 질문 ={ p(존댓말), c(반말), options? type? unit? skip? id? }.
 // options 있으면 선택창(칩)으로, type:"number"면 숫자 입력, 없으면 자유서술.
 // 일상 = 구체적 하루 활동 로그. 성향(todayQuestions=가치·성찰 질문)과 겹치지 않게 '한 일/사람/먹은 것'.
 const DAILY_Q = [

@@ -39,6 +39,16 @@ export async function tagDomain(text) {
   }
 }
 
+// 말투 — 사용자가 대화 화면에서 켜고 끈 값. 마스코트가 말하는 곳이면 어디서든 이걸 따른다.
+export const SPEECH_KEY = "pm.speech.v1";
+export function loadSpeech() {
+  try {
+    return localStorage.getItem(SPEECH_KEY) === "casual" ? "casual" : "polite"; // 기본 존댓말
+  } catch {
+    return "polite";
+  }
+}
+
 // 마스코트 대화 한 턴 → { reply, stage, suggest_compose }. 실패 시 간단 폴백.
 //  · context: 프론트가 가진 기억 {recent:[{date,emotion,text}], hardStreak} — 로컬 우선이라 이 경로가 기본.
 //  · speech : 말투 "polite"(기본) | "casual". 사용자가 화면에서 켜고 끈다.

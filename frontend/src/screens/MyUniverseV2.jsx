@@ -7,7 +7,8 @@ import { PLANETS } from "../data/result.js";
 import { adaptiveGroups, loadUniverse, resetUniverse, scenariosByPlanet, seedDemoCheckins, todayKey } from "../data/myUniverse.js";
 import { seedDemoEunwoo, seedDemoYear } from "../data/demoYear.js";
 import { domainAnalysis, domainMonths, domainReport } from "../data/diarySignals.js";
-import { clearSavedReports, REPORT_UID } from "../data/dispositionApi.js";
+import { futureMaterials, getCachedFuture, writeFuture } from "../data/futureApi.js";
+import { clearSavedReports, REPORT_UID, loadSpeech } from "../data/dispositionApi.js";
 import { planetSkin } from "../data/planetShop.js";
 
 const DESCRIPTIONS = {
@@ -217,6 +218,122 @@ function DomainRecords({ planet, state, entries, recent }) {
   );
 }
 
+// ── 이 영역의 N년 뒤 ──────────────────────────────────────────
+// 행성 하나에 쌓인 셋(그 영역 일기 · 그 영역에서 돌린 시뮬레이션 · 저장한 우주의 회고)을
+// 한 번에 읽어 "이대로 가면 N년 뒤" 를 서사로 받아온다. 예측 수치가 아니라 기록에서
+// 끌어온 이야기라, 화면에도 그대로 밝힌다.
+const YEAR_CHOICES = [1, 3, 5, 10];
+
+function FutureYears({ planet, state }) {
+  const [years, setYears] = useState(3);
+  const [busy, setBusy] = useState(false);
+  const [story, setStory] = useState(() => getCachedFuture(planet.key, 3));
+  const mat = useMemo(() => futureMaterials(planet.key, state), [planet.key, state]);
+
+  // 햇수를 바꾸면 그 햇수로 써둔 이야기가 있으면 꺼내고, 없으면 비운다.
+  function pickYears(y) {
+    setYears(y);
+    setStory(getCachedFuture(planet.key, y));
+  }
+
+  async function write() {
+    setBusy(true);
+    try {
+      setStory(await writeFuture(planet, years, { speech: loadSpeech(), state }));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // 새 기록이 쌓였으면 다시 쓸 만하다고 알려준다(이야기는 쓴 시점에 묶여 있다).
+  const stale = story?.ok && story.nRecords != null && mat.records.length > story.nRecords;
+
+  return (
+    <div className="mt-4 rounded-[18px] border border-[#4E7FD9]/25 bg-[#4E7FD9]/[.07] p-4">
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] font-bold">이 영역의 N년 뒤</p>
+        <span className="text-[9.5px] text-[#8FB4F0]">
+          일기 {mat.records.length}개{mat.sims.length ? ` · 시뮬 ${mat.sims.length}개` : ""}
+          {mat.reflections ? ` · 회고 ${mat.reflections}개` : ""}
+        </span>
+      </div>
+
+      {!mat.ready ? (
+        <p className="mt-2 text-[10px] leading-relaxed text-mut">
+          이 영역 일기가 3개는 모여야 이야기를 쓸 수 있어요. 지금 {mat.records.length}개예요.
+        </p>
+      ) : (
+        <>
+          <div className="mt-3 grid grid-cols-4 gap-1.5">
+            {YEAR_CHOICES.map((y) => (
+              <button
+                key={y}
+                onClick={() => pickYears(y)}
+                className={`tap rounded-xl border py-2 text-[10px] font-semibold ${
+                  years === y ? "border-[#4E7FD9] bg-[#4E7FD9]/20 text-[#B6D0FA]" : "border-white/[.07] text-mut"
+                }`}
+              >
+                {y}년 뒤
+              </button>
+            ))}
+          </div>
+
+          {story?.ok ? (
+            <div className="mt-3 space-y-2.5">
+              {story.now && (
+                <div className="rounded-xl bg-black/20 p-3">
+                  <p className="text-[9px] text-mut">지금 이 영역은</p>
+                  <p className="mt-1 text-[10.5px] leading-relaxed text-sub">{story.now}</p>
+                </div>
+              )}
+              <div className="rounded-xl border border-[#4E7FD9]/25 bg-black/25 p-3">
+                <p className="text-[9px] text-[#8FB4F0]">{story.years}년 뒤</p>
+                <p className="mt-1 text-[11px] leading-relaxed text-ink">{story.future}</p>
+              </div>
+              {story.hinge && (
+                <div className="rounded-xl bg-[#EDA100]/[.08] p-3">
+                  <p className="text-[9px] text-[#EDA100]">이 미래를 가르는 갈림길</p>
+                  <p className="mt-1 text-[10.5px] leading-relaxed text-sub">{story.hinge}</p>
+                </div>
+              )}
+              {story.basis?.length > 0 && (
+                <div className="border-t border-white/[.06] pt-2.5">
+                  <p className="text-[9px] text-mut">이 이야기를 끌어온 기록</p>
+                  <ul className="mt-1 space-y-0.5">
+                    {story.basis.map((b, i) => (
+                      <li key={i} className="text-[9.5px] leading-relaxed text-mut">· {b}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          ) : story?.reason ? (
+            <p className="mt-3 text-[10px] leading-relaxed text-mut">{story.reason}</p>
+          ) : null}
+
+          <button
+            onClick={write}
+            disabled={busy}
+            className={`tap mt-3 w-full rounded-xl text-[12px] font-bold ${
+              busy ? "bg-[#1E2740] text-mut" : "bg-[#4E7FD9] text-white"
+            }`}
+          >
+            {busy ? "기록을 읽는 중…" : story?.ok ? "다시 쓰기" : `${years}년 뒤 이야기 쓰기`}
+          </button>
+          {stale && (
+            <p className="mt-1.5 text-[9px] text-[#EDA100]">
+              이야기를 쓴 뒤 기록이 {mat.records.length - story.nRecords}개 늘었어요. 다시 쓰면 반영돼요.
+            </p>
+          )}
+          <p className="mt-2 text-[8.5px] leading-relaxed text-mut">
+            예측이 아니라 내 기록에서 끌어온 이야기예요. 통계 예측치와는 무관합니다.
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
 function PlanetModal({ planet, state, groups, scenarios, onClose, onSimulate, onArchive }) {
   const entries = planetEntries(state, planet.key), recent = entries.slice(-3).reverse();
   const futures = [...(scenarios || [])].reverse();
@@ -231,6 +348,8 @@ function PlanetModal({ planet, state, groups, scenarios, onClose, onSimulate, on
     {/* 이 영역의 일기 분석 — 행성이 시나리오만 담으면 '내 기록'과 끊긴다.
         같은 영역으로 분류된 일기의 흐름·감정·대표 기록을 여기서 보여준다. */}
     <DomainRecords planet={planet} state={state} entries={entries} recent={recent} />
+    {/* 과거(일기)와 미래(시뮬)가 한 행성에서 만났으니, 그 둘을 이어 'N년 뒤'를 쓴다. */}
+    <FutureYears planet={planet} state={state} />
 
     <div className="mt-4 grid grid-cols-3 gap-2">{[["저장한 결과",futures.length],["비교한 미래",futures.length*2],["관련 기록",entries.length]].map(([l,v])=><Mini key={l} label={l} value={v}/>)}</div>
     <button onClick={onArchive} className="tap mt-4 w-full rounded-xl border border-[#8B6CCF]/40 bg-[#8B6CCF]/10 text-[12px] font-bold text-[#C7B5F2]">저장한 시뮬레이션 전체 보기</button>

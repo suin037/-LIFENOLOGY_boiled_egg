@@ -28,7 +28,15 @@ export default function HomeCalendar() {
   // 12달을 전부 넘긴다 — 기록이 없는 달도 별자리 밑그림은 깔리고, 기록한 달만 밝아진다.
   // (예전엔 기록 있는 달만 넘겨서 빈 달이 아예 안 보였다.)
   const allMonthGroups=useMemo(()=>months.map((item)=>({monthKey:item.key,entries:item.items,n:item.count,avgMood:item.avg})),[months]);
-  const weeksByMonth=useMemo(()=>Object.fromEntries(allMonthGroups.map((item)=>[item.monthKey,groups.filter((group)=>group.stars.some((star)=>!star.empty&&star.date?.startsWith(item.monthKey)))])),[allMonthGroups,groups]);
+  // 달 경계를 넘는 주(예: 12.29~1.4)는 양쪽 달 모두에 걸린다. 그대로 두면 그 주의 별이
+  // 두 달에서 각각 세어져 별 개수가 실제 기록보다 부풀었다. 달별로는 그 달 날짜만 채운
+  // 것으로 가리고(칸 7개는 유지 — 레이아웃이 흔들리지 않게), 주간 리포트를 열 때는
+  // full 로 원래 한 주를 그대로 넘긴다.
+  const weeksByMonth=useMemo(()=>Object.fromEntries(allMonthGroups.map((item)=>[item.monthKey,
+    groups.filter((group)=>group.stars.some((star)=>!star.empty&&star.date?.startsWith(item.monthKey)))
+      .map((group)=>({...group,full:group,
+        stars:group.stars.map((star)=>star.date?.startsWith(item.monthKey)?star:{...star,empty:true}),
+      }))])),[allMonthGroups,groups]);
 
   // 기록이 있는 달 전체(연도 넘어서까지) — 상단 화살표로 한 달씩 넘길 때 쓴다.
   const allMonths = useMemo(()=>[...new Set(entries.map((entry)=>entry.date.slice(0,7)))].sort(),[entries]);
@@ -77,7 +85,7 @@ export default function HomeCalendar() {
         aria-label={month?"다음 달":"다음 해"}><ChevronRight size={16}/></button>
     </div>
 
-    <div className="mt-3"><JyConstellationArchive monthGroups={allMonthGroups} weeksByMonth={weeksByMonth} focusMonth={month} onMonthPick={(key)=>{setMonth(key);setWeek(null);setStar(null);}} onWeekOpen={(group)=>{setWeek(group);setStar(null);}}/></div>
+    <div className="mt-3"><JyConstellationArchive monthGroups={allMonthGroups} weeksByMonth={weeksByMonth} focusMonth={month} onMonthPick={(key)=>{setMonth(key);setWeek(null);setStar(null);}} onWeekOpen={(group)=>{setWeek(group.full||group);setStar(null);}}/></div>
     {month && <>
       <div className="mt-4 flex items-center justify-between rounded-xl border border-[#8B6CCF]/20 bg-[#8B6CCF]/[.07] px-3 py-2.5"><div><b className="text-[12px] text-[#C7B5F2]">{Number(month.slice(5))}월 · {zodiacOf(Number(month.slice(5))).ko}</b><p className="mt-0.5 text-[9px] text-mut">{months.find((item)=>item.key===month)?.count || 0}일 기록</p></div><button onClick={()=>{setMonth(null);setWeek(null);setStar(null);}} className="tap text-[10px] text-sub">12개월 보기</button></div>
       {/* 주 선택 — 별을 정확히 못 눌러도 주간 별자리·리포트로 갈 수 있게. */}

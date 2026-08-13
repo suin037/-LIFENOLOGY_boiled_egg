@@ -207,12 +207,26 @@ export function resetUniverse() {
 }
 
 // ── 파생 계산 ────────────────────────────────────────────────
+/**
+ * 별 하나 = 기록 하나. 기분만 찍고 지나간 날은 별이 되지 않는다.
+ *
+ * 전에는 기분값만 있어도 별로 셌는데, 정작 그 별을 눌러 보는 분석(대표 문장·감정 칩·
+ * 영역 리포트)은 전부 본문을 읽는다. 그래서 "별 254개"인데 읽을 일기는 136개인
+ * 어긋남이 났다. 세는 자리마다 규칙이 갈리지 않게 여기 한 곳에서 정한다.
+ */
+export function hasRecord(c) {
+  if (!c || c.empty) return false;
+  if ((c.text || "").trim() || (c.note || "").trim()) return true;
+  const answers = Array.isArray(c.answers) ? c.answers : Object.values(c.answers || {});
+  return Boolean(c.diaryId) || answers.some((v) => String(v?.a ?? v ?? "").trim());
+}
+
 export function totalStars(s = loadUniverse()) {
-  return s.checkins.length;
+  return s.checkins.filter(hasRecord).length;
 }
 
 export function diaryDays(s = loadUniverse()) {
-  return s.checkins.filter((c) => c.hasDiary).length;
+  return s.checkins.filter(hasRecord).length;
 }
 
 export function hasCheckedInToday(s = loadUniverse()) {
@@ -247,7 +261,8 @@ export function constellationGroups(s = loadUniverse()) {
   const today = todayKey();
   const firstWeek = weekStartKey(cs[0].date);
   const lastWeek = weekStartKey(cs[cs.length - 1].date > today ? cs[cs.length - 1].date : today);
-  const byDate = Object.fromEntries(cs.map((c) => [c.date, c]));
+  // 기록이 없는 날(기분만 찍은 날)은 빈 자리로 남긴다 — 별 개수 = 일기 개수.
+  const byDate = Object.fromEntries(cs.filter(hasRecord).map((c) => [c.date, c]));
 
   const groups = [];
   for (let ws = firstWeek; ws <= lastWeek; ws = addDays(ws, 7)) {
@@ -327,8 +342,7 @@ export function adaptiveGroups(planetKey, s = loadUniverse()) {
   const stars = s.checkins
     .filter(
       (c) =>
-        !c.empty &&
-        (c.mood != null || c.valence != null) &&
+        hasRecord(c) &&
         (all || (Array.isArray(c.domains) && c.domains.includes(planetKey))),
     )
     .sort((a, b) => a.date.localeCompare(b.date));

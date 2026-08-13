@@ -46,6 +46,7 @@ export function universeFromResult(result, profile, choices) {
     title: `${A} vs ${B}`,
     choiceA: A,
     choiceB: B,
+    domain: result?.planetDomain || null, // 어느 행성(삶의 영역) 얘기였는지 — '그 영역의 N년 뒤' 재료
     profileSnapshot: {
       age: profile?.age,
       income: profile?.income,

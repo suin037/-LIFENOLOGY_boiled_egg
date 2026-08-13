@@ -136,7 +136,10 @@ export function ResultProvider({ children }) {
     } catch {
       /* 시나리오 기록 실패 무시 */
     }
-    const pair = { ...getPredictionPair({ profile, choiceA, choiceB, detail: currentDiary }), dataMode: "demo" };
+    // 이 시뮬레이션이 어느 행성 얘기였는지 결과에 남긴다 — 보관함에 저장한 뒤
+    // 회고까지 붙으면 '그 영역의 N년 뒤'를 쓸 때 재료로 다시 꺼내 쓴다.
+    const pair = { ...getPredictionPair({ profile, choiceA, choiceB, detail: currentDiary }),
+                   dataMode: "demo", planetDomain: scenarioDomain };
     setResult(pair);
     const requestArgs = {
       profile,
