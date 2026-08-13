@@ -28,10 +28,26 @@ export default function HomeCalendar() {
   const populatedMonths=useMemo(()=>months.filter((item)=>item.count>0).map((item)=>({monthKey:item.key,entries:item.items,n:item.count,avgMood:item.avg})),[months]);
   const weeksByMonth=useMemo(()=>Object.fromEntries(populatedMonths.map((item)=>[item.monthKey,groups.filter((group)=>group.stars.some((star)=>!star.empty&&star.date?.startsWith(item.monthKey)))])),[populatedMonths,groups]);
 
+  // 기록이 있는 달 전체(연도 넘어서까지) — 상단 화살표로 한 달씩 넘길 때 쓴다.
+  const allMonths = useMemo(()=>[...new Set(entries.map((entry)=>entry.date.slice(0,7)))].sort(),[entries]);
+
   function moveYear(delta) { setYear((value)=>value+delta); setMonth(null); setWeek(null); setStar(null); }
+  // 달을 고른 상태면 ‹ ›가 한 달씩(연도 경계도 넘어) 이동, 아니면 연도 이동.
+  function step(delta) {
+    if (!month) { moveYear(delta); return; }
+    const at = allMonths.indexOf(month);
+    const next = allMonths[at + delta];
+    if (!next) return;
+    setMonth(next);
+    setYear(Number(next.slice(0, 4)));
+    setWeek(null);
+    setStar(null);
+  }
+  const atFirst = month ? allMonths.indexOf(month) <= 0 : false;
+  const atLast = month ? allMonths.indexOf(month) >= allMonths.length - 1 : false;
 
   return <section className="mt-5 rounded-[24px] border border-white/[.08] bg-[#0B1322] p-4 lg:p-5">
-    <div className="flex items-center justify-between gap-3"><div><p className="text-[10px] tracking-[.15em] text-[#9F85DD]">CONSTELLATION ARCHIVE</p><h2 className="mt-1 text-[17px] font-bold">나의 기록 별자리</h2></div><div className="flex items-center gap-1"><button onClick={()=>moveYear(-1)} className="tap flex h-9 w-9 items-center justify-center rounded-full border border-white/10"><ChevronLeft size={16}/></button><span className="min-w-[92px] text-center text-[13px] font-bold">{year}년{month?` ${Number(month.slice(5))}월`:""}</span><button onClick={()=>moveYear(1)} className="tap flex h-9 w-9 items-center justify-center rounded-full border border-white/10"><ChevronRight size={16}/></button></div></div>
+    <div className="flex items-center justify-between gap-3"><div><p className="text-[10px] tracking-[.15em] text-[#9F85DD]">CONSTELLATION ARCHIVE</p><h2 className="mt-1 text-[17px] font-bold">나의 기록 별자리</h2></div><div className="flex items-center gap-1"><button onClick={()=>step(-1)} disabled={atFirst} className="tap flex h-9 w-9 items-center justify-center rounded-full border border-white/10 disabled:opacity-25" aria-label={month?"이전 달":"이전 해"}><ChevronLeft size={16}/></button><div className="min-w-[104px] text-center"><span className="text-[13px] font-bold">{year}년{month?` ${Number(month.slice(5))}월`:""}</span>{month&&<span className="block text-[9px] text-[#8B6CCF]">{zodiacOf(Number(month.slice(5))).ko}</span>}</div><button onClick={()=>step(1)} disabled={atLast} className="tap flex h-9 w-9 items-center justify-center rounded-full border border-white/10 disabled:opacity-25" aria-label={month?"다음 달":"다음 해"}><ChevronRight size={16}/></button></div></div>
     {/* 월 선택 — 성단을 정확히 누르지 않아도 달을 고를 수 있게(리포트까지 닿는 길). */}
     <div className="mt-3 flex flex-wrap gap-1">
       {months.map((item)=>{
