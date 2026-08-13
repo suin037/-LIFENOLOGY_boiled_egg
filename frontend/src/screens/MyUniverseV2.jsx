@@ -6,6 +6,7 @@ import Constellation from "../components/Constellation.jsx";
 import { PLANETS } from "../data/result.js";
 import { adaptiveGroups, loadUniverse, resetUniverse, scenariosByPlanet, seedDemoCheckins, todayKey } from "../data/myUniverse.js";
 import { seedDemoEunwoo, seedDemoYear } from "../data/demoYear.js";
+import { domainAnalysis, domainMonths, domainReport } from "../data/diarySignals.js";
 import { clearSavedReports, REPORT_UID } from "../data/dispositionApi.js";
 import { planetSkin } from "../data/planetShop.js";
 
@@ -115,6 +116,107 @@ function Shell({ children, onClose, wide = false }) {
 }
 function Close({ onClick }) { return <button type="button" onClick={onClick} className="tap flex h-9 w-9 items-center justify-center rounded-full text-sub"><X size={18} /></button>; }
 
+// 그 행성(영역)으로 분류된 일기의 분석 — 기록 수·기분 흐름·자주 남긴 감정·월별 추이와
+// 실제로 그날 쓴 문장. 시나리오(미래)와 기록(과거)이 한 행성에서 만나게 하는 부분이다.
+const MOOD_COLORS = ["#E24B4A", "#D85A30", "#EDA100", "#5DCAA5", "#378ADD"];
+
+function DomainRecords({ planet, state, entries, recent }) {
+  const a = domainAnalysis(planet.key, state);
+  const months = domainMonths(planet.key, state).slice(0, 6).reverse();
+  const maxN = Math.max(1, ...months.map((m) => m.analysis.n || 0));
+
+  if (!a?.ok) {
+    return (
+      <div className="mt-4 rounded-[18px] border border-white/[.07] bg-black/20 p-4">
+        <p className="text-[11px] font-bold">이 영역의 기록</p>
+        <p className="mt-2 text-[10px] leading-relaxed text-mut">{domainReport(a, planet.label)}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 rounded-[18px] border border-white/[.07] bg-black/20 p-4">
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] font-bold">이 영역의 기록</p>
+        <span className="text-[10px] text-[#A88BE8]">{a.n}개 · 평균 {a.moodAvg}</span>
+      </div>
+
+      <p className="mt-2 text-[10.5px] leading-relaxed text-sub">{domainReport(a, planet.label)}</p>
+
+      {/* 월별 기록량 — 이 영역을 언제 많이 썼는지 */}
+      {months.length > 1 && (
+        <div className="mt-3">
+          <div className="flex items-end gap-1.5">
+            {months.map((m) => {
+              const n = m.analysis.n || 0;
+              const mood = m.analysis.moodAvg;
+              const col = mood ? MOOD_COLORS[Math.max(0, Math.min(4, Math.round(mood) - 1))] : "#39435F";
+              return (
+                <div key={m.month} className="flex flex-1 flex-col items-center gap-1">
+                  <div className="flex h-[38px] w-full items-end">
+                    <div className="w-full rounded-t-[3px]" style={{ height: `${Math.max(8, (n / maxN) * 100)}%`, background: col, opacity: 0.8 }} />
+                  </div>
+                  <span className="text-[8px] text-mut">{Number(m.month.split("-")[1])}월</span>
+                </div>
+              );
+            })}
+          </div>
+          <p className="mt-1 text-[8.5px] text-mut">높이 = 기록 수 · 색 = 그달 평균 기분</p>
+        </div>
+      )}
+
+      {a.topEmotions?.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {a.topEmotions.map((e) => (
+            <span key={e} className="rounded-full border border-white/10 px-2 py-0.5 text-[9px] text-sub">{e}</span>
+          ))}
+        </div>
+      )}
+
+      {/* 대표 기록 — 숫자보다 그날 문장이 이 영역을 기억나게 한다.
+          기분이 고른 구간에선 '가장 좋았던 날'이 부정적 문장으로 뽑히기도 해서,
+          실제 기분값으로 표현을 가른다(4점 이상일 때만 '좋았던 날'). */}
+      <div className="mt-3 space-y-1.5">
+        {a.best?.text && (
+          <div className="rounded-lg bg-[#5DCAA5]/[.08] px-2.5 py-1.5">
+            <p className="text-[8.5px] text-[#5DCAA5]">
+              {a.best.mood >= 4 ? "가장 좋았던 날" : "그중 나았던 날"} · {dateLabel(a.best.date)}
+            </p>
+            <p className="mt-0.5 text-[10px] leading-relaxed text-sub">“{a.best.text}”</p>
+          </div>
+        )}
+        {a.worst?.text && a.worst.date !== a.best?.date && (
+          <div className="rounded-lg bg-[#F0736F]/[.08] px-2.5 py-1.5">
+            <p className="text-[8.5px] text-[#F0736F]">
+              {a.worst.mood <= 2 ? "가장 힘들었던 날" : "그중 무거웠던 날"} · {dateLabel(a.worst.date)}
+            </p>
+            <p className="mt-0.5 text-[10px] leading-relaxed text-sub">“{a.worst.text}”</p>
+          </div>
+        )}
+      </div>
+
+      {/* 최근 기록 몇 개 */}
+      {recent?.length > 0 && (
+        <div className="mt-3 border-t border-white/[.06] pt-2.5">
+          <p className="text-[9.5px] text-mut">최근 기록</p>
+          <div className="mt-1.5 space-y-1">
+            {recent.map((e, i) => (
+              <p key={i} className="truncate text-[10px] text-sub">
+                <span className="mr-1.5 text-mut">{dateLabel(e.date)}</span>
+                {e.text || e.note || "(체크인만 남긴 날)"}
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <p className="mt-3 text-[8.5px] leading-relaxed text-mut">
+        이 영역으로 분류된 기록만 모아 정리한 것이며, 성격 진단이나 예측이 아닙니다.
+      </p>
+    </div>
+  );
+}
+
 function PlanetModal({ planet, state, groups, scenarios, onClose, onSimulate, onArchive }) {
   const entries = planetEntries(state, planet.key), recent = entries.slice(-3).reverse();
   const futures = [...(scenarios || [])].reverse();
@@ -126,6 +228,10 @@ function PlanetModal({ planet, state, groups, scenarios, onClose, onSimulate, on
       <div className="mt-3 space-y-2">{futures.length ? futures.slice(0,3).map((scenario, i)=><div key={`${scenario.date}-${i}`} className="rounded-xl border border-white/[.07] bg-black/20 p-3"><div className="flex justify-between gap-3"><p className="text-[11px] font-semibold">{scenario.title}</p><span className="shrink-0 text-[9px] text-mut">{scenario.date}</span></div>{scenario.br?.length>0&&<p className="mt-2 line-clamp-2 text-[10px] leading-relaxed text-sub">{scenario.br.join(" · ")}</p>}</div>) : <p className="py-2 text-[10px] leading-relaxed text-mut">아직 이 영역에서 만든 미래 시뮬레이션이 없어요. 선택지를 비교하면 결과가 이 행성에 쌓입니다.</p>}</div>
       <button onClick={onSimulate} className="tap mt-3 w-full rounded-xl bg-[#8B6CCF] text-[12px] font-bold">{futures.length ? "새 미래 시뮬레이션" : "첫 미래 시뮬레이션 시작"}</button>
     </div>
+    {/* 이 영역의 일기 분석 — 행성이 시나리오만 담으면 '내 기록'과 끊긴다.
+        같은 영역으로 분류된 일기의 흐름·감정·대표 기록을 여기서 보여준다. */}
+    <DomainRecords planet={planet} state={state} entries={entries} recent={recent} />
+
     <div className="mt-4 grid grid-cols-3 gap-2">{[["저장한 결과",futures.length],["비교한 미래",futures.length*2],["관련 기록",entries.length]].map(([l,v])=><Mini key={l} label={l} value={v}/>)}</div>
     <button onClick={onArchive} className="tap mt-4 w-full rounded-xl border border-[#8B6CCF]/40 bg-[#8B6CCF]/10 text-[12px] font-bold text-[#C7B5F2]">저장한 시뮬레이션 전체 보기</button>
     <p className="mt-4 text-[9px] leading-relaxed text-mut">이 행성에는 해당 영역의 선택지, 예측 변화와 저장한 시뮬레이션 결과가 쌓입니다.</p>

@@ -1,5 +1,17 @@
 import { useMemo } from "react";
-import { zodiacOf, zodiacPoints, zodiacLines, zodiacDots } from "../data/zodiac.js";
+import { zodiacOf, zodiacPoints, zodiacLines } from "../data/zodiac.js";
+import { ART_BY_MONTH, ART_VIEWBOX } from "../data/zodiacArt.js";
+
+// 512 좌표계로 그려진 별자리 일러스트를 원하는 위치·크기로 얹는다.
+function ZodiacArt({ month, cx, cy, size }) {
+  const art = ART_BY_MONTH[month];
+  if (!art) return null;
+  const k = size / ART_VIEWBOX;
+  return (
+    <g transform={`translate(${cx - size / 2} ${cy - size / 2}) scale(${k})`}
+       dangerouslySetInnerHTML={{ __html: art.inner }} />
+  );
+}
 
 const COL=["#E24B4A","#D85A30","#EDA100","#5DCAA5","#378ADD"];
 const PASTEL=["#F0A3A2","#F2B48E","#F7DCA0","#AEE6CF","#A8CDF5"];
@@ -42,7 +54,7 @@ export default function JyConstellationArchive({monthGroups,weeksByMonth,focusMo
         weekMeta.push({g,wx,wy,verts});
       });
       return {m,num,cx,cy,stars,weekMeta,count:k,zodiac:zodiacOf(num),
-              zLines:zodiacLines(num,k,ZR),dots:zodiacDots(num,ZR),
+              zLines:zodiacLines(num,k,ZR),
               isNow:m.monthKey===now,labelUp:i%2===0};
     });
   },[monthGroups,weeksByMonth]);
@@ -58,14 +70,14 @@ export default function JyConstellationArchive({monthGroups,weeksByMonth,focusMo
         {active&&mo.weekMeta.map((wk)=><g key={wk.g.weekStart} onClick={()=>onWeekOpen(wk.g)} style={{cursor:"pointer",opacity:1,transition:"opacity .5s .45s"}}>{wk.verts.map((v,i)=>{const q=wk.verts[(i+1)%wk.verts.length],solid=v.filled&&q.filled;return <line key={i} x1={v.x} y1={v.y} x2={q.x} y2={q.y} stroke="#9FB0CE" strokeWidth={solid?.35:.28} strokeOpacity={solid?.42:.13} strokeDasharray={solid?undefined:".8 1.4"}/>})}{wk.verts.filter((v)=>!v.filled).map((v,i)=><circle key={`e${i}`} cx={v.x} cy={v.y} r=".7" fill="none" stroke="#39435F" strokeWidth=".3" strokeDasharray=".5 .7" opacity=".6"/>)}<text x={wk.wx} y={wk.wy+14.5} textAnchor="middle" fill="#8895AF" fontSize="4.6">{short(wk.g.weekStart)}~ · {wk.g.stars.filter((s)=>!s.empty).length}일</text><circle cx={wk.wx} cy={wk.wy} r="13" fill="transparent"/></g>)}
         {/* 별자리 밑그림 — 기록이 없어도 그 달의 별자리 형태가 아주 연하게 깔린다.
             내 기록은 이 자리 위에서 하나씩 밝아진다(밑그림=별자리, 밝은 별=내 기록). */}
-        {!active&&<g pointerEvents="none" shapeRendering="crispEdges">
-          {/* 별자리 밑그림을 도트로 — 선 대신 격자에 스냅한 네모 픽셀로 깔아 픽셀아트처럼. */}
-          {mo.dots.map((d,di)=>{
-            const s=d.big?1.5:1;
-            return <rect key={`dt${di}`} x={mo.cx+d.x-s/2} y={mo.cy+d.y-s/2} width={s} height={s}
-                         fill="#A88BE8" opacity={d.big?.5:.26}/>;
-          })}
-        </g>}
+        {/* 별자리 일러스트 — 그 달의 별자리를 뒤에 깔아 형태로 알아보게 한다.
+            기록이 있는 달은 밝게(별자리가 살아난 느낌), 없는 달은 아주 흐리게.
+            선택한 달은 한 번 더 밝혀 어디를 보고 있는지 드러낸다. */}
+        <g pointerEvents="none"
+           opacity={active?.5:mo.count>0?.3:.12}
+           style={{transition:"opacity .5s"}}>
+          <ZodiacArt month={mo.num} cx={mo.cx} cy={mo.cy} size={ZR*2.7}/>
+        </g>
         {!active&&mo.zLines.map((ln,li)=><line key={`z${li}`} x1={mo.cx+ln[0]} y1={mo.cy+ln[1]} x2={mo.cx+ln[2]} y2={mo.cy+ln[3]} stroke="#9FB0CE" strokeWidth=".4" strokeOpacity=".38" style={{transition:"opacity .4s"}}/>)}
         {/* 평소엔 별을 연보라 하나로 — 12달이 한눈에 차분히 보인다.
             달을 눌러 자세히 볼 때만 그날 기분 색으로 갈라진다(색이 의미를 갖는 순간). */}
@@ -88,7 +100,9 @@ export default function JyConstellationArchive({monthGroups,weeksByMonth,focusMo
             <circle r={s.r*.42} fill="#fff" opacity={active?0:.6} style={{transition:"opacity .5s"}}/>
           </g>
         ))}
-        {!active&&<g onClick={()=>onMonthPick(mo.m.monthKey)} style={{cursor:"pointer"}}>
+        {/* 기록 없는 달은 눌러도 펼칠 게 없다 — 커서·색으로 구분한다. */}
+        {!active&&<g onClick={()=>{ if(mo.count>0) onMonthPick(mo.m.monthKey); }}
+                     style={{cursor:mo.count>0?"pointer":"default"}} opacity={mo.count>0?1:.45}>
           {mo.isNow&&<circle cx={mo.cx} cy={mo.cy} r={ZR+5} fill="none" stroke="#A8CDF5" strokeOpacity=".55"/>}
           <circle cx={mo.cx} cy={mo.cy} r={ZR+4} fill="transparent"/>
           <text x={mo.cx} y={mo.cy+(mo.labelUp?-ZR-8:ZR+13)} textAnchor="middle" fill="#9FB0CE" fontSize="7">{mo.num}월</text>
