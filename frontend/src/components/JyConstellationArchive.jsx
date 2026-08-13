@@ -31,7 +31,13 @@ export default function JyConstellationArchive({monthGroups,weeksByMonth,focusMo
           const filled=!s.empty&&(s.mood!=null||s.valence!=null),lvl=filled?level(s):1,[mx,my]=miniCoord(di,lvl,.155),vx=wx+mx,vy=wy+my;
           verts.push({x:vx,y:vy,filled}); if(!filled)return;
           const zp=zPts[k]||[0,0];
-          stars.push({key:s.date,blobX:cx+zp[0],blobY:cy+zp[1],zoomX:vx,zoomY:vy,c:COL[lvl-1],p:PASTEL[lvl-1],r:1+lvl*.16});k++;
+          // 별처럼 보이게 — 밝기·반짝임 주기를 조금씩 다르게(같은 날이면 항상 같은 값).
+          const seed=rng(k*7+i*13);
+          stars.push({key:s.date,blobX:cx+zp[0],blobY:cy+zp[1],zoomX:vx,zoomY:vy,
+                      c:COL[lvl-1],p:PASTEL[lvl-1],r:1+lvl*.16,
+                      glint:seed>.72,                       // 일부만 4갈래 빛
+                      tw:(2.6+seed*2.4).toFixed(2),         // 반짝임 주기(초)
+                      delay:(seed*3).toFixed(2)});k++;
         });
         weekMeta.push({g,wx,wy,verts});
       });
@@ -59,7 +65,25 @@ export default function JyConstellationArchive({monthGroups,weeksByMonth,focusMo
         {!active&&mo.zLines.map((ln,li)=><line key={`z${li}`} x1={mo.cx+ln[0]} y1={mo.cy+ln[1]} x2={mo.cx+ln[2]} y2={mo.cy+ln[3]} stroke="#9FB0CE" strokeWidth=".4" strokeOpacity=".38" style={{transition:"opacity .4s"}}/>)}
         {/* 평소엔 별을 연보라 하나로 — 12달이 한눈에 차분히 보인다.
             달을 눌러 자세히 볼 때만 그날 기분 색으로 갈라진다(색이 의미를 갖는 순간). */}
-        {mo.stars.map((s)=><g key={s.key} style={{transform:active?`translate(${s.zoomX}px,${s.zoomY}px)`:`translate(${s.blobX}px,${s.blobY}px)`,transition:"transform .8s cubic-bezier(.25,.9,.3,1)"}}><circle r={s.r+1.6} fill={active?s.c:CALM} opacity=".2" style={{transition:"fill .5s"}}/><circle r={s.r} fill={active?s.c:CALM} style={{transition:"fill .5s"}}/><circle r={s.r*.45} fill="#fff" opacity={active?0:.45} style={{transition:"opacity .5s"}}/></g>)}
+        {mo.stars.map((s)=>(
+          <g key={s.key}
+             style={{transform:active?`translate(${s.zoomX}px,${s.zoomY}px)`:`translate(${s.blobX}px,${s.blobY}px)`,
+                     transition:"transform .8s cubic-bezier(.25,.9,.3,1)"}}>
+            {/* 번짐 → 4갈래 빛 → 알맹이 → 심지. 겹쳐야 별처럼 보인다. */}
+            <circle r={s.r+2.2} fill={active?s.c:CALM} opacity=".14" style={{transition:"fill .5s"}}/>
+            {!active&&s.glint&&(
+              <g stroke={CALM} strokeWidth=".28" strokeLinecap="round" opacity=".5">
+                <line x1={-s.r*2.6} y1="0" x2={s.r*2.6} y2="0"/>
+                <line x1="0" y1={-s.r*2.6} x2="0" y2={s.r*2.6}/>
+              </g>
+            )}
+            <circle r={s.r} fill={active?s.c:CALM} style={{transition:"fill .5s"}}>
+              {!active&&<animate attributeName="opacity" values="1;.62;1"
+                                 dur={`${s.tw}s`} begin={`${s.delay}s`} repeatCount="indefinite"/>}
+            </circle>
+            <circle r={s.r*.42} fill="#fff" opacity={active?0:.6} style={{transition:"opacity .5s"}}/>
+          </g>
+        ))}
         {!active&&<g onClick={()=>onMonthPick(mo.m.monthKey)} style={{cursor:"pointer"}}>
           {mo.isNow&&<circle cx={mo.cx} cy={mo.cy} r={ZR+5} fill="none" stroke="#A8CDF5" strokeOpacity=".55"/>}
           <circle cx={mo.cx} cy={mo.cy} r={ZR+4} fill="transparent"/>
