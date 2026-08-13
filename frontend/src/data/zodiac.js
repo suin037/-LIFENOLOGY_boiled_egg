@@ -93,3 +93,14 @@ export function zodiacLines(month, n, radius = 13) {
       z.stars[j][0] * radius, z.stars[j][1] * radius * 0.92,
     ]);
 }
+
+/** 별자리 밑그림 — 기록이 없어도 그 달의 별자리 형태가 연하게 보이도록.
+ *  기록은 이 자리 위에서 하나씩 밝아진다(밑그림=별자리, 밝은 별=내 기록). */
+export function zodiacGhost(month, radius = 13) {
+  const z = zodiacOf(month);
+  const pt = (i) => [z.stars[i][0] * radius, z.stars[i][1] * radius * 0.92];
+  return {
+    dots: z.stars.map((_, i) => pt(i)),
+    lines: z.lines.map(([i, j]) => [...pt(i), ...pt(j)]),
+  };
+}
