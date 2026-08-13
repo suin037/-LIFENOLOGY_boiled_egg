@@ -80,19 +80,25 @@ export default function InputScreen() {
   const duplicate = sameCategory && normalizedA === normalizedB;
   const missingDomains = Boolean(normalizedA && normalizedB && (!scenarioDomains.a.length || !scenarioDomains.b.length));
   const needJobDetails = choices.a === "이직" || choices.b === "이직";
-  const jobDetailsMissing = needJobDetails && (
-    profile.occupation_group == null || profile.employment_status == null
-    || profile.tenure_years == null || profile.firm_size == null
-  );
-  const blocked = !normalizedA || !normalizedB || duplicate || missingDomains || jobDetailsMissing;
+  // 직업정보가 없으면 전체 유사 집단으로 자동 완화한다. 입력 화면 진행을 막지는 않는다.
+  const jobDetailsMissing = needJobDetails && profile.occupation_group == null;
+  const blocked = !normalizedA || !normalizedB || duplicate;
   const needMajor = choices.a === "진학" || choices.b === "진학";
   const emotions = detectEmotions(`${diary} ${textA} ${textB}`);
   const completed = Number(Boolean(normalizedA)) + Number(Boolean(normalizedB));
 
-  function panelGrow(side) {
-    if (normalizedA && normalizedB) return 1;
-    if (focused === side) return 1.35;
-    return 0.78;
+  function startComparison() {
+    const fallback = (choice) => {
+      if (["이직", "유지"].includes(choice)) return ["career"];
+      if (choice === "진학") return ["education"];
+      if (choice === "창업") return ["business"];
+      return ["long_term_values"];
+    };
+    setScenarioDomains((prev) => ({
+      a: prev.a?.length ? prev.a : fallback(choices.a),
+      b: prev.b?.length ? prev.b : fallback(choices.b),
+    }));
+    navigate("/simulate");
   }
 
   return (
@@ -121,24 +127,24 @@ export default function InputScreen() {
         </div>
       </div>
 
-      <div className="relative mt-4 flex min-h-[570px] flex-col overflow-hidden rounded-[28px] border border-white/10 bg-[#08111F]/70 shadow-[0_26px_70px_rgba(0,0,0,.35)] lg:min-h-[450px] lg:flex-row">
+      <div className="relative mt-3 flex min-h-[400px] flex-col overflow-hidden rounded-[24px] border border-white/10 bg-[#08111F]/70 shadow-[0_20px_50px_rgba(0,0,0,.32)] lg:min-h-[350px] lg:flex-row">
         <ChoicePanel
           side="A" text={textA} domains={scenarioDomains.a} domainAuto={domainAuto.a}
-          active={focused === "a"} grow={panelGrow("a")} suggestions={SUGGESTIONS.a}
+          active={focused === "a"} suggestions={SUGGESTIONS.a}
           onFocus={() => setFocused("a")} onText={(value) => onText("A", value)}
           onSuggestion={(value) => chooseSuggestion("a", value)}
           onDomain={(key) => toggleDomain("A", key)} onRedetect={() => resetDomainDetection("A")}
         />
 
-        <div className="pointer-events-none absolute left-0 right-0 top-1/2 z-20 flex -translate-y-1/2 items-center gap-3 lg:bottom-0 lg:left-1/2 lg:right-auto lg:top-0 lg:-translate-x-1/2 lg:translate-y-0 lg:flex-col">
-          <span className="h-px flex-1 bg-gradient-to-r from-transparent to-white/20 lg:h-auto lg:w-px lg:bg-gradient-to-b" />
+        {/* 실제 flex 구분 영역. 패널의 활성 너비가 변해도 VS가 콘텐츠 위로 겹치지 않는다. */}
+        <div className="pointer-events-none relative z-20 flex h-16 shrink-0 items-center justify-center lg:h-auto lg:w-16 lg:flex-col">
+          <span className="absolute left-0 right-0 top-1/2 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent lg:bottom-0 lg:left-1/2 lg:right-auto lg:top-0 lg:h-auto lg:w-px lg:bg-gradient-to-b" />
           <span className="flex h-12 w-12 items-center justify-center rounded-full border border-white/15 bg-[#07101E] text-[13px] font-black text-white shadow-[0_0_30px_rgba(75,126,255,.22)]">VS</span>
-          <span className="h-px flex-1 bg-gradient-to-l from-transparent to-white/20 lg:h-auto lg:w-px lg:bg-gradient-to-t" />
         </div>
 
         <ChoicePanel
           side="B" text={textB} domains={scenarioDomains.b} domainAuto={domainAuto.b}
-          active={focused === "b"} grow={panelGrow("b")} suggestions={SUGGESTIONS.b}
+          active={focused === "b"} suggestions={SUGGESTIONS.b}
           onFocus={() => setFocused("b")} onText={(value) => onText("B", value)}
           onSuggestion={(value) => chooseSuggestion("b", value)}
           onDomain={(key) => toggleDomain("B", key)} onRedetect={() => resetDomainDetection("B")}
@@ -147,7 +153,7 @@ export default function InputScreen() {
 
       {duplicate && <Caption className="text-danger">두 미래가 같아요. 회사·조건·상황 중 하나를 다르게 적어주세요.</Caption>}
       {sameCategory && !duplicate && <Caption className="text-cyan">같은 유형이어도 구체적인 조건이 다르면 비교할 수 있어요.</Caption>}
-      {missingDomains && <Caption className="text-danger">각 미래에 해당하는 삶의 영역을 하나 이상 선택해주세요.</Caption>}
+      {missingDomains && <Caption className="text-[#FFB36B]">삶의 영역을 찾지 못한 선택은 내용에 맞는 기본 영역으로 자동 분류할게요.</Caption>}
 
       {needJobDetails && (
         <section className="mt-4 rounded-[22px] border border-cyan/30 bg-[#0B1729]/90 p-4">
@@ -157,7 +163,7 @@ export default function InputScreen() {
               <div className="mt-1 text-[11px] leading-relaxed text-muted">이직 시뮬레이션을 선택했을 때만 한 번 입력해요. 입력값은 다음 비교에도 다시 사용할 수 있어요.</div>
               <p className="mt-1 text-[11px] leading-relaxed text-mut">유사 조건 비교에 사용하며, 선택 결과를 확정하는 정보는 아니에요.</p>
             </div>
-            <span className="shrink-0 rounded-full bg-cyan/15 px-2 py-1 text-[9px] font-bold text-cyan">필수</span>
+            <span className="shrink-0 rounded-full bg-cyan/15 px-2 py-1 text-[9px] font-bold text-cyan">선택 입력</span>
           </div>
 
           <div className="mt-4 grid gap-3 lg:grid-cols-2">
@@ -168,28 +174,28 @@ export default function InputScreen() {
               </select>
             </JobField>
 
-            <JobField label="고용 형태">
+            <JobField label="고용 형태 · 선택">
               <select value={profile.employment_status ?? ""} onChange={(event) => setProfile((prev) => ({ ...prev, employment_status: event.target.value === "" ? null : Number(event.target.value) }))} className="tap w-full rounded-xl border border-line bg-[#0E1424] px-3 py-2.5 text-[12px] text-ink outline-none focus:border-cyan">
                 <option value="">선택해주세요</option>
                 {EMPLOYMENT_STATUSES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
             </JobField>
 
-            <JobField label="현 일자리 근속기간">
+            <JobField label="현 일자리 근속기간 · 선택">
               <div className="flex items-center gap-2">
                 <input type="number" min="0" max="50" step="0.5" value={profile.tenure_years ?? ""} placeholder="예: 2.5" onChange={(event) => setProfile((prev) => ({ ...prev, tenure_years: event.target.value === "" ? null : Number(event.target.value) }))} className="w-full rounded-xl border border-line bg-[#0E1424] px-3 py-2.5 text-[12px] text-ink outline-none placeholder:text-mut focus:border-cyan" />
                 <span className="shrink-0 text-[11px] text-mut">년</span>
               </div>
             </JobField>
 
-            <JobField label="현재 직장 전체 인원">
+            <JobField label="현재 직장 전체 인원 · 선택">
               <select value={profile.firm_size ?? ""} onChange={(event) => setProfile((prev) => ({ ...prev, firm_size: event.target.value === "" ? null : Number(event.target.value) }))} className="tap w-full rounded-xl border border-line bg-[#0E1424] px-3 py-2.5 text-[12px] text-ink outline-none focus:border-cyan">
                 <option value="">선택해주세요</option>
                 {FIRM_SIZES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
             </JobField>
           </div>
-          {jobDetailsMissing && <p className="mt-3 text-[10px] text-[#FFB36B]">네 항목을 모두 입력하면 비교를 시작할 수 있어요.</p>}
+          {jobDetailsMissing && <p className="mt-3 text-[10px] text-[#FFB36B]">입력하지 않아도 진행할 수 있어요. 현재 직종을 선택하면 유사 경로가 더 정확해집니다.</p>}
         </section>
       )}
 
@@ -208,7 +214,7 @@ export default function InputScreen() {
         {emotions.length > 0 && <Caption>감정은 결과 설명의 말투와 맥락에 반영됩니다.</Caption>}
       </details>
 
-      <button type="button" disabled={blocked} onClick={() => navigate("/simulate")} className={`tap mt-4 flex w-full items-center justify-center gap-2 rounded-full py-4 text-[15px] font-bold transition-all ${blocked ? "bg-white/10 text-mut" : "bg-[#F4F0FF] text-[#08101D] shadow-[0_14px_34px_rgba(139,108,207,.25)]"}`}>
+      <button type="button" disabled={blocked} onClick={startComparison} className={`tap mt-4 flex w-full items-center justify-center gap-2 rounded-full py-4 text-[15px] font-bold transition-all ${blocked ? "bg-white/10 text-mut" : "bg-[#F4F0FF] text-[#08101D] shadow-[0_14px_34px_rgba(139,108,207,.25)]"}`}>
         두 미래 비교 시작하기 <ArrowRight size={17} />
       </button>
       <p className="mt-2 text-center text-[10px] text-mut">두 길을 채우면 코스모가 같은 조건으로 결과를 비교해요.</p>
@@ -225,27 +231,27 @@ function JobField({ label, children }) {
   );
 }
 
-function ChoicePanel({ side, text, domains, domainAuto, active, grow, suggestions, onFocus, onText, onSuggestion, onDomain, onRedetect }) {
+function ChoicePanel({ side, text, domains, domainAuto, active, suggestions, onFocus, onText, onSuggestion, onDomain, onRedetect }) {
   const [editingDomains, setEditingDomains] = useState(false);
   const isA = side === "A";
   const accentText = isA ? "text-[#8B6CCF]" : "text-[#FFB85C]";
 
   return (
-    <section onClick={onFocus} style={{ flexGrow: grow, flexBasis: 0 }} className={`relative min-h-[240px] px-5 py-6 transition-[flex-grow,background-color] duration-500 ease-out lg:px-8 lg:py-9 ${isA ? "bg-[radial-gradient(circle_at_15%_10%,rgba(69,116,225,.19),transparent_48%)]" : "bg-[radial-gradient(circle_at_85%_90%,rgba(211,137,49,.15),transparent_48%)]"} ${active ? "opacity-100" : "opacity-75"}`}>
+    <section onClick={onFocus} className={`relative min-h-0 min-w-0 flex-1 basis-0 overflow-hidden px-4 py-4 transition-[opacity,background-color] duration-300 ease-out lg:px-6 lg:py-5 ${isA ? "bg-[radial-gradient(circle_at_15%_10%,rgba(69,116,225,.19),transparent_48%)]" : "bg-[radial-gradient(circle_at_85%_90%,rgba(211,137,49,.15),transparent_48%)]"} ${active ? "opacity-100" : "opacity-75"}`}>
       <div className={`text-[11px] font-black tracking-[.12em] ${accentText}`}>CHOICE {side}</div>
-      <textarea value={text} onFocus={onFocus} onChange={(event) => onText(event.target.value)} rows={2} maxLength={100} placeholder={isA ? "첫 번째 길을 적어주세요" : "두 번째 길을 적어주세요"} className="mt-3 w-full resize-none border-b border-white/15 bg-transparent pb-3 text-[22px] font-bold leading-[1.35] tracking-[-.025em] text-ink outline-none placeholder:text-white/25" />
+      <textarea value={text} onFocus={onFocus} onChange={(event) => onText(event.target.value)} rows={2} maxLength={100} placeholder={isA ? "첫 번째 길을 적어주세요" : "두 번째 길을 적어주세요"} className="mt-2 block max-h-[72px] min-h-[58px] w-full min-w-0 max-w-full resize-none overflow-y-auto break-words border-b border-white/15 bg-transparent pb-2 text-[18px] font-bold leading-[1.3] tracking-[-.025em] text-ink outline-none placeholder:text-white/25 lg:text-[20px]" />
 
       {!text.trim() && active && (
-        <div className="mt-4">
+        <div className="mt-3 min-w-0 overflow-hidden">
           <div className="mb-2 text-[10px] text-mut">이런 식으로 시작할 수 있어요</div>
-          <div className="flex flex-wrap gap-2">
-            {suggestions.map((item) => <button key={item} type="button" onClick={(event) => { event.stopPropagation(); onSuggestion(item); }} className={`tap rounded-full border border-white/10 bg-white/[.06] px-3 py-2 text-[11px] ${accentText}`}>{item}</button>)}
+          <div className="flex min-w-0 flex-wrap gap-1.5">
+            {suggestions.map((item) => <button key={item} type="button" onClick={(event) => { event.stopPropagation(); onSuggestion(item); }} className={`tap max-w-full truncate rounded-full border border-white/10 bg-white/[.06] px-2.5 py-1.5 text-[10px] ${accentText}`}>{item}</button>)}
           </div>
         </div>
       )}
 
       {text.trim() && (
-        <div className="mt-3">
+        <div className="mt-2 min-w-0 overflow-hidden">
           <div className="flex items-center gap-2 text-[10px]">
             <span className="font-semibold text-sub">삶의 영역</span>
             <span className="min-w-0 flex-1 truncate text-mut">{domains.map(domainLabel).join(" · ") || "영역을 확인해주세요"}</span>
@@ -256,7 +262,7 @@ function ChoicePanel({ side, text, domains, domainAuto, active, grow, suggestion
               {LIFE_DOMAINS.map((domain) => {
                 const selected = domains.includes(domain.key);
                 const DomainIcon = DOMAIN_ICONS[domain.key];
-                return <button type="button" key={domain.key} aria-pressed={selected} onClick={(event) => { event.stopPropagation(); onDomain(domain.key); }} className={`tap flex min-w-0 items-center justify-center gap-1 rounded-xl border px-2 py-2 text-[9px] ${selected ? `${isA ? "border-[#8B6CCF] bg-[#211832]" : "border-[#D8933E] bg-[#352511]"} ${accentText}` : "border-white/10 bg-black/10 text-mut"}`}>{DomainIcon && <DomainIcon size={12} className="text-violet-400" />}{domain.label}</button>;
+                return <button type="button" key={domain.key} aria-pressed={selected} onClick={(event) => { event.stopPropagation(); onDomain(domain.key); }} className={`tap flex min-w-0 overflow-hidden items-center justify-center gap-1 rounded-xl border px-1.5 py-1.5 text-[9px] ${selected ? `${isA ? "border-[#8B6CCF] bg-[#211832]" : "border-[#D8933E] bg-[#352511]"} ${accentText}` : "border-white/10 bg-black/10 text-mut"}`}>{DomainIcon && <DomainIcon size={11} className="shrink-0 text-violet-400" />}<span className="truncate">{domain.label}</span></button>;
               })}
               {!domainAuto && <button type="button" onClick={(event) => { event.stopPropagation(); onRedetect(); }} className={`col-span-3 py-1 text-[10px] ${accentText}`}>자동 감지 다시 적용</button>}
             </div>

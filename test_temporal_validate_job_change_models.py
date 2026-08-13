@@ -14,11 +14,27 @@ class TemporalValidationTest(unittest.TestCase):
         self.assertEqual(set(train.pid), {1, 2})
         self.assertEqual(set(test.pid), {3})
 
-    def test_verdict_requires_positive_ci_and_overlap(self):
+    def test_verdict_uses_favorable_direction_and_overlap(self):
         base = {"overlap_fraction": 0.9, "adjusted_effect_move_minus_stay": 1.0}
-        self.assertEqual(verdict({**base, "cluster_bootstrap_ci95": [0.1, 2.0]}), "시간 검증 통과")
-        self.assertEqual(verdict({**base, "cluster_bootstrap_ci95": [-0.1, 2.0]}), "방향만 유지")
-        self.assertEqual(verdict({**base, "overlap_fraction": 0.7, "cluster_bootstrap_ci95": [0.1, 2.0]}), "overlap 부족")
+        self.assertEqual(
+            verdict({**base, "cluster_bootstrap_ci95": [0.1, 2.0]}),
+            "favorable_association",
+        )
+        self.assertEqual(
+            verdict({**base, "cluster_bootstrap_ci95": [-0.1, 2.0]}),
+            "inconclusive",
+        )
+        self.assertEqual(
+            verdict({**base, "overlap_fraction": 0.7, "cluster_bootstrap_ci95": [0.1, 2.0]}),
+            "overlap_insufficient",
+        )
+        negative_is_good = {
+            **base,
+            "adjusted_effect_move_minus_stay": -1.0,
+            "cluster_bootstrap_ci95": [-2.0, -0.1],
+            "favorable_direction": "negative",
+        }
+        self.assertEqual(verdict(negative_is_good), "favorable_association")
 
 
 if __name__ == "__main__":

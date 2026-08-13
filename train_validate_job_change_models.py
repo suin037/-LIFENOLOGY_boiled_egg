@@ -64,6 +64,30 @@ METRICS = [
 ]
 
 
+ACTIVE_METRICS = [
+    metric for metric in METRICS
+    if metric["column"] in {"wage_change_pct", "wage_down_t1"}
+] + [
+    {"dataset": "klips", "indicator": "quality_of_life", "column": column,
+     "label": label, "kind": "continuous", "baseline": column.replace("_change", "_t")}
+    for column, label in {
+        "satisfaction_overall_change": "전반적 만족 변화",
+        "satisfaction_family_income_change": "가족수입 만족 변화",
+        "satisfaction_leisure_change": "여가 만족 변화",
+        "satisfaction_housing_change": "주거 만족 변화",
+        "satisfaction_family_relationship_change": "가족관계 만족 변화",
+        "satisfaction_social_relationship_change": "사회적 친분 만족 변화",
+    }.items()
+]
+
+MODEL_SCOPE = {"age_min": 25, "age_max": 35, "treatment": "job_to_job"}
+
+for _metric in ACTIVE_METRICS:
+    _metric["favorable_direction"] = (
+        "negative" if _metric["column"] == "wage_down_t1" else "positive"
+    )
+
+
 def split_people(df: pd.DataFrame, test_size: float = 0.25, seed: int = SEED) -> tuple[pd.DataFrame, pd.DataFrame]:
     """동일 pid가 양쪽에 섞이지 않는 재현 가능한 분리."""
     splitter = GroupShuffleSplit(n_splits=1, test_size=test_size, random_state=seed)
@@ -175,6 +199,7 @@ def fit_metric(train: pd.DataFrame, test: pd.DataFrame, spec: dict, base_feature
 
     report = {
         **{k: spec[k] for k in ("dataset", "indicator", "column", "label", "kind")},
+        "favorable_direction": spec.get("favorable_direction", "positive"),
         "features": features,
         "train_rows": int(len(train)), "test_rows": int(len(test)),
         "train_people": int(train.pid.nunique()), "test_people": int(test.pid.nunique()),
@@ -187,7 +212,12 @@ def fit_metric(train: pd.DataFrame, test: pd.DataFrame, spec: dict, base_feature
         "cluster_bootstrap_ci95": ci,
         "direction_supported": bool(ci[0] > 0 or ci[1] < 0),
         "predictive_test": predictive,
-        "gate": "후보 통과" if len(test[t_test == 1]) >= 200 and overlap_fraction >= 0.8 else "보류",
+        "gate": (
+            "evidence_candidate"
+            if len(test[t_test == 1]) >= 200 and overlap_fraction >= 0.8
+            and (ci[0] > 0 or ci[1] < 0)
+            else "insufficient_evidence"
+        ),
         "causal_claim": False,
     }
     artifact = {
@@ -200,6 +230,11 @@ def fit_metric(train: pd.DataFrame, test: pd.DataFrame, spec: dict, base_feature
 def load_datasets() -> dict[str, pd.DataFrame]:
     klips = pd.read_csv(DATASETS["klips"]["path"], low_memory=False)
     klips = klips[klips.wage_outlier.eq(0)].copy()
+    employed_both = klips["employment_status_t"].notna() & klips["employment_status_t1"].notna()
+    klips = klips[
+        employed_both & klips["age_t"].between(MODEL_SCOPE["age_min"], MODEL_SCOPE["age_max"])
+    ].copy()
+    klips["transition_type"] = np.where(klips["moved_t1"].eq(1), "job_to_job", "same_job")
     # 서비스에서는 이해 가능한 KSCO 대분류(1~9)를 받으므로 학습도 3자리 소분류 대신 대분류로 통일한다.
     klips["occupation_group_t"] = (pd.to_numeric(klips["occupation_t"], errors="coerce") // 100)
     klips.loc[~klips["occupation_group_t"].between(1, 9), "occupation_group_t"] = np.nan
@@ -211,7 +246,7 @@ def train_and_validate() -> tuple[dict, dict]:
     frames = load_datasets()
     splits = {name: split_people(df) for name, df in frames.items()}
     metric_reports, artifacts = [], {}
-    for spec in METRICS:
+    for spec in ACTIVE_METRICS:
         train, test = splits[spec["dataset"]]
         report, artifact = fit_metric(train, test, spec, DATASETS[spec["dataset"]])
         metric_reports.append(report)

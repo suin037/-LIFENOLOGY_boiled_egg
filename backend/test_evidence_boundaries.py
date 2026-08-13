@@ -29,6 +29,17 @@ class EvidenceBoundaryTests(unittest.TestCase):
         self.assertEqual(result["focus_indicator"], "성장가능성")
         self.assertEqual(result["basis"], "user_provided_state")
 
+    def test_matched_observations_upgrade_display_evidence_not_psych_score(self):
+        statuses = indicators.evidence_statuses("이직", {
+            "observed_outcomes": {"domains": {
+                "growth": [{"available": True}],
+                "quality_of_life": [{"available": True}],
+            }}
+        })
+        self.assertEqual(statuses["성장가능성"]["status"], "matched_observation")
+        self.assertEqual(statuses["삶의질"]["status"], "matched_observation")
+        self.assertEqual(indicators.psych_eligible_scores(statuses), {})
+
     def test_no_eligible_score_means_no_psych_cards(self):
         result = get_psych_evidence(
             {"성장가능성": 0.1}, eligible_indicators=[], basis="model"

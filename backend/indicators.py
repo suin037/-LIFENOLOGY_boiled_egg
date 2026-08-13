@@ -35,6 +35,9 @@ def evidence_statuses(kind: str, validated_prediction: dict | None = None,
 
     if kind == "이직":
         vp = validated_prediction or {}
+        observed_domains = ((vp.get("observed_outcomes") or {}).get("domains") or {})
+        has_growth = any(item.get("available") for item in observed_domains.get("growth", []))
+        has_life = any(item.get("available") for item in observed_domains.get("quality_of_life", []))
         pop = vp.get("population_evidence") or {}
         effect = pop.get("effect")
         financial_status = "directional_evidence" if effect is not None else "insufficient_evidence"
@@ -50,15 +53,24 @@ def evidence_statuses(kind: str, validated_prediction: dict | None = None,
                 "reason": "집단 임금효과의 방향 근거이며 개인의 현재 심리 상태 점수가 아님",
             },
             "성장가능성": {
-                "status": "insufficient_evidence", "score": None,
+                "status": "matched_observation" if has_growth else "insufficient_evidence", "score": None,
                 "eligible_for_psych_rag": False,
-                "reason": "최근 연도 검증에서 성장 효과가 재현되지 않음",
+                "reason": "유사 집단의 실제 경력상태 전환 관측값" if has_growth else "최근 연도 검증에서 성장 효과가 재현되지 않음",
             },
             "삶의질": {
-                "status": "insufficient_evidence", "score": None,
+                "status": "matched_observation" if has_life else "insufficient_evidence", "score": None,
                 "eligible_for_psych_rag": False,
-                "reason": "반복 검증에서 삶의 질 효과가 안정적이지 않음",
+                "reason": "유사 집단의 만족·행복·건강·웰빙 변화 관측값" if has_life else "반복 검증에서 삶의 질 효과가 안정적이지 않음",
             },
+        }
+
+    vp = validated_prediction or {}
+    observed = vp.get("observed_outcomes") or {}
+    if kind == "유지" and observed.get("status") == "available":
+        return {
+            "경제적안정도": {"status": "matched_observation", "score": None, "eligible_for_psych_rag": False, "reason": "유사 유지 집단의 관측 결과"},
+            "성장가능성": {"status": "matched_observation", "score": None, "eligible_for_psych_rag": False, "reason": "유지 집단의 실제 경력상태 전환 관측값"},
+            "삶의질": {"status": "matched_observation", "score": None, "eligible_for_psych_rag": False, "reason": "유지 집단의 만족·행복·건강·웰빙 변화 관측값"},
         }
 
     reason = "해당 선택의 검증된 개인 예측모델이 없어 집단통계·관측값만 제공"

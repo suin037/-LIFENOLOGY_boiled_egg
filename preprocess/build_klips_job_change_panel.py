@@ -28,15 +28,17 @@ BASE_REQUIRED = {
 }
 
 HEALTH_VARS = [
-    "건강_현재", "삶의만족도_현재", "행복도_현재", "건강점수", "웰빙지수",
+    "건강_현재", "건강_1년전대비", "건강_또래대비", "제약_직업활동", "제약_비직업",
+    "삶의만족도_현재", "행복도_현재", "삶의만족도_5년후예상", "건강점수", "웰빙지수",
+    "미래낙관점수", "기대격차_5년",
     "만족_가족수입", "만족_여가활동", "만족_주거환경", "만족_가족관계",
     "만족_친인척관계", "만족_사회적친분", "만족_전반적",
 ]
 
 WORK_CONTEXT_VARS = [
-    "스트레스", "우울", "수면시간", "실근무시간", "장시간근무", "야간근무",
+    "스트레스", "우울", "수면시간", "불면지수", "BMI", "실근무시간", "장시간근무", "야간근무",
     "저녁근무", "주말근무", "교대근무", "유연근무제", "출퇴근시간",
-    "피로_지장", "휴식_필요",
+    "피로_지장", "휴식_필요", "짧은휴식", "유해근무_개수",
 ]
 
 BASE_INPUTS = [
@@ -51,6 +53,18 @@ OUTCOMES = [
     "health_current_change", "life_satisfaction_change", "happiness_change",
     "health_score_change", "wellbeing_index_change",
 ]
+
+# The raw KLIPS domain-satisfaction items use 1=most satisfied and
+# 5=least satisfied. Model-facing changes are reversed so positive always
+# means that satisfaction improved between t and t+1.
+SATISFACTION_DOMAINS = {
+    "satisfaction_family_income": "\ub9cc\uc871_\uac00\uc871\uc218\uc785",
+    "satisfaction_leisure": "\ub9cc\uc871_\uc5ec\uac00\ud65c\ub3d9",
+    "satisfaction_housing": "\ub9cc\uc871_\uc8fc\uac70\ud658\uacbd",
+    "satisfaction_family_relationship": "\ub9cc\uc871_\uac00\uc871\uad00\uacc4",
+    "satisfaction_social_relationship": "\ub9cc\uc871_\uc0ac\ud68c\uc801\uce5c\ubd84",
+    "satisfaction_overall": "\ub9cc\uc871_\uc804\ubc18\uc801",
+}
 
 
 def _read_csv(path: Path) -> pd.DataFrame:
@@ -121,11 +135,17 @@ def build_panel(age_min: int = 20, age_max: int = 45) -> tuple[pd.DataFrame, dic
             safe = {
                 "건강_현재": "health_current", "삶의만족도_현재": "life_satisfaction",
                 "행복도_현재": "happiness", "건강점수": "health_score", "웰빙지수": "wellbeing_index",
+                "건강_1년전대비": "health_year_change", "건강_또래대비": "health_peer",
+                "제약_직업활동": "limit_work", "제약_비직업": "limit_other",
+                "삶의만족도_5년후예상": "future_satisfaction", "미래낙관점수": "future_optimism",
+                "기대격차_5년": "future_expectation_gap",
                 "스트레스": "stress", "우울": "depression", "수면시간": "sleep_hours",
+                "불면지수": "insomnia", "BMI": "bmi",
                 "실근무시간": "actual_work_hours", "장시간근무": "long_hours",
                 "야간근무": "night_work", "저녁근무": "evening_work", "주말근무": "weekend_work",
                 "교대근무": "shift_work", "유연근무제": "flexible_work", "출퇴근시간": "commute_time",
                 "피로_지장": "fatigue_interference", "휴식_필요": "need_rest",
+                "짧은휴식": "short_rest", "유해근무_개수": "harmful_work_count",
             }.get(col, col)
             panel[f"{prefix}{safe}_t"] = current[col]
             panel[f"{prefix}{safe}_t1"] = next_values[col]
@@ -154,6 +174,13 @@ def build_panel(age_min: int = 20, age_max: int = 45) -> tuple[pd.DataFrame, dic
         before, after = f"{stem}_t", f"{stem}_t1"
         if before in panel.columns and after in panel.columns:
             panel[f"{stem}_change"] = panel[after] - panel[before]
+
+    for safe, source in SATISFACTION_DOMAINS.items():
+        before, after = f"{source}_t", f"{source}_t1"
+        if before in panel.columns and after in panel.columns:
+            panel[f"{safe}_t"] = panel[before]
+            panel[f"{safe}_t1"] = panel[after]
+            panel[f"{safe}_change"] = panel[before] - panel[after]
 
     # 극단적 임금 변화는 삭제하지 않고 품질 플래그만 남긴다.
     panel["wage_outlier"] = panel["wage_change_pct"].abs().gt(300).fillna(False).astype(int)

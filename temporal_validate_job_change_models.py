@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import json
 
-from train_validate_job_change_models import DATASETS, METRICS, ROOT, fit_metric, load_datasets
+from train_validate_job_change_models import ACTIVE_METRICS, DATASETS, ROOT, fit_metric, load_datasets
 
 
 REPORT_JSON = ROOT / "data" / "clean" / "job_change_model_temporal_validation.json"
 REPORT_MD = ROOT / "docs" / "JOB_CHANGE_MODEL_TEMPORAL_VALIDATION.md"
-CANDIDATE_COLUMNS = {"wage_change_pct", "growth_change", "future_change"}
+CANDIDATE_COLUMNS = {metric["column"] for metric in ACTIVE_METRICS}
 CUTOFFS = {"klips": 2021, "yp": 2022}
 
 
@@ -26,18 +26,21 @@ def temporal_split(frame, cutoff: int, strict_people: bool = False):
 def verdict(metric: dict) -> str:
     ci = metric["cluster_bootstrap_ci95"]
     if metric["overlap_fraction"] < 0.8:
-        return "overlap 부족"
-    if metric["adjusted_effect_move_minus_stay"] > 0 and ci[0] > 0:
-        return "시간 검증 통과"
-    if metric["adjusted_effect_move_minus_stay"] > 0:
-        return "방향만 유지"
-    return "재현 실패"
+        return "overlap_insufficient"
+    direction = metric.get("favorable_direction", "positive")
+    if direction == "negative" and ci[1] < 0:
+        return "favorable_association"
+    if direction == "positive" and ci[0] > 0:
+        return "favorable_association"
+    if (direction == "negative" and ci[0] > 0) or (direction == "positive" and ci[1] < 0):
+        return "adverse_association"
+    return "inconclusive"
 
 
 def run_temporal_validation() -> dict:
     frames = load_datasets()
     results = []
-    for spec in (item for item in METRICS if item["column"] in CANDIDATE_COLUMNS):
+    for spec in (item for item in ACTIVE_METRICS if item["column"] in CANDIDATE_COLUMNS):
         dataset = spec["dataset"]
         cutoff = CUTOFFS[dataset]
         train, test = temporal_split(frames[dataset], cutoff)
@@ -52,7 +55,7 @@ def run_temporal_validation() -> dict:
         results.append(metric)
 
         # KLIPS는 최근 유입자만 남긴 더 엄격한 검증도 표본이 가능하다.
-        if dataset == "klips":
+        if dataset == "klips" and spec["indicator"] == "financial_stability":
             strict_train, strict_test = temporal_split(frames[dataset], cutoff, strict_people=True)
             strict_metric, _ = fit_metric(strict_train, strict_test, spec, DATASETS[dataset])
             strict_metric.update({
@@ -64,7 +67,10 @@ def run_temporal_validation() -> dict:
             })
             results.append(strict_metric)
 
-    passed = [m["column"] for m in results if m["protocol"] == "recent_year" and m["temporal_verdict"] == "시간 검증 통과"]
+    passed = [
+        m["column"] for m in results
+        if m["protocol"] == "recent_year" and m["temporal_verdict"] == "favorable_association"
+    ]
     return {
         "method": "과거 전이로 학습하고 이후 연도 전이로 홀드아웃 검증",
         "cutoffs": CUTOFFS,
@@ -80,7 +86,11 @@ def run_temporal_validation() -> dict:
 
 
 def render_markdown(report: dict) -> str:
-    indicator = {"financial_stability": "재정 안정도", "growth_potential": "성장 가능성"}
+    indicator = {
+        "financial_stability": "재정 안정도",
+        "growth_potential": "성장 가능성",
+        "quality_of_life": "삶의 질",
+    }
     protocol = {"recent_year": "최근 연도", "recent_year_new_people": "최근 연도·신규 인물"}
     lines = [
         "# 이직 후보 지표 연도 기준 검증", "", f"> {report['method']}", "",

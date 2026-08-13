@@ -15,11 +15,15 @@ import numpy as np
 import pandas as pd
 
 from config import ROOT
+from models.job_change_trajectory import trajectory_for_choice
 
 
 ARTIFACT = ROOT / "backend" / "models" / "candidates" / "job_change_3indicators_candidate.joblib"
 TEMPORAL_REPORT = ROOT / "data" / "clean" / "job_change_model_temporal_validation.json"
 SENSITIVITY_REPORT = ROOT / "data" / "clean" / "job_change_financial_sensitivity.json"
+TRANSITION_REPORT = ROOT / "data" / "clean" / "job_transition_matrix.json"
+OBSERVED_OUTCOMES_REPORT = ROOT / "data" / "clean" / "job_change_observed_outcomes.json"
+KLIPS_PANEL = ROOT / "data" / "clean" / "klips_job_change_panel.csv"
 MODEL_KEY = "wage_change_pct"
 
 
@@ -50,6 +54,180 @@ def _sensitivity_result() -> dict | None:
         return None
     report = json.loads(SENSITIVITY_REPORT.read_text(encoding="utf-8"))
     return report.get("summary")
+
+
+@lru_cache(maxsize=1)
+def _transition_report() -> dict | None:
+    if not TRANSITION_REPORT.exists():
+        return None
+    return json.loads(TRANSITION_REPORT.read_text(encoding="utf-8"))
+
+
+@lru_cache(maxsize=1)
+def _observed_outcomes_report() -> dict | None:
+    if not OBSERVED_OUTCOMES_REPORT.exists():
+        return None
+    return json.loads(OBSERVED_OUTCOMES_REPORT.read_text(encoding="utf-8"))
+
+
+@lru_cache(maxsize=1)
+def _personalization_panel() -> pd.DataFrame:
+    """서비스 매칭에 필요한 KLIPS 열과 파생 결과만 메모리에 보관한다."""
+    report = _observed_outcomes_report() or {}
+    metric_columns = {item["column"] for item in report.get("metrics", [])}
+    source_columns = {
+        "pid", "age_t", "moved_t1", "occupation_t", "employment_status_t",
+        "employment_status_t1", "real_wage_t", "real_wage_t1", "firm_size_t",
+        "firm_size_t1", "tenure_t", "wage_outlier", "occupation_t1",
+        "health_peer_t", "health_peer_t1", "future_optimism_t", "future_optimism_t1",
+        "limit_work_t1", "limit_other_t1", *metric_columns,
+    }
+    header = pd.read_csv(KLIPS_PANEL, nrows=0).columns
+    df = pd.read_csv(KLIPS_PANEL, usecols=[c for c in header if c in source_columns], low_memory=False)
+    employed = df.employment_status_t.notna() & df.employment_status_t1.notna()
+    df = df[employed & df.wage_outlier.eq(0)].copy()
+    df["occupation_group_t"] = pd.to_numeric(df.occupation_t, errors="coerce").floordiv(100)
+    df["occupation_changed"] = np.where(
+        df.occupation_t.notna() & df.occupation_t1.notna(),
+        (df.occupation_t != df.occupation_t1).astype(float), np.nan,
+    )
+    df["employment_improved"] = np.where(
+        df.employment_status_t.isin([2, 3]), df.employment_status_t1.eq(1).astype(float), np.nan,
+    )
+    df["firm_size_up"] = np.where(
+        df.firm_size_t.notna() & df.firm_size_t1.notna(),
+        (df.firm_size_t1 > df.firm_size_t).astype(float), np.nan,
+    )
+    valid_wage = df.real_wage_t.gt(0) & df.real_wage_t1.gt(0)
+    wage_edges = df.loc[df.real_wage_t.gt(0), "real_wage_t"].quantile([0, .2, .4, .6, .8, 1]).to_numpy()
+    wage_edges = np.unique(wage_edges)
+    df["wage_band_t"] = pd.cut(df.real_wage_t, wage_edges, labels=False, include_lowest=True)
+    df["wage_band_t1"] = pd.cut(df.real_wage_t1, wage_edges, labels=False, include_lowest=True)
+    df["wage_band_up"] = np.where(valid_wage, (df.wage_band_t1 > df.wage_band_t).astype(float), np.nan)
+    df["health_peer_improvement"] = np.where(
+        df.health_peer_t.notna() & df.health_peer_t1.notna(), df.health_peer_t - df.health_peer_t1, np.nan,
+    )
+    df["future_optimism_change"] = df.future_optimism_t1 - df.future_optimism_t
+    df["work_limitation_t1"] = np.where(df.limit_work_t1.notna(), df.limit_work_t1.eq(1).astype(float), np.nan)
+    df["other_limitation_t1"] = np.where(df.limit_other_t1.notna(), df.limit_other_t1.gt(0).astype(float), np.nan)
+    return df
+
+
+def _summary(values: pd.Series, kind: str) -> dict:
+    values = pd.to_numeric(values, errors="coerce").dropna()
+    if values.empty:
+        return {"n": 0, "available": False}
+    result = {"n": int(len(values)), "available": True}
+    if kind == "rate":
+        return {**result, "rate": round(float(values.mean()), 4)}
+    quantiles = values.quantile([.25, .5, .75])
+    return {
+        **result, "mean": round(float(values.mean()), 4),
+        "p25": round(float(quantiles.loc[.25]), 4), "median": round(float(quantiles.loc[.5]), 4),
+        "p75": round(float(quantiles.loc[.75]), 4),
+        "improved_rate": round(float(values.gt(0).mean()), 4),
+        "unchanged_rate": round(float(values.eq(0).mean()), 4),
+        "worsened_rate": round(float(values.lt(0).mean()), 4),
+    }
+
+
+def _matched_cases(profile: dict, scenario: str, minimum_n: int = 40) -> tuple[pd.DataFrame, list[str], list[str]]:
+    """표본을 보존하면서 현재 상태와 일치하는 조건을 단계적으로 적용한다."""
+    df = _personalization_panel()
+    moved = 1 if scenario == "move" else 0
+    pool = df[df.moved_t1.eq(moved)].copy()
+    age = pd.to_numeric(profile.get("age"), errors="coerce")
+    applied, relaxed = [], []
+    if pd.notna(age):
+        age_match = pool[pool.age_t.between(max(20, age - 3), min(45, age + 3))]
+        if len(age_match) >= minimum_n:
+            pool = age_match
+            applied.append(f"나이 {int(age)-3}~{int(age)+3}세")
+        else:
+            relaxed.append("나이")
+
+    occupation = profile.get("occupation_group")
+    employment = profile.get("employment_status")
+    wage = pd.to_numeric(profile.get("monthly_wage"), errors="coerce")
+    tenure = pd.to_numeric(profile.get("tenure_years"), errors="coerce")
+    firm = profile.get("firm_size")
+    wage_band = None
+    if pd.notna(wage):
+        edges = df.loc[df.real_wage_t.gt(0), "real_wage_t"].quantile([0, .2, .4, .6, .8, 1]).to_numpy()
+        wage_band = int(np.clip(np.searchsorted(edges, wage, side="right") - 1, 0, 4))
+    tenure_band = None if pd.isna(tenure) else (0 if tenure < 1 else 1 if tenure < 3 else 2)
+    firm_band = None if firm is None else (0 if int(firm) <= 3 else 1 if int(firm) <= 6 else 2)
+    candidates = [
+        ("직종", occupation, lambda x: x.occupation_group_t.eq(int(occupation))) if occupation is not None else None,
+        ("고용형태", employment, lambda x: x.employment_status_t.eq(int(employment))) if employment is not None else None,
+        ("임금구간", wage_band, lambda x: x.wage_band_t.eq(wage_band)) if wage_band is not None else None,
+        ("근속구간", tenure_band, lambda x: ((x.tenure_t < 1) if tenure_band == 0 else (x.tenure_t.between(1, 3, inclusive="left") if tenure_band == 1 else x.tenure_t.ge(3)))) if tenure_band is not None else None,
+        ("기업규모", firm_band, lambda x: ((x.firm_size_t <= 3) if firm_band == 0 else (x.firm_size_t.between(4, 6) if firm_band == 1 else x.firm_size_t.ge(7)))) if firm_band is not None else None,
+    ]
+    for candidate in (item for item in candidates if item is not None):
+        name, _, condition = candidate
+        narrowed = pool[condition(pool)]
+        if len(narrowed) >= minimum_n:
+            pool = narrowed
+            applied.append(name)
+        else:
+            relaxed.append(name)
+    return pool, applied, relaxed
+
+
+def _observed_outcomes(choice_kind: str, profile: dict) -> dict:
+    report = _observed_outcomes_report()
+    if not report:
+        return {"status": "unavailable"}
+    scenario = "move" if choice_kind == "이직" else "stay"
+    cases, applied, relaxed = _matched_cases(profile, scenario)
+    domains: dict[str, list[dict]] = {}
+    for metric in report.get("metrics", []):
+        personalized = _summary(cases[metric["column"]], metric["kind"])
+        population = metric["scenarios"][scenario]
+        domains.setdefault(metric["domain"], []).append({
+            "key": metric["column"], "label": metric["label"], "kind": metric["kind"],
+            **personalized, "population_reference": population["all_years"],
+            "direction_stable": population["direction_stable"],
+        })
+    return {
+        "status": "available", "claim_type": report["claim_type"], "scenario": scenario,
+        "domains": domains, "source": report["source"], "caution": report["caution"],
+        "matching": {
+            "method": "current_state_progressive_matching", "sample_n": int(len(cases)),
+            "people_n": int(cases.pid.nunique()), "applied_conditions": applied,
+            "relaxed_conditions": relaxed, "minimum_sample_n": 40,
+        },
+    }
+
+
+def _observed_transitions(profile: dict, limit: int = 5) -> dict:
+    """현재 직종에서 실제로 관측된 이직 도착 분포를 반환한다."""
+    report = _transition_report()
+    raw_code = profile.get("occupation_group")
+    try:
+        code = str(int(raw_code))
+    except (TypeError, ValueError):
+        code = ""
+    origin = report.get("origins", {}).get(code) if report else None
+    if not origin:
+        return {
+            "status": "unavailable",
+            "reason": "현재 직종을 선택하면 실제 이직자의 주요 이동 직종을 볼 수 있습니다.",
+        }
+    return {
+        "status": "available",
+        "claim_type": report["claim_type"],
+        "title": "비슷한 연령대 이직자들의 실제 이동 경로",
+        "origin": {"code": origin["code"], "label": origin["label"]},
+        "sample_n": origin["sample_n"],
+        "distinct_people": origin["distinct_people"],
+        "age_range": [report["population"]["age_min"], report["population"]["age_max"]],
+        "destinations": origin["destinations"][:limit],
+        "source": report["source"],
+        "evidence_grade": "observed",
+        "caution": "과거 관측 빈도이며 개인의 이동 가능성이나 이직 효과를 뜻하지 않습니다.",
+    }
 
 
 def _input_frame(profile: dict, model: dict) -> tuple[pd.DataFrame, list[str], list[str]]:
@@ -98,9 +276,6 @@ def financial_impact(profile: dict) -> dict:
         artifact = _load_artifact()
         model = artifact["models"][MODEL_KEY]
         x, used, imputed = _input_frame(profile, model)
-        stay = float(model["outcome_stay"].predict(x)[0])
-        move = float(model["outcome_move"].predict(x)[0])
-        propensity = float(model["propensity"].predict_proba(x)[0, 1])
     except Exception as exc:
         return {
             "status": "unavailable",
@@ -132,14 +307,12 @@ def financial_impact(profile: dict) -> dict:
         ),
         "indicator": "경제적안정도",
         "outcome": "실질임금 변화율",
+        "observed_transitions": _observed_transitions(profile),
         "population_evidence": population,
         "sensitivity_validation": sensitivity,
         "personalized_estimate": {
-            "status": "experimental_not_individually_validated",
-            "stay_change_pct": round(stay, 2),
-            "move_change_pct": round(move, 2),
-            "difference_pct_points": round(move - stay, 2),
-            "estimated_move_propensity": round(float(np.clip(propensity, 0, 1)), 3),
+            "status": "disabled_insufficient_individual_validation",
+            "reason": "관찰 패널로 개인별 반사실 효과를 직접 검증할 수 없어 수치 제공을 중단했습니다.",
         },
         "input_quality": {
             "used_features": used,
@@ -173,4 +346,6 @@ def prediction_for_choice(choice_kind: str, profile: dict) -> dict:
         }
     result = financial_impact(profile)
     result["selected_scenario"] = "move" if choice_kind == "이직" else "stay"
+    result["observed_outcomes"] = _observed_outcomes(choice_kind, profile)
+    result["parallel_trajectory"] = trajectory_for_choice(choice_kind, profile)
     return result
