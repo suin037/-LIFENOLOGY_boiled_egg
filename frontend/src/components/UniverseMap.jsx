@@ -30,6 +30,25 @@ function makeSoftTexture(stops) {
   return texture;
 }
 
+// 별 알갱이 — Points 로 한 번에 그리므로 모양은 이 스프라이트가 낸다.
+// 모듈에 한 번만 만든다(별자리마다 캔버스를 만들면 그것도 비용이다).
+let _starSprite = null;
+function starSprite() {
+  if (_starSprite) return _starSprite;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 64;
+  const ctx = canvas.getContext("2d");
+  const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0, "rgba(255,255,255,1)");
+  g.addColorStop(.35, "rgba(255,255,255,.72)");
+  g.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 64, 64);
+  _starSprite = new THREE.CanvasTexture(canvas);
+  _starSprite.colorSpace = THREE.SRGBColorSpace;
+  return _starSprite;
+}
+
 function makePlanetTexture(from, to, seed) {
   const canvas = document.createElement("canvas");
   canvas.width = 512; canvas.height = 256;
@@ -181,6 +200,13 @@ function Constellation3D({ group, index, anchorIndex, onOpen }) {
     return [Math.cos(a)*radius, Math.sin(a)*radius*.72, (i-3)*.055];
   }), [group.weekStart, visible.length, index]);
   const geometry = useMemo(()=>new THREE.BufferGeometry().setFromPoints(points.map((p)=>new THREE.Vector3(...p))),[points]);
+  // 별을 Points 하나로 그린다 — 별마다 mesh + pointLight 를 두면 기록이 늘수록
+  // 드로우콜과 동적 광원이 같이 늘어난다(1년치면 광원만 100개가 넘어 프레임이 무너졌다).
+  const starGeo = useMemo(()=>{
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(points.flat(), 3));
+    return g;
+  },[points]);
   useFrame((state,delta)=>{
     if (!orbit.current) return;
     orbit.current.rotation.y += delta * (.055 + index * .006);
@@ -192,7 +218,12 @@ function Constellation3D({ group, index, anchorIndex, onOpen }) {
       <mesh visible={false}><sphereGeometry args={[.72,12,12]}/><meshBasicMaterial transparent opacity={0}/></mesh>
       <line geometry={geometry}><lineBasicMaterial color="#9FB0CE" transparent opacity={.42}/></line>
       {/* 기록은 하얀 별. 시나리오(마름모)와 한눈에 갈라지도록 색을 섞지 않는다. */}
-      {points.map((p,i)=><mesh key={visible[i].date||visible[i].label||i} position={p} onClick={(e)=>{e.stopPropagation();onOpen?.({...group,selectedPoint:visible[i]});}}><sphereGeometry args={[.05+(visible[i].mood||3)*.008,12,12]}/><meshBasicMaterial color="#ffffff"/><pointLight color="#eaf1ff" intensity={.2} distance={1}/></mesh>)}
+      <points geometry={starGeo}>
+        <pointsMaterial
+          color="#ffffff" size={.16} sizeAttenuation transparent opacity={.95}
+          map={starSprite()} depthWrite={false} blending={THREE.AdditiveBlending}
+        />
+      </points>
     </group>
   </group>;
 }
@@ -213,9 +244,8 @@ function ScenarioMark({ scenario, index, anchorIndex, onOpen }) {
     <group position={[Math.cos(angle)*radius, 1.15 + (index%2)*.34, Math.sin(angle)*radius]}>
       <mesh ref={spin} onClick={(e)=>{e.stopPropagation();onOpen?.(scenario);}}>
         <octahedronGeometry args={[.135,0]}/>
-        <meshStandardMaterial color="#C9A6FF" emissive="#8B6CCF" emissiveIntensity={1.5} roughness={.3}/>
+        <meshStandardMaterial color="#C9A6FF" emissive="#8B6CCF" emissiveIntensity={2.4} roughness={.3}/>
       </mesh>
-      <pointLight color="#B38BFF" intensity={.5} distance={1.6}/>
     </group>
   </group>;
 }

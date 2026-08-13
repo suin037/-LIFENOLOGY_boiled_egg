@@ -72,6 +72,8 @@ export default function MyUniverseV2() {
     if (planet) return starGroupsOf(planet.key, state);
     return PLANETS.flatMap((item) => starGroupsOf(item.key, state));
   }, [planet, state]);
+  const planetScenarios = useMemo(
+    () => (planet ? scenariosByPlanet(planet.key, state) : []), [planet, state]);
 
   function openPlanet(key) { setPlanet(PLANETS.find((item) => item.key === key)); setWeek(null); setFuture(null); }
   function openWeek(group) { setWeek(group || selectedGroups[selectedGroups.length - 1] || null); setRecord(null); setReport(false); }
@@ -103,7 +105,7 @@ export default function MyUniverseV2() {
       </div>
       <p className="pointer-events-none absolute bottom-5 left-1/2 z-20 -translate-x-1/2 text-[10px] text-white/40">행성을 클릭해 영역별 미래를 비교해보세요 · 드래그 회전 · 휠/핀치 확대</p>
 
-      {planet && !future && <PlanetModal planet={planet} state={state} groups={orbitGroups} scenarios={scenariosByPlanet(planet.key, state)} onClose={() => setPlanet(null)} onSimulate={() => navigate("/input")} onArchive={() => navigate("/archive")} onOpportunity={pickOpportunity} onOpenScenario={setFuture} />}
+      {planet && !future && <PlanetModal planet={planet} state={state} groups={orbitGroups} scenarios={planetScenarios} onClose={() => setPlanet(null)} onSimulate={() => navigate("/input")} onArchive={() => navigate("/archive")} onOpportunity={pickOpportunity} onOpenScenario={setFuture} />}
       {future && <FutureScenarioPanel planet={planet} future={future} onClose={()=>setFuture(null)} onCompare={()=>navigate("/input")}/>} 
     </div>
   );
@@ -119,9 +121,10 @@ function Close({ onClick }) { return <button type="button" onClick={onClick} cla
 const MOOD_COLORS = ["#E24B4A", "#D85A30", "#EDA100", "#5DCAA5", "#378ADD"];
 
 function DomainRecords({ planet, state, entries, recent }) {
-  const a = domainAnalysis(planet.key, state);
-  const months = domainMonths(planet.key, state).slice(0, 6).reverse();
-  const maxN = Math.max(1, ...months.map((m) => m.analysis.n || 0));
+  // 1년치가 들어오면 이 셋은 렌더마다 수백 개 기록을 다시 훑는다 — 상태가 바뀔 때만 돌린다.
+  const a = useMemo(() => domainAnalysis(planet.key, state), [planet.key, state]);
+  const months = useMemo(() => domainMonths(planet.key, state).slice(0, 6).reverse(), [planet.key, state]);
+  const maxN = useMemo(() => Math.max(1, ...months.map((m) => m.analysis.n || 0)), [months]);
 
   if (!a?.ok) {
     return (
@@ -473,8 +476,9 @@ function FutureYears({ planet, state }) {
 }
 
 function PlanetModal({ planet, state, groups, scenarios, onClose, onSimulate, onArchive, onOpportunity, onOpenScenario }) {
-  const entries = planetEntries(state, planet.key), recent = entries.slice(-3).reverse();
-  const futures = [...(scenarios || [])].reverse();
+  const entries = useMemo(() => planetEntries(state, planet.key), [state, planet.key]);
+  const recent = useMemo(() => entries.slice(-3).reverse(), [entries]);
+  const futures = useMemo(() => [...(scenarios || [])].reverse(), [scenarios]);
   return <div className="absolute inset-y-5 right-5 z-40 w-[min(430px,calc(100%-40px))] overflow-y-auto rounded-[24px] border border-white/10 bg-[#09111F]/94 p-5 shadow-[0_30px_90px_rgba(0,0,0,.6)] backdrop-blur-xl"><div>
     <div className="flex items-start justify-between"><div className="flex items-center gap-4"><PlanetOrb planet={planet} /><div><p className="text-[9px] tracking-[.16em] text-[#A88BE8]">FUTURE PLANET</p><h2 className="mt-1 text-[22px] font-bold">{planet.label}</h2></div></div><Close onClick={onClose}/></div>
     <p className="mt-4 text-[11px] leading-relaxed text-sub">{DESCRIPTIONS[planet.key]}</p>

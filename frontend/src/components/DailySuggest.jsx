@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Sparkles, Search } from "lucide-react";
 import { fetchSuggestion, getTodaySuggestion, suggestMaterials } from "../data/suggestApi.js";
 import { loadSpeech } from "../data/dispositionApi.js";
@@ -17,7 +17,8 @@ const KIND_STYLE = {
 export default function DailySuggest() {
   const [data, setData] = useState(getTodaySuggestion);
   const [busy, setBusy] = useState(false);
-  const mat = suggestMaterials();
+  // 렌더마다 localStorage 를 다시 파싱하지 않도록 — 1년치면 그것만으로도 눈에 띈다.
+  const mat = useMemo(() => suggestMaterials(), []);
 
   // 오늘 것이 없으면 한 번만 만든다(하루 1회 — 들어올 때마다 부르면 말이 계속 바뀐다).
   useEffect(() => {

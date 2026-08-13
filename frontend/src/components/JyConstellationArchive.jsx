@@ -49,6 +49,7 @@ export default function JyConstellationArchive({monthGroups,weeksByMonth,focusMo
           stars.push({key:s.date,blobX:cx+zp[0],blobY:cy+zp[1],zoomX:vx,zoomY:vy,
                       c:COL[lvl-1],p:PASTEL[lvl-1],r:1+lvl*.16,
                       glint:seed>.72,                       // 일부만 4갈래 빛
+                      twinkle:seed<.34,                     // 반짝임도 일부만(성능)
                       tw:(2.6+seed*2.4).toFixed(2),         // 반짝임 주기(초)
                       delay:(seed*3).toFixed(2)});k++;
         });
@@ -95,8 +96,10 @@ export default function JyConstellationArchive({monthGroups,weeksByMonth,focusMo
                 <line x1="0" y1={-s.r*2.6} x2="0" y2={s.r*2.6}/>
               </g>
             )}
+            {/* 반짝임은 일부만 — 1년치(별 100개↑)에서 전부 SMIL 을 돌리면 스크롤이 끊긴다.
+                띄엄띄엄 깜박여도 하늘은 충분히 살아 보인다. */}
             <circle r={s.r} fill={active?s.c:CALM} style={{transition:"fill .5s"}}>
-              {!active&&<animate attributeName="opacity" values="1;.62;1"
+              {!active&&s.twinkle&&<animate attributeName="opacity" values="1;.62;1"
                                  dur={`${s.tw}s`} begin={`${s.delay}s`} repeatCount="indefinite"/>}
             </circle>
             <circle r={s.r*.42} fill="#fff" opacity={active?0:.6} style={{transition:"opacity .5s"}}/>
