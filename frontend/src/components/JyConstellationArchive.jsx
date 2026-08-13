@@ -19,8 +19,9 @@ const PASTEL=["#F0A3A2","#F2B48E","#F7DCA0","#AEE6CF","#A8CDF5"];
 const CALM="#CBD8EE";
 // 캘린더는 모달(최대 820px)이라 넓게 써도 된다. 별자리끼리 겹치지 않게 간격을 벌렸다.
 const W=470,H=300,CX=W/2,CY=H/2,ZOOM_MONTH=2.2,MINI_R_MIN=16,MINI_R_SPREAD=60;
-const ZR=16;   // 별자리 반지름 — 간격(STEP)보다 작아야 이웃과 안 겹친다
-const STEP=38, RIGHT=430;
+const ZR=16;   // 기록 성단 반지름 — 간격(STEP)보다 작아야 이웃과 안 겹친다
+const STEP=36, RIGHT=440;   // 12달 × 별자리 폭(48)이 좌우로 잘리지 않는 값
+const ART_OFFSET=34;   // 별자리를 띠에서 위·아래로 띄우는 거리
 const rng=(n)=>{const x=Math.sin(n*12.9898+78.233)*43758.5453;return x-Math.floor(x);};
 const level=(s)=>s.mood!=null?Math.max(1,Math.min(5,Math.round(s.mood))):s.valence!=null?Math.max(1,Math.min(5,Math.round(s.valence*2+3))):3;
 function miniCoord(day,lvl,scale){const r=(MINI_R_MIN+((lvl-1)/4)*MINI_R_SPREAD)*scale,a=(-90+day*(360/7))*Math.PI/180;return [r*Math.cos(a),r*Math.sin(a)];}
@@ -31,8 +32,8 @@ export default function JyConstellationArchive({monthGroups,weeksByMonth,focusMo
     return monthGroups.map((m,i)=>{
       const num=parseInt(m.monthKey.slice(5),10);
       const cx=RIGHT-(n-1-i)*STEP+(rng(num*3+1)-.5)*6;
-      // 위아래로도 벌려 이웃 별자리와 겹치지 않게(윗줄·아랫줄이 번갈아 오도록).
-      const cy=Math.max(96,Math.min(204,CY+Math.sin(i*.9+.4)*44+(rng(num*3+2)-.5)*10));
+      // 띠는 거의 수평으로 둔다 — 별자리를 위·아래로 번갈아 붙이는 리듬이 흐트러지지 않게.
+      const cy=Math.max(126,Math.min(174,CY+Math.sin(i*.9+.4)*14+(rng(num*3+2)-.5)*8));
       const weeks=(weeksByMonth[m.monthKey]||[]).slice(0,6),count=weeks.length||1,stars=[],weekMeta=[];let k=0;
       // 그 달의 대표 별자리(황도 12궁) 자리표 — 기록이 이 꼭짓점부터 채워진다.
       const filledN=(weeksByMonth[m.monthKey]||[]).reduce((sum,g)=>sum+g.stars.filter((s)=>!s.empty&&(s.mood!=null||s.valence!=null)).length,0);
@@ -70,14 +71,15 @@ export default function JyConstellationArchive({monthGroups,weeksByMonth,focusMo
         {active&&mo.weekMeta.map((wk)=><g key={wk.g.weekStart} onClick={()=>onWeekOpen(wk.g)} style={{cursor:"pointer",opacity:1,transition:"opacity .5s .45s"}}>{wk.verts.map((v,i)=>{const q=wk.verts[(i+1)%wk.verts.length],solid=v.filled&&q.filled;return <line key={i} x1={v.x} y1={v.y} x2={q.x} y2={q.y} stroke="#9FB0CE" strokeWidth={solid?.35:.28} strokeOpacity={solid?.42:.13} strokeDasharray={solid?undefined:".8 1.4"}/>})}{wk.verts.filter((v)=>!v.filled).map((v,i)=><circle key={`e${i}`} cx={v.x} cy={v.y} r=".7" fill="none" stroke="#39435F" strokeWidth=".3" strokeDasharray=".5 .7" opacity=".6"/>)}<text x={wk.wx} y={wk.wy+14.5} textAnchor="middle" fill="#8895AF" fontSize="4.6">{short(wk.g.weekStart)}~ · {wk.g.stars.filter((s)=>!s.empty).length}일</text><circle cx={wk.wx} cy={wk.wy} r="13" fill="transparent"/></g>)}
         {/* 별자리 밑그림 — 기록이 없어도 그 달의 별자리 형태가 아주 연하게 깔린다.
             내 기록은 이 자리 위에서 하나씩 밝아진다(밑그림=별자리, 밝은 별=내 기록). */}
-        {/* 별자리 일러스트 — 그 달의 별자리를 뒤에 깔아 형태로 알아보게 한다.
-            기록이 있는 달은 밝게(별자리가 살아난 느낌), 없는 달은 아주 흐리게.
-            선택한 달은 한 번 더 밝혀 어디를 보고 있는지 드러낸다. */}
-        <g pointerEvents="none"
-           opacity={active?.5:mo.count>0?.3:.12}
-           style={{transition:"opacity .5s"}}>
-          <ZodiacArt month={mo.num} cx={mo.cx} cy={mo.cy} size={ZR*2.7}/>
-        </g>
+        {/* 그 달의 별자리 — 띠 위·아래로 번갈아 놓는다(뒤에 깔지 않는다).
+            기록이 쌓일수록 그 별자리가 밝아지고 빛무리가 번진다: 기록이 별자리를 켠다. */}
+        {!active&&<g pointerEvents="none"
+           opacity={mo.count>0 ? .3+Math.min(1,mo.count/24)*.65 : .1}
+           style={{transition:"opacity .6s", filter: mo.count>0
+             ? `drop-shadow(0 0 ${(1+Math.min(1,mo.count/24)*3.4).toFixed(1)}px rgba(168,139,232,${(.2+Math.min(1,mo.count/24)*.55).toFixed(2)}))`
+             : "none"}}>
+          <ZodiacArt month={mo.num} cx={mo.cx} cy={mo.cy+(mo.labelUp?-ART_OFFSET:ART_OFFSET)} size={ZR*3}/>
+        </g>}
         {!active&&mo.zLines.map((ln,li)=><line key={`z${li}`} x1={mo.cx+ln[0]} y1={mo.cy+ln[1]} x2={mo.cx+ln[2]} y2={mo.cy+ln[3]} stroke="#9FB0CE" strokeWidth=".4" strokeOpacity=".38" style={{transition:"opacity .4s"}}/>)}
         {/* 평소엔 별을 연보라 하나로 — 12달이 한눈에 차분히 보인다.
             달을 눌러 자세히 볼 때만 그날 기분 색으로 갈라진다(색이 의미를 갖는 순간). */}
@@ -105,8 +107,11 @@ export default function JyConstellationArchive({monthGroups,weeksByMonth,focusMo
                      style={{cursor:mo.count>0?"pointer":"default"}} opacity={mo.count>0?1:.45}>
           {mo.isNow&&<circle cx={mo.cx} cy={mo.cy} r={ZR+5} fill="none" stroke="#A8CDF5" strokeOpacity=".55"/>}
           <circle cx={mo.cx} cy={mo.cy} r={ZR+4} fill="transparent"/>
-          <text x={mo.cx} y={mo.cy+(mo.labelUp?-ZR-8:ZR+13)} textAnchor="middle" fill="#9FB0CE" fontSize="7">{mo.num}월</text>
-          <text x={mo.cx} y={mo.cy+(mo.labelUp?-ZR-1.5:ZR+20)} textAnchor="middle" fill="#8B6CCF" fontSize="5.4">{mo.zodiac.ko}</text>
+          {/* 별자리 쪽을 눌러도 그 달이 열리게 — 그림이 곧 그 달의 표식이다. */}
+          <circle cx={mo.cx} cy={mo.cy+(mo.labelUp?-ART_OFFSET:ART_OFFSET)} r={ZR*1.4} fill="transparent"/>
+          {/* 글자는 별자리 반대쪽에 둔다 — 그림과 겹치지 않게. */}
+          <text x={mo.cx} y={mo.cy+(mo.labelUp?ZR+13:-ZR-8)} textAnchor="middle" fill="#9FB0CE" fontSize="7">{mo.num}월</text>
+          <text x={mo.cx} y={mo.cy+(mo.labelUp?ZR+20:-ZR-1.5)} textAnchor="middle" fill="#8B6CCF" fontSize="5.4">{mo.zodiac.ko}</text>
         </g>}
       </g>})}
     </g>
