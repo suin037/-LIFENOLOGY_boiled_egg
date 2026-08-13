@@ -25,11 +25,15 @@ function putCachedFuture(planetKey, years, value) {
   } catch { /* 저장 실패는 무시 — 화면엔 이미 떠 있다 */ }
 }
 
-// 그 영역의 일기 — 최근 것부터 24개까지.
-function domainRecords(planetKey, s) {
+// 그 영역의 일기 전체(최신순). 서버로는 이 중 앞 24개만 보낸다.
+function domainRecordsAll(planetKey, s) {
   return s.checkins
     .filter((c) => hasRecord(c) && Array.isArray(c.domains) && c.domains.includes(planetKey))
-    .sort((a, b) => b.date.localeCompare(a.date))
+    .sort((a, b) => b.date.localeCompare(a.date));
+}
+
+function domainRecords(planetKey, s) {
+  return domainRecordsAll(planetKey, s)
     .slice(0, 24)
     .map((c) => ({
       date: c.date,
@@ -71,17 +75,66 @@ function domainSims(planetKey) {
 export function futureMaterials(planetKey, s = loadUniverse()) {
   const records = domainRecords(planetKey, s);
   const sims = domainSims(planetKey);
+  // total 은 상한 없는 실제 기록 수 — 24개를 넘겨도 "새 기록이 늘었다"를 알아채야 한다.
+  const total = domainRecordsAll(planetKey, s).length;
   return {
     records,
+    total,
     sims,
     reflections: sims.filter((x) => (x.reflection || "").trim()).length,
-    ready: records.length >= 3,
+    ready: total >= 3,
   };
+}
+
+// ── 아직 안 가본 길 ────────────────────────────────────────────
+// 시뮬레이션은 사용자가 A/B를 직접 적어야 시작된다 — 그러면 이미 아는 두 길 사이에서만
+// 고민하게 된다. 여기서 그 영역 기록을 읽어 저울에 올려본 적 없는 갈림길을 내민다.
+const OPP_KEY = "pm.opportunity.v1";
+
+export function getCachedOpportunities(planetKey) {
+  try { return JSON.parse(localStorage.getItem(OPP_KEY) || "{}")[planetKey] || null; } catch { return null; }
+}
+function putCachedOpportunities(planetKey, value) {
+  try {
+    const all = JSON.parse(localStorage.getItem(OPP_KEY) || "{}");
+    all[planetKey] = value;
+    localStorage.setItem(OPP_KEY, JSON.stringify(all));
+  } catch { /* 무시 */ }
+}
+
+export async function scanOpportunities(planet, { speech = "polite", state } = {}) {
+  const s = state || loadUniverse();
+  const { records, sims, total } = futureMaterials(planet.key, s);
+  const a = domainAnalysis(planet.key, s);
+  try {
+    const res = await fetch(`${BASE}/opportunity/scan`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        domain: planet.key,
+        label: planet.label,
+        records,
+        analysis: a?.ok ? { n: a.n, moodAvg: a.moodAvg, topEmotions: a.topEmotions } : null,
+        sims,
+        speech,
+      }),
+    });
+    if (!res.ok) throw new Error(`API ${res.status}`);
+    const data = await res.json();
+    if (data?.ok) {
+      const value = { ...data, scannedAt: new Date().toISOString().slice(0, 10), nRecords: total };
+      putCachedOpportunities(planet.key, value);
+      return value;
+    }
+    return data;
+  } catch {
+    return { ok: false, reason: "길을 찾지 못했어요. 서버가 켜져 있는지 확인해 주세요." };
+  }
 }
 
 export async function writeFuture(planet, years, { speech = "polite", state } = {}) {
   const s = state || loadUniverse();
-  const { records, sims } = futureMaterials(planet.key, s);
+  const { records, sims, total } = futureMaterials(planet.key, s);
   const a = domainAnalysis(planet.key, s);
   try {
     const res = await fetch(`${BASE}/future/scenario`, {
@@ -102,7 +155,7 @@ export async function writeFuture(planet, years, { speech = "polite", state } = 
     if (!res.ok) throw new Error(`API ${res.status}`);
     const data = await res.json();
     if (data?.ok) {
-      const value = { ...data, writtenAt: new Date().toISOString().slice(0, 10), nRecords: records.length };
+      const value = { ...data, writtenAt: new Date().toISOString().slice(0, 10), nRecords: total };
       putCachedFuture(planet.key, years, value);
       return value;
     }

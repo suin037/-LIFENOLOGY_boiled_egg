@@ -7,7 +7,8 @@ import { PLANETS } from "../data/result.js";
 import { adaptiveGroups, loadUniverse, resetUniverse, scenariosByPlanet, seedDemoCheckins, todayKey } from "../data/myUniverse.js";
 import { seedDemoEunwoo, seedDemoYear } from "../data/demoYear.js";
 import { domainAnalysis, domainMonths, domainReport } from "../data/diarySignals.js";
-import { futureMaterials, getCachedFuture, writeFuture } from "../data/futureApi.js";
+import { futureMaterials, getCachedFuture, writeFuture, getCachedOpportunities, scanOpportunities } from "../data/futureApi.js";
+import { useResult } from "../data/ResultContext.jsx";
 import { clearSavedReports, REPORT_UID, loadSpeech } from "../data/dispositionApi.js";
 import { planetSkin } from "../data/planetShop.js";
 
@@ -34,6 +35,7 @@ function dateLabel(date) { const [, month, day] = String(date).split("-"); retur
 
 export default function MyUniverseV2() {
   const navigate = useNavigate();
+  const { setChoices, setScenarioTexts, setScenarioDomains } = useResult();
   const [state, setState] = useState(loadUniverse);
   const [planet, setPlanet] = useState(null);
   const [week, setWeek] = useState(null);
@@ -44,6 +46,18 @@ export default function MyUniverseV2() {
   const [skin,setSkin]=useState(planetSkin);
   useEffect(() => { const refresh = () => setState(loadUniverse()); window.addEventListener("pm:universe", refresh); return () => window.removeEventListener("pm:universe", refresh); }, []);
   useEffect(()=>{const refresh=()=>setSkin(planetSkin());window.addEventListener("pm:planet-shop",refresh);return()=>window.removeEventListener("pm:planet-shop",refresh);},[]);
+
+  // 기회 카드를 누르면 그 갈림길이 채워진 채로 시뮬레이션이 열린다 —
+  // 다시 타이핑하게 하면 '길을 내밀었다'는 의미가 없다. 영역도 그 행성으로 넘겨
+  // 결과 시나리오가 원래 행성에 다시 쌓이게 한다.
+  function pickOpportunity(item) {
+    if (!planet) return;
+    setChoices({ a: item.choiceA, b: item.choiceB });
+    setScenarioTexts({ a: item.why || "", b: "" });
+    setScenarioDomains({ a: [planet.key], b: [planet.key] });
+    setPlanet(null);
+    navigate("/input");
+  }
 
   const allGroups = useMemo(() => adaptiveGroups(null, state), [state]);
   const selectedGroups = useMemo(() => planet ? adaptiveGroups(planet.key, state) : allGroups, [planet, state, allGroups]);
@@ -106,7 +120,7 @@ export default function MyUniverseV2() {
       </div>
       <p className="pointer-events-none absolute bottom-5 left-1/2 z-20 -translate-x-1/2 text-[10px] text-white/40">행성을 클릭해 영역별 미래를 비교해보세요 · 드래그 회전 · 휠/핀치 확대</p>
 
-      {planet && !future && <PlanetModal planet={planet} state={state} groups={futureGroups} scenarios={scenariosByPlanet(planet.key, state)} onClose={() => setPlanet(null)} onSimulate={() => navigate("/input")} onArchive={() => navigate("/archive")} />}
+      {planet && !future && <PlanetModal planet={planet} state={state} groups={futureGroups} scenarios={scenariosByPlanet(planet.key, state)} onClose={() => setPlanet(null)} onSimulate={() => navigate("/input")} onArchive={() => navigate("/archive")} onOpportunity={pickOpportunity} />}
       {future && <FutureScenarioPanel planet={planet} future={future} onClose={()=>setFuture(null)} onCompare={()=>navigate("/input")}/>} 
     </div>
   );
@@ -222,13 +236,139 @@ function DomainRecords({ planet, state, entries, recent }) {
 // 행성 하나에 쌓인 셋(그 영역 일기 · 그 영역에서 돌린 시뮬레이션 · 저장한 우주의 회고)을
 // 한 번에 읽어 "이대로 가면 N년 뒤" 를 서사로 받아온다. 예측 수치가 아니라 기록에서
 // 끌어온 이야기라, 화면에도 그대로 밝힌다.
-const YEAR_CHOICES = [1, 3, 5, 10];
+// ── 아직 안 가본 길 ──────────────────────────────────────────
+// 이 서비스가 하는 일은 하나를 맞히는 게 아니라 놓치고 있던 선택지를 여러 개 보이게
+// 하는 것이다. 기록을 읽어 아직 저울에 올려본 적 없는 갈림길을 내밀고, 누르면
+// 그 두 선택지가 채워진 채로 시뮬레이션이 열린다.
+const EFFORT_COLOR = {
+  "지금 바로": "#5DCAA5",
+  "몇 달 준비": "#EDA100",
+  "길게 준비": "#8FB4F0",
+};
+
+function Opportunities({ planet, state, onPick }) {
+  const mat = useMemo(() => futureMaterials(planet.key, state), [planet.key, state]);
+  const [found, setFound] = useState(() => getCachedOpportunities(planet.key));
+  const [busy, setBusy] = useState(false);
+
+  async function scan() {
+    setBusy(true);
+    try {
+      setFound(await scanOpportunities(planet, { speech: loadSpeech(), state }));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const stale = found?.ok && found.nRecords != null && mat.total > found.nRecords;
+
+  return (
+    <div className="mt-4 rounded-[18px] border border-[#5DCAA5]/25 bg-[#5DCAA5]/[.06] p-4">
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] font-bold">아직 안 가본 길</p>
+        {found?.ok && <span className="text-[9.5px] text-[#7FD9BB]">{found.items.length}개</span>}
+      </div>
+      <p className="mt-1 text-[9.5px] leading-relaxed text-mut">
+        아는 두 갈래 사이에서만 고민하지 않도록, 기록에서 다른 길을 찾아봐요.
+      </p>
+
+      {!mat.ready ? (
+        <p className="mt-2 text-[10px] leading-relaxed text-mut">
+          이 영역 일기가 3개는 모여야 길을 찾을 수 있어요. 지금 {mat.total}개예요.
+        </p>
+      ) : (
+        <>
+          {found?.ok && (
+            <div className="mt-3 space-y-2">
+              {found.items.map((it, i) => (
+                <button
+                  key={i}
+                  onClick={() => onPick(it)}
+                  className="tap w-full rounded-xl border border-white/[.07] bg-black/25 p-3 text-left hover:border-[#5DCAA5]/40"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-[11px] font-semibold text-ink">{it.title}</p>
+                    {it.effort && (
+                      <span
+                        className="shrink-0 rounded-full px-2 py-0.5 text-[8.5px]"
+                        style={{
+                          color: EFFORT_COLOR[it.effort] || "#9FB0CE",
+                          background: `${EFFORT_COLOR[it.effort] || "#9FB0CE"}1A`,
+                        }}
+                      >
+                        {it.effort}
+                      </span>
+                    )}
+                  </div>
+                  {it.why && <p className="mt-1 text-[10px] leading-relaxed text-sub">{it.why}</p>}
+                  <p className="mt-1.5 text-[9.5px] text-[#7FD9BB]">
+                    {it.choiceA} <span className="text-mut">vs</span> {it.choiceB}
+                  </p>
+                  {it.first && (
+                    <p className="mt-1 text-[9px] leading-relaxed text-mut">첫 걸음 · {it.first}</p>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+          {found && !found.ok && found.reason && (
+            <p className="mt-3 text-[10px] leading-relaxed text-mut">{found.reason}</p>
+          )}
+
+          <button
+            onClick={scan}
+            disabled={busy}
+            className={`tap mt-3 w-full rounded-xl text-[12px] font-bold ${
+              busy ? "bg-[#1E2740] text-mut" : "bg-[#3E9C7F] text-white"
+            }`}
+          >
+            {busy ? "기록에서 길을 찾는 중…" : found?.ok ? "다시 찾기" : "이 영역의 길 찾기"}
+          </button>
+          {stale && (
+            <p className="mt-1.5 text-[9px] text-[#EDA100]">
+              길을 찾은 뒤 기록이 {mat.total - found.nRecords}개 늘었어요. 다시 찾으면 반영돼요.
+            </p>
+          )}
+          <p className="mt-2 text-[8.5px] leading-relaxed text-mut">
+            기록에 있는 흐름에서만 끌어온 제안이에요. 눌러서 바로 비교해볼 수 있어요.
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
+// 관측 거리 — 멀리 보려면 더 개척해야 한다. 쌓인 게 늘수록 먼 해가 열린다.
+// 기록이 곧 망원경이고, 회고(선택하고 돌아와 적은 것)가 가장 멀리 보게 해준다.
+const YEAR_TIERS = [
+  { years: 1, need: { records: 3 }, how: "일기 3개" },
+  { years: 3, need: { records: 10 }, how: "일기 10개" },
+  { years: 5, need: { records: 10, sims: 1 }, how: "일기 10개 + 시뮬레이션 1번" },
+  { years: 10, need: { records: 10, sims: 1, reflections: 1 }, how: "거기에 회고 1개" },
+];
+
+function tierState(tier, mat) {
+  const have = { records: mat.total, sims: mat.sims.length, reflections: mat.reflections };
+  const missing = [];
+  if (have.records < (tier.need.records || 0)) {
+    missing.push(`일기 ${tier.need.records - have.records}개`);
+  }
+  if (have.sims < (tier.need.sims || 0)) missing.push("시뮬레이션 1번");
+  if (have.reflections < (tier.need.reflections || 0)) missing.push("회고 1개");
+  return { open: missing.length === 0, missing };
+}
 
 function FutureYears({ planet, state }) {
-  const [years, setYears] = useState(3);
-  const [busy, setBusy] = useState(false);
-  const [story, setStory] = useState(() => getCachedFuture(planet.key, 3));
   const mat = useMemo(() => futureMaterials(planet.key, state), [planet.key, state]);
+  const tiers = useMemo(() => YEAR_TIERS.map((t) => ({ ...t, ...tierState(t, mat) })), [mat]);
+  const furthest = useMemo(() => {
+    const open = tiers.filter((t) => t.open);
+    return open.length ? open[open.length - 1].years : null;
+  }, [tiers]);
+
+  const [years, setYears] = useState(() => furthest || 1);
+  const [busy, setBusy] = useState(false);
+  const [story, setStory] = useState(() => (furthest ? getCachedFuture(planet.key, furthest) : null));
 
   // 햇수를 바꾸면 그 햇수로 써둔 이야기가 있으면 꺼내고, 없으면 비운다.
   function pickYears(y) {
@@ -246,37 +386,52 @@ function FutureYears({ planet, state }) {
   }
 
   // 새 기록이 쌓였으면 다시 쓸 만하다고 알려준다(이야기는 쓴 시점에 묶여 있다).
-  const stale = story?.ok && story.nRecords != null && mat.records.length > story.nRecords;
+  const stale = story?.ok && story.nRecords != null && mat.total > story.nRecords;
 
   return (
     <div className="mt-4 rounded-[18px] border border-[#4E7FD9]/25 bg-[#4E7FD9]/[.07] p-4">
       <div className="flex items-center justify-between">
         <p className="text-[11px] font-bold">이 영역의 N년 뒤</p>
         <span className="text-[9.5px] text-[#8FB4F0]">
-          일기 {mat.records.length}개{mat.sims.length ? ` · 시뮬 ${mat.sims.length}개` : ""}
+          일기 {mat.total}개{mat.sims.length ? ` · 시뮬 ${mat.sims.length}개` : ""}
           {mat.reflections ? ` · 회고 ${mat.reflections}개` : ""}
         </span>
       </div>
 
-      {!mat.ready ? (
+      {!furthest ? (
         <p className="mt-2 text-[10px] leading-relaxed text-mut">
-          이 영역 일기가 3개는 모여야 이야기를 쓸 수 있어요. 지금 {mat.records.length}개예요.
+          이 영역 일기가 3개는 모여야 1년 뒤가 보여요. 지금 {mat.total}개예요.
         </p>
       ) : (
         <>
+          {/* 잠긴 해는 눌러도 안 열리고, 무엇을 더 쌓아야 열리는지만 알려준다. */}
           <div className="mt-3 grid grid-cols-4 gap-1.5">
-            {YEAR_CHOICES.map((y) => (
+            {tiers.map((t) => (
               <button
-                key={y}
-                onClick={() => pickYears(y)}
+                key={t.years}
+                onClick={() => t.open && pickYears(t.years)}
+                disabled={!t.open}
+                title={t.open ? undefined : `${t.missing.join(" + ")} 더 모으면 열려요`}
                 className={`tap rounded-xl border py-2 text-[10px] font-semibold ${
-                  years === y ? "border-[#4E7FD9] bg-[#4E7FD9]/20 text-[#B6D0FA]" : "border-white/[.07] text-mut"
+                  !t.open
+                    ? "border-white/[.05] text-[#4A5573]"
+                    : years === t.years
+                      ? "border-[#4E7FD9] bg-[#4E7FD9]/20 text-[#B6D0FA]"
+                      : "border-white/[.07] text-mut"
                 }`}
               >
-                {y}년 뒤
+                {t.open ? `${t.years}년 뒤` : `🔒 ${t.years}년`}
               </button>
             ))}
           </div>
+          {tiers.some((t) => !t.open) && (
+            <p className="mt-1.5 text-[9px] leading-relaxed text-mut">
+              {(() => {
+                const next = tiers.find((t) => !t.open);
+                return `${next.missing.join(" + ")} 더 쌓이면 ${next.years}년 뒤까지 보여요 — 멀리 보려면 더 개척해야 해요.`;
+              })()}
+            </p>
+          )}
 
           {story?.ok ? (
             <div className="mt-3 space-y-2.5">
@@ -322,7 +477,7 @@ function FutureYears({ planet, state }) {
           </button>
           {stale && (
             <p className="mt-1.5 text-[9px] text-[#EDA100]">
-              이야기를 쓴 뒤 기록이 {mat.records.length - story.nRecords}개 늘었어요. 다시 쓰면 반영돼요.
+              이야기를 쓴 뒤 기록이 {mat.total - story.nRecords}개 늘었어요. 다시 쓰면 반영돼요.
             </p>
           )}
           <p className="mt-2 text-[8.5px] leading-relaxed text-mut">
@@ -334,7 +489,7 @@ function FutureYears({ planet, state }) {
   );
 }
 
-function PlanetModal({ planet, state, groups, scenarios, onClose, onSimulate, onArchive }) {
+function PlanetModal({ planet, state, groups, scenarios, onClose, onSimulate, onArchive, onOpportunity }) {
   const entries = planetEntries(state, planet.key), recent = entries.slice(-3).reverse();
   const futures = [...(scenarios || [])].reverse();
   return <div className="absolute inset-y-5 right-5 z-40 w-[min(430px,calc(100%-40px))] overflow-y-auto rounded-[24px] border border-white/10 bg-[#09111F]/94 p-5 shadow-[0_30px_90px_rgba(0,0,0,.6)] backdrop-blur-xl"><div>
@@ -348,6 +503,8 @@ function PlanetModal({ planet, state, groups, scenarios, onClose, onSimulate, on
     {/* 이 영역의 일기 분석 — 행성이 시나리오만 담으면 '내 기록'과 끊긴다.
         같은 영역으로 분류된 일기의 흐름·감정·대표 기록을 여기서 보여준다. */}
     <DomainRecords planet={planet} state={state} entries={entries} recent={recent} />
+    {/* 기록에서 아직 안 가본 길을 찾아 내민다 — 누르면 그 갈림길로 시뮬레이션이 열린다. */}
+    <Opportunities planet={planet} state={state} onPick={onOpportunity} />
     {/* 과거(일기)와 미래(시뮬)가 한 행성에서 만났으니, 그 둘을 이어 'N년 뒤'를 쓴다. */}
     <FutureYears planet={planet} state={state} />
 

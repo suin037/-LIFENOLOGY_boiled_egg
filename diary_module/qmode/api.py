@@ -991,6 +991,24 @@ def future_scenario(req: FutureReq):
                        analysis=req.analysis, sims=req.sims, speech=req.speech)
 
 
+class OpportunityReq(BaseModel):
+    """그 영역에서 아직 안 가본 길. 이미 비교한 갈림길(sims)은 빼고 찾는다."""
+    domain: Optional[str] = None
+    label: str = "이 영역"
+    records: list[dict] = []
+    analysis: Optional[dict] = None
+    sims: list[dict] = []
+    speech: Optional[str] = None
+
+
+@app.post("/opportunity/scan")
+def opportunity_scan(req: OpportunityReq):
+    """일기를 읽고 아직 저울에 올려본 적 없는 갈림길 2~4개 — 그대로 시뮬레이션 입력이 된다."""
+    from qmode import opportunity as OP
+    return OP.scan(req.label or "이 영역", req.records,
+                   analysis=req.analysis, sims=req.sims, speech=req.speech)
+
+
 class ComfortReq(BaseModel):
     entries: list[dict] = []          # 그 주 기록 [{date, text, mood, emotion}]
     persona: Optional[str] = "lumi"
