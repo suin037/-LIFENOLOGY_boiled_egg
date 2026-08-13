@@ -432,6 +432,112 @@ def third_path(req: ThirdPathReq):
         return {"ok": False, "reason": str(e)}
 
 
+# ── 기업 분석 — OpenDART 공시·재무 + AI 요약 ───────────────────────────
+# 공고 분석이 뽑은 회사명으로 바로 이어붙는다. 예측 수치가 '비슷한 사람들'을 말한다면
+# 이건 '내가 가려는 그 회사'의 사실(공시·재무)을 말한다. 숫자는 지어내지 않는다.
+class CompanyAnalyzeReq(BaseModel):
+    name: str = ""                       # 회사명(공고에서 뽑힌 것)
+    corp_code: Optional[str] = None      # 이미 알고 있으면 바로 사용
+    persona_block: Optional[str] = None
+    uid: Optional[str] = None
+
+
+@app.get("/company/search")
+def company_search(name: str = ""):
+    """기업명 → DART 고유번호 후보. 상장사를 앞에 둔다."""
+    from qmode import dart
+    if not dart.api_key():
+        return {"ok": False, "reason": "no_dart_key"}
+    try:
+        return {"ok": True, "items": dart.find_company(name)}
+    except Exception as e:      # noqa: BLE001
+        return {"ok": False, "reason": str(e)}
+
+
+@app.get("/company/summary")
+def company_summary(name: str = "", corp_code: str = ""):
+    """재무 5개년 + 최근 공시 — 근거 자료 그대로."""
+    from qmode import dart
+    if not dart.api_key():
+        return {"ok": False, "reason": "no_dart_key"}
+    try:
+        code, matched = corp_code, name
+        if not code:
+            hits = dart.find_company(name)
+            if not hits:
+                return {"ok": False, "reason": "not_found", "name": name}
+            code, matched = hits[0]["corp_code"], hits[0]["name"]
+        return {"ok": True, "name": matched, "corp_code": code,
+                "financials": dart.financials(code),
+                "disclosures": dart.disclosures(code)}
+    except Exception as e:      # noqa: BLE001
+        return {"ok": False, "reason": str(e)}
+
+
+@app.post("/company/analyze")
+def company_analyze(req: CompanyAnalyzeReq):
+    """재무 추이 + 공시 제목 → 지원자 관점 요약(사업 흐름·최근 집중·지원동기 포인트)."""
+    import os
+    from qmode import dart
+    if not dart.api_key():
+        return {"ok": False, "reason": "no_dart_key"}
+    try:
+        code, matched = req.corp_code, req.name
+        if not code:
+            hits = dart.find_company(req.name)
+            if not hits:
+                return {"ok": False, "reason": "not_found", "name": req.name}
+            code, matched = hits[0]["corp_code"], hits[0]["name"]
+        fin = dart.financials(code)
+        disc = dart.disclosures(code)
+    except Exception as e:      # noqa: BLE001
+        return {"ok": False, "reason": str(e)}
+
+    R1._load_dotenv()
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        return {"ok": True, "name": matched, "corp_code": code,
+                "financials": fin, "disclosures": disc, "report": None}
+
+    def _won(v):
+        if v is None:
+            return "—"
+        if abs(v) >= 1_0000_0000_0000:
+            return f"{v / 1_0000_0000_0000:.1f}조원"
+        return f"{v / 1_0000_0000:.0f}억원"
+
+    fin_lines = "\n".join(
+        f"- {r['year']}년: 매출 {_won(r.get('revenue'))} / 영업이익 {_won(r.get('operating'))} / 순이익 {_won(r.get('net'))}"
+        for r in fin) or "(재무 데이터 없음)"
+    disc_lines = "\n".join(f"- {d['date']} {d['title']}" for d in disc[:8]) or "(최근 공시 없음)"
+    pb = req.persona_block or (_fetch_persona(req.uid) if req.uid else None)
+
+    prompt = (
+        f"[기업] {matched}\n[공시 재무(OpenDART)]\n{fin_lines}\n\n[최근 공시]\n{disc_lines}\n\n"
+        + (f"{pb}\n\n" if pb else "")
+        + "취업·이직을 준비하는 사람이 이 회사를 이해하도록 정리하라.\n"
+          "규칙: 위에 준 수치·공시 제목 밖의 사실(경쟁사 점유율, 조직문화, 합격률 등)은 "
+          "절대 지어내지 마라. 모르면 모른다고 하라. 주가·투자 판단은 하지 마라.\n\n"
+          '반드시 이 JSON만:\n'
+          '{"trend":"재무 흐름 2~3문장(무엇이 늘고 줄었는지, 준 숫자만 근거로)",'
+          '"focus":"최근 공시에서 읽히는 회사의 관심사 1~2문장(공시 제목 범위 안에서)",'
+          '"talking_points":["지원동기·면접에서 쓸 수 있는 관점 3개"]}\n'
+          "한국어만, 한자·설명·인사말 없이 JSON 하나만."
+    )
+    try:
+        from anthropic import Anthropic
+        resp = Anthropic().messages.create(
+            model="claude-sonnet-5", max_tokens=900, thinking={"type": "disabled"},
+            messages=[{"role": "user", "content": prompt}])
+        txt = "".join(b.text for b in resp.content if b.type == "text").strip()
+        s, e = txt.find("{"), txt.rfind("}")
+        report = json.loads(txt[s:e + 1]) if s >= 0 and e > s else None
+    except Exception:      # noqa: BLE001
+        report = None
+
+    return {"ok": True, "name": matched, "corp_code": code,
+            "financials": fin, "disclosures": disc, "report": report}
+
+
 # ── 커리어넷 직업가치관검사 — 성향을 '검증된 척도'로 한 겹 더 ──────────
 # 우리 온보딩 8카드는 자체 제작이라 타당성 근거가 약하다. 커리어넷(한국직업능력연구원)
 # 직업가치관검사(대학/일반, seq 6)는 28문항 = 8개 가치의 모든 쌍(8C2=28) 완전비교라

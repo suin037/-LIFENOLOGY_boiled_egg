@@ -6,6 +6,7 @@ import { detectEmotions } from "../data/DiaryContext.jsx";
 import { Caption } from "../components/ui.jsx";
 import { analyzeJobPosting, isPostingReady, extractFromUrl, extractFromPdf } from "../data/jobAnalysis.js";
 import ValueDeepTest from "../components/ValueDeepTest.jsx";
+import CompanyAnalysis from "../components/CompanyAnalysis.jsx";
 import Mascot from "../components/Mascot.jsx";
 import { BriefcaseBusiness, GraduationCap, Sprout, Wallet, HeartPulse, House, Users, Leaf, Compass, ArrowRight } from "lucide-react";
 
@@ -426,6 +427,9 @@ function JobPostingAnalysis({ choice, profile, setProfile, onAnalyzed }) {
               ))}
             </JobBlock>
           )}
+
+          {/* 공고에서 회사명이 잡혔으면 그 회사의 공시·재무까지 이어서 본다. */}
+          {result.company && <CompanyAnalysis company={result.company} />}
 
           {/* 세부 질문 — 진로 질문을 한 직후라 검사 동기가 가장 높은 자리. */}
           {deepOpen ? (

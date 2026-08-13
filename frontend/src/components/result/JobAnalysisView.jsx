@@ -1,4 +1,5 @@
 import { useResult } from "../../data/ResultContext.jsx";
+import CompanyAnalysis from "../CompanyAnalysis.jsx";
 
 // 결과 화면의 '공고 분석' 탭 — 입력에서 분석한 공고를 예측 수치와 나란히 다시 본다.
 // 예측은 '비슷한 사람들이 어떻게 됐나'를, 이 탭은 '내가 가려는 그 자리는 어떤가'를 말한다.
@@ -20,6 +21,8 @@ export default function JobAnalysisView() {
           </p>
         )}
       </div>
+
+      {j.company && <CompanyAnalysis company={j.company} />}
 
       {j.requirements?.length > 0 && (
         <Block title="요구 역량">
