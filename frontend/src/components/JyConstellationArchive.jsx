@@ -3,6 +3,7 @@ import { zodiacOf, zodiacPoints, zodiacLines, zodiacGhost } from "../data/zodiac
 
 const COL=["#E24B4A","#D85A30","#EDA100","#5DCAA5","#378ADD"];
 const PASTEL=["#F0A3A2","#F2B48E","#F7DCA0","#AEE6CF","#A8CDF5"];
+const CALM="#C7B5F2";   // 평소 별빛 — 연보라. 기분 색은 '자세히 보기'에서만 드러난다.
 // 캘린더는 모달(최대 820px)이라 넓게 써도 된다. 별자리끼리 겹치지 않게 간격을 벌렸다.
 const W=470,H=300,CX=W/2,CY=H/2,ZOOM_MONTH=2.2,MINI_R_MIN=16,MINI_R_SPREAD=60;
 const ZR=16;   // 별자리 반지름 — 간격(STEP)보다 작아야 이웃과 안 겹친다
@@ -55,7 +56,9 @@ export default function JyConstellationArchive({monthGroups,weeksByMonth,focusMo
           {mo.ghost.dots.map((p,pi)=><circle key={`gd${pi}`} cx={mo.cx+p[0]} cy={mo.cy+p[1]} r=".9" fill="#9FB0CE" opacity=".2"/>)}
         </g>}
         {!active&&mo.zLines.map((ln,li)=><line key={`z${li}`} x1={mo.cx+ln[0]} y1={mo.cy+ln[1]} x2={mo.cx+ln[2]} y2={mo.cy+ln[3]} stroke="#9FB0CE" strokeWidth=".4" strokeOpacity=".38" style={{transition:"opacity .4s"}}/>)}
-        {mo.stars.map((s)=><g key={s.key} style={{transform:active?`translate(${s.zoomX}px,${s.zoomY}px)`:`translate(${s.blobX}px,${s.blobY}px)`,transition:"transform .8s cubic-bezier(.25,.9,.3,1)"}}><circle r={s.r+1.6} fill={active?s.c:s.p} opacity=".2" style={{transition:"fill .5s"}}/><circle r={s.r} fill={active?s.c:s.p} style={{transition:"fill .5s"}}/><circle r={s.r*.45} fill="#fff" opacity={active?0:.8} style={{transition:"opacity .5s"}}/></g>)}
+        {/* 평소엔 별을 연보라 하나로 — 12달이 한눈에 차분히 보인다.
+            달을 눌러 자세히 볼 때만 그날 기분 색으로 갈라진다(색이 의미를 갖는 순간). */}
+        {mo.stars.map((s)=><g key={s.key} style={{transform:active?`translate(${s.zoomX}px,${s.zoomY}px)`:`translate(${s.blobX}px,${s.blobY}px)`,transition:"transform .8s cubic-bezier(.25,.9,.3,1)"}}><circle r={s.r+1.6} fill={active?s.c:CALM} opacity=".2" style={{transition:"fill .5s"}}/><circle r={s.r} fill={active?s.c:CALM} style={{transition:"fill .5s"}}/><circle r={s.r*.45} fill="#fff" opacity={active?0:.8} style={{transition:"opacity .5s"}}/></g>)}
         {!active&&<g onClick={()=>onMonthPick(mo.m.monthKey)} style={{cursor:"pointer"}}>
           {mo.isNow&&<circle cx={mo.cx} cy={mo.cy} r={ZR+5} fill="none" stroke="#A8CDF5" strokeOpacity=".55"/>}
           <circle cx={mo.cx} cy={mo.cy} r={ZR+4} fill="transparent"/>
@@ -65,7 +68,13 @@ export default function JyConstellationArchive({monthGroups,weeksByMonth,focusMo
       </g>})}
     </g>
     {/* 연·월 제목은 SVG 밖(HTML)에서 넘김 버튼과 함께 그린다 — 크기 조절과 겹침 관리가 쉽다. */}
-    {focused&&<text x={CX} y="30" textAnchor="middle" fill="#9FB0CE" fontSize="6" pointerEvents="none">주간 별자리를 눌러 기록을 확인하세요</text>}
+    {focused&&<g pointerEvents="none">
+      <text x={CX} y="24" textAnchor="middle" fill="#9FB0CE" fontSize="6">주간 별자리를 눌러 기록을 확인하세요</text>
+      {/* 색이 드러나는 순간에만 그 뜻을 함께 — 색 = 그날 기분. */}
+      <text x={CX-46} y="38" textAnchor="end" fill="#7A8AA8" fontSize="5.4">힘듦</text>
+      {COL.map((c,i)=><circle key={c} cx={CX-38+i*10} cy="36" r="2.6" fill={c}/>)}
+      <text x={CX+46} y="38" textAnchor="start" fill="#7A8AA8" fontSize="5.4">좋음</text>
+    </g>}
   </svg></div>;
 }
 function short(value){const [,m,d]=String(value||"").split("-");return m&&d?`${Number(m)}.${Number(d)}`:value;}
