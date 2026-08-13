@@ -99,11 +99,95 @@ function MonthCluster({item,onClick}) {
   return <button disabled={!item.count} onClick={onClick} className="tap w-full text-center disabled:opacity-25"><svg viewBox="0 0 100 72" className="h-[58px] w-full overflow-visible">{Array.from({length:dots},(_,i)=>{const angle=i*2.399;const radius=7+Math.sqrt(i)*7;const x=50+Math.cos(angle)*radius,y=36+Math.sin(angle)*radius*.68;const warm=item.avg!=null&&item.avg<3;return <g key={i}><circle cx={x} cy={y} r={8} fill={warm?"#D7774F":"#62CDBC"} opacity=".09"/><circle cx={x} cy={y} r={item.count>15?3.8:3} fill={warm?"#F0A45E":"#A6E2D8"} opacity={.68+(i/dots)*.28}/></g>;})}</svg><div className="-mt-1 text-[10px] font-semibold text-sub">{item.index}월 <span className="text-[8px] text-mut">{item.count}일</span></div></button>;
 }
 
+const MOOD_COL=["#E24B4A","#D85A30","#EDA100","#5DCAA5","#378ADD"];
+const DAY_KO=["월","화","수","목","금","토","일"];
+
+// 주간 리포트 — 숫자 나열 대신 '그 주가 어떻게 흘렀는지'가 한눈에 보이게.
 function WeeklyReport({group,onClose}) {
-  const stars=group.stars.filter((item)=>!item.empty),moods=stars.map((item)=>item.mood).filter(Boolean);
-  const avg=moods.length?(moods.reduce((a,b)=>a+b,0)/moods.length).toFixed(1):"-";
-  const keywords=[...new Set(stars.map((item)=>item.keyword||item.emotion).filter(Boolean))].slice(0,5);
-  return <div className="fixed inset-0 z-[100] flex items-end justify-center bg-[#02040B]/75 p-4 backdrop-blur-sm md:items-center" onClick={onClose}><div className="w-full max-w-[680px] rounded-[24px] border border-white/10 bg-[#0C1424] p-5" onClick={(event)=>event.stopPropagation()}><div className="flex justify-between"><div><p className="text-[10px] text-[#A88BE8]">WEEKLY REPORT</p><h3 className="mt-1 text-[18px] font-bold">{group.weekStart} — {group.weekEnd}</h3></div><button onClick={onClose} className="tap flex h-9 w-9 items-center justify-center rounded-full"><X size={18}/></button></div><div className="mt-5 grid grid-cols-3 gap-2">{[["기록",`${stars.length}/7일`],["평균 기분",avg],["반복 키워드",keywords.length]].map(([label,value])=><div key={label} className="rounded-xl bg-white/[.04] p-3 text-center"><b className="text-[18px] text-[#BBA4ED]">{value}</b><p className="mt-1 text-[9px] text-mut">{label}</p></div>)}</div><div className="mt-4 rounded-xl border border-white/[.06] bg-black/15 p-4"><p className="text-[10px] font-bold text-sub">이번 주 요약</p><p className="mt-2 text-[12px] leading-relaxed text-sub">{stars.length?`${stars.length}일의 기록에서 평균 기분은 ${avg}점이었어요.${keywords.length?` 반복된 키워드는 ${keywords.join(", ")}입니다.`:""}`:"이 주에는 기록이 없습니다."}</p></div></div></div>;
+  const filled=group.stars.filter((item)=>!item.empty);
+  const moods=filled.map((item)=>item.mood).filter(Boolean);
+  const avg=moods.length?(moods.reduce((a,b)=>a+b,0)/moods.length):null;
+  const keywords=[...new Set(filled.map((item)=>item.keyword||item.emotion).filter(Boolean))].slice(0,6);
+  // 전반 대비 후반 — 그 주가 나아졌는지 가라앉았는지.
+  const half=Math.floor(moods.length/2);
+  const trend=moods.length>=4
+    ? (moods.slice(half).reduce((a,b)=>a+b,0)/(moods.length-half))-(moods.slice(0,half).reduce((a,b)=>a+b,0)/half)
+    : null;
+  const trendTxt=trend==null?null:trend>0.3?"뒤로 갈수록 나아진 주":trend<-0.3?"뒤로 갈수록 가라앉은 주":"큰 기복 없이 고른 주";
+  const best=filled.filter((s)=>s.mood).sort((a,b)=>b.mood-a.mood)[0];
+  const hard=filled.filter((s)=>s.mood).sort((a,b)=>a.mood-b.mood)[0];
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-end justify-center bg-[#02040B]/75 p-4 backdrop-blur-sm md:items-center" onClick={onClose}>
+      <div className="max-h-[88dvh] w-full max-w-[560px] overflow-y-auto rounded-[26px] border border-white/10 bg-[#0C1424] p-5 shadow-[0_24px_70px_rgba(0,0,0,.5)]" onClick={(event)=>event.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[10px] tracking-[.14em] text-[#A88BE8]">WEEKLY REPORT</p>
+            <h3 className="mt-1 text-[19px] font-bold leading-tight">{shortDate(group.weekStart)} ~ {shortDate(group.weekEnd)}</h3>
+            {trendTxt&&<p className="mt-1 text-[11px] text-[#C7B5F2]">{trendTxt}</p>}
+          </div>
+          <button onClick={onClose} className="tap flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[.07] text-sub"><X size={17}/></button>
+        </div>
+
+        {/* 7일 흐름 — 요일별 막대. 색=기분, 빈 날은 점선. */}
+        <div className="mt-4 flex items-end gap-1.5">
+          {group.stars.map((s,i)=>{
+            const m=s.empty?null:s.mood;
+            return (
+              <div key={i} className="flex flex-1 flex-col items-center gap-1">
+                <div className="flex h-[54px] w-full items-end">
+                  {m ? (
+                    <div className="w-full rounded-t-[4px]" style={{height:`${(m/5)*100}%`,background:MOOD_COL[m-1],opacity:.85}}/>
+                  ) : (
+                    <div className="h-[6px] w-full rounded border border-dashed border-white/15"/>
+                  )}
+                </div>
+                <span className={`text-[9px] ${m?"text-sub":"text-mut"}`}>{DAY_KO[i]}</span>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          {[["기록한 날",`${filled.length}일`],["기분 평균",avg?avg.toFixed(1):"—"],["감정 키워드",`${keywords.length}개`]].map(([label,value])=>(
+            <div key={label} className="rounded-xl bg-white/[.04] p-3 text-center">
+              <b className="text-[17px] text-[#BBA4ED]">{value}</b>
+              <p className="mt-0.5 text-[9px] text-mut">{label}</p>
+            </div>
+          ))}
+        </div>
+
+        {keywords.length>0&&(
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {keywords.map((k)=>(
+              <span key={k} className="rounded-full border border-[#8B6CCF]/30 bg-[#8B6CCF]/[.1] px-2.5 py-1 text-[10px] text-[#C7B5F2]">{k}</span>
+            ))}
+          </div>
+        )}
+
+        {/* 그 주의 양 끝 — 실제 그날 기록 한 줄씩. 숫자보다 이게 기억을 되살린다. */}
+        <div className="mt-3 space-y-2">
+          {best&&(best.text||best.note)&&(
+            <div className="rounded-xl border border-[#5DCAA5]/20 bg-[#5DCAA5]/[.06] px-3 py-2.5">
+              <p className="text-[9.5px] text-[#5DCAA5]">가장 좋았던 날 · {shortDate(best.date)}</p>
+              <p className="mt-1 text-[11.5px] leading-relaxed text-sub">“{best.text||best.note}”</p>
+            </div>
+          )}
+          {hard&&hard.date!==best?.date&&(hard.text||hard.note)&&(
+            <div className="rounded-xl border border-[#F0736F]/20 bg-[#F0736F]/[.06] px-3 py-2.5">
+              <p className="text-[9.5px] text-[#F0736F]">가장 힘들었던 날 · {shortDate(hard.date)}</p>
+              <p className="mt-1 text-[11.5px] leading-relaxed text-sub">“{hard.text||hard.note}”</p>
+            </div>
+          )}
+        </div>
+
+        {filled.length===0&&<p className="mt-4 text-center text-[12px] text-mut">이 주에는 기록이 없습니다.</p>}
+        <p className="mt-4 text-[9px] leading-relaxed text-mut">
+          기록한 날들의 기분을 정리한 것이며, 성격 진단이나 미래 예측이 아닙니다.
+        </p>
+      </div>
+    </div>
+  );
 }
 
 function shortDate(value) { const parts=String(value||"").split("-"); return parts.length===3?`${Number(parts[1])}.${Number(parts[2])}`:value; }

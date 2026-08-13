@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { zodiacOf, zodiacPoints, zodiacLines, zodiacGhost } from "../data/zodiac.js";
+import { zodiacOf, zodiacPoints, zodiacLines, zodiacDots } from "../data/zodiac.js";
 
 const COL=["#E24B4A","#D85A30","#EDA100","#5DCAA5","#378ADD"];
 const PASTEL=["#F0A3A2","#F2B48E","#F7DCA0","#AEE6CF","#A8CDF5"];
@@ -42,7 +42,7 @@ export default function JyConstellationArchive({monthGroups,weeksByMonth,focusMo
         weekMeta.push({g,wx,wy,verts});
       });
       return {m,num,cx,cy,stars,weekMeta,count:k,zodiac:zodiacOf(num),
-              zLines:zodiacLines(num,k,ZR),ghost:zodiacGhost(num,ZR),
+              zLines:zodiacLines(num,k,ZR),dots:zodiacDots(num,ZR),
               isNow:m.monthKey===now,labelUp:i%2===0};
     });
   },[monthGroups,weeksByMonth]);
@@ -58,9 +58,13 @@ export default function JyConstellationArchive({monthGroups,weeksByMonth,focusMo
         {active&&mo.weekMeta.map((wk)=><g key={wk.g.weekStart} onClick={()=>onWeekOpen(wk.g)} style={{cursor:"pointer",opacity:1,transition:"opacity .5s .45s"}}>{wk.verts.map((v,i)=>{const q=wk.verts[(i+1)%wk.verts.length],solid=v.filled&&q.filled;return <line key={i} x1={v.x} y1={v.y} x2={q.x} y2={q.y} stroke="#9FB0CE" strokeWidth={solid?.35:.28} strokeOpacity={solid?.42:.13} strokeDasharray={solid?undefined:".8 1.4"}/>})}{wk.verts.filter((v)=>!v.filled).map((v,i)=><circle key={`e${i}`} cx={v.x} cy={v.y} r=".7" fill="none" stroke="#39435F" strokeWidth=".3" strokeDasharray=".5 .7" opacity=".6"/>)}<text x={wk.wx} y={wk.wy+14.5} textAnchor="middle" fill="#8895AF" fontSize="4.6">{short(wk.g.weekStart)}~ · {wk.g.stars.filter((s)=>!s.empty).length}일</text><circle cx={wk.wx} cy={wk.wy} r="13" fill="transparent"/></g>)}
         {/* 별자리 밑그림 — 기록이 없어도 그 달의 별자리 형태가 아주 연하게 깔린다.
             내 기록은 이 자리 위에서 하나씩 밝아진다(밑그림=별자리, 밝은 별=내 기록). */}
-        {!active&&<g pointerEvents="none">
-          {mo.ghost.lines.map((ln,li)=><line key={`gl${li}`} x1={mo.cx+ln[0]} y1={mo.cy+ln[1]} x2={mo.cx+ln[2]} y2={mo.cy+ln[3]} stroke="#8B6CCF" strokeWidth=".5" strokeOpacity=".13"/>)}
-          {mo.ghost.dots.map((p,pi)=><circle key={`gd${pi}`} cx={mo.cx+p[0]} cy={mo.cy+p[1]} r=".9" fill="#9FB0CE" opacity=".2"/>)}
+        {!active&&<g pointerEvents="none" shapeRendering="crispEdges">
+          {/* 별자리 밑그림을 도트로 — 선 대신 격자에 스냅한 네모 픽셀로 깔아 픽셀아트처럼. */}
+          {mo.dots.map((d,di)=>{
+            const s=d.big?1.5:1;
+            return <rect key={`dt${di}`} x={mo.cx+d.x-s/2} y={mo.cy+d.y-s/2} width={s} height={s}
+                         fill="#A88BE8" opacity={d.big?.5:.26}/>;
+          })}
         </g>}
         {!active&&mo.zLines.map((ln,li)=><line key={`z${li}`} x1={mo.cx+ln[0]} y1={mo.cy+ln[1]} x2={mo.cx+ln[2]} y2={mo.cy+ln[3]} stroke="#9FB0CE" strokeWidth=".4" strokeOpacity=".38" style={{transition:"opacity .4s"}}/>)}
         {/* 평소엔 별을 연보라 하나로 — 12달이 한눈에 차분히 보인다.
