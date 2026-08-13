@@ -432,6 +432,103 @@ def third_path(req: ThirdPathReq):
         return {"ok": False, "reason": str(e)}
 
 
+# ── 커리어넷 직업가치관검사 — 성향을 '검증된 척도'로 한 겹 더 ──────────
+# 우리 온보딩 8카드는 자체 제작이라 타당성 근거가 약하다. 커리어넷(한국직업능력연구원)
+# 직업가치관검사(대학/일반, seq 6)는 28문항 = 8개 가치의 모든 쌍(8C2=28) 완전비교라
+# 응답만 세면 순위가 떨어진다. 진로 질문을 한 직후에 '세부 질문'으로 권한다.
+CAREERNET_TEST_SEQ = "6"
+_CN_QUESTIONS = "https://www.career.go.kr/inspct/openapi/test/questions"
+_CN_REPORT = "https://www.career.go.kr/inspct/openapi/test/report"
+
+
+def _careernet_key():
+    R1._load_dotenv()
+    import os
+    return os.getenv("CAREERNET_API_KEY")
+
+
+def _cn_get(url, params):
+    import urllib.parse, urllib.request
+    with urllib.request.urlopen(url + "?" + urllib.parse.urlencode(params), timeout=20) as r:
+        return json.loads(r.read().decode("utf-8"))
+
+
+@app.get("/career/value-test")
+def career_value_test():
+    """직업가치관검사 28문항 — 각 문항은 가치 두 개 중 하나 고르기."""
+    key = _careernet_key()
+    if not key:
+        return {"ok": False, "reason": "no_careernet_key"}
+    try:
+        data = _cn_get(_CN_QUESTIONS, {"apikey": key, "q": CAREERNET_TEST_SEQ})
+        items = [
+            {"no": q["qitemNo"],
+             "a": {"name": q["answer01"], "desc": q["answer03"], "score": q["answerScore01"]},
+             "b": {"name": q["answer02"], "desc": q["answer04"], "score": q["answerScore02"]}}
+            for q in data.get("RESULT", [])
+        ]
+        return {"ok": True, "items": items, "n": len(items)}
+    except Exception as e:      # noqa: BLE001
+        return {"ok": False, "reason": str(e)}
+
+
+class ValueAnswerReq(BaseModel):
+    answers: dict = {}          # {문항번호(str|int): "1" | "2"}
+    uid: Optional[str] = None
+
+
+@app.post("/career/value-report")
+def career_value_report(req: ValueAnswerReq):
+    """응답 → 8개 가치 순위(승수 집계) + 커리어넷 공식 리포트 링크.
+
+    28문항이 모든 쌍을 한 번씩 비교하므로, 고른 횟수가 곧 그 가치의 순위다.
+    점수는 우리가 직접 세고(즉시·오프라인), 공식 리포트는 근거 링크로 함께 준다.
+    """
+    key = _careernet_key()
+    if not key:
+        return {"ok": False, "reason": "no_careernet_key"}
+    try:
+        qs = _cn_get(_CN_QUESTIONS, {"apikey": key, "q": CAREERNET_TEST_SEQ}).get("RESULT", [])
+    except Exception as e:      # noqa: BLE001
+        return {"ok": False, "reason": str(e)}
+
+    wins, desc = {}, {}
+    for q in qs:
+        for name, d in ((q["answer01"], q["answer03"]), (q["answer02"], q["answer04"])):
+            wins.setdefault(name, 0)
+            desc.setdefault(name, d)
+        picked = str(req.answers.get(str(q["qitemNo"])) or req.answers.get(q["qitemNo"]) or "")
+        if picked == "1":
+            wins[q["answer01"]] += 1
+        elif picked == "2":
+            wins[q["answer02"]] += 1
+
+    ranking = [{"name": k, "wins": v, "desc": desc.get(k, "")}
+               for k, v in sorted(wins.items(), key=lambda kv: -kv[1])]
+    answered = sum(1 for q in qs
+                   if str(req.answers.get(str(q["qitemNo"])) or req.answers.get(q["qitemNo"]) or ""))
+
+    # 공식 리포트 링크 — 우리 집계가 아니라 커리어넷이 만든 결과를 근거로 함께 제공.
+    report_url = None
+    try:
+        import urllib.request
+        body = json.dumps({
+            "apikey": key, "qestrnSeq": CAREERNET_TEST_SEQ, "trgetSe": "100",
+            "gender": "100", "grade": "4", "startDtm": "1700000000000",
+            "answers": " ".join(f"{q['qitemNo']}={req.answers.get(str(q['qitemNo'])) or req.answers.get(q['qitemNo']) or 1}"
+                                for q in qs),
+        }).encode("utf-8")
+        rq = urllib.request.Request(_CN_REPORT, data=body,
+                                    headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(rq, timeout=20) as r:
+            report_url = (json.loads(r.read().decode("utf-8")).get("RESULT") or {}).get("url")
+    except Exception:      # noqa: BLE001
+        report_url = None
+
+    return {"ok": True, "ranking": ranking, "answered": answered,
+            "total": len(qs), "report_url": report_url}
+
+
 # ── 직무 분석 — 채용 공고 × 내 성향 ────────────────────────────────────
 # 공고에서 요구역량을 뽑는 건 누구나 한다. 우리가 더할 수 있는 건 '이 사람'의
 # 성향·가치순위와 대조해 맞는 지점과 부딪힐 지점을 짚는 것. 그래서 입력에

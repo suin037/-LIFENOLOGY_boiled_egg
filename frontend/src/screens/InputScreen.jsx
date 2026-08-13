@@ -5,6 +5,7 @@ import { LIFE_DOMAINS, classifyChoice, detectLifeDomains, domainLabel, labelOf }
 import { detectEmotions } from "../data/DiaryContext.jsx";
 import { Caption } from "../components/ui.jsx";
 import { analyzeJobPosting, isPostingReady } from "../data/jobAnalysis.js";
+import ValueDeepTest from "../components/ValueDeepTest.jsx";
 import Mascot from "../components/Mascot.jsx";
 import { BriefcaseBusiness, GraduationCap, Sprout, Wallet, HeartPulse, House, Users, Leaf, Compass, ArrowRight } from "lucide-react";
 
@@ -211,7 +212,7 @@ export default function InputScreen() {
 
       {/* 지원하려는 공고가 있으면 붙여넣기 → 요구역량 + 내 성향과의 접점·마찰점.
           공고 수집은 약관 문제가 커서 크롤링 대신 붙여넣기로 받는다. */}
-      <JobPostingAnalysis choice={textA || choices.a} profile={profile} />
+      <JobPostingAnalysis choice={textA || choices.a} profile={profile} setProfile={setProfile} />
 
       <details className="mt-3 rounded-2xl border border-white/10 bg-[#0B1423]/80 px-3.5 py-3">
         <summary className="cursor-pointer text-[11px] font-semibold text-sub">지금 심정도 덧붙이기 · 선택</summary>
@@ -228,12 +229,20 @@ export default function InputScreen() {
 }
 
 // 채용 공고 붙여넣기 → 직무 분석. 요구역량은 공고에서, 접점·마찰점은 내 성향과 대조해서.
-function JobPostingAnalysis({ choice, profile }) {
+function JobPostingAnalysis({ choice, profile, setProfile }) {
   const [posting, setPosting] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const [result, setResult] = useState(null);
+  const [deepOpen, setDeepOpen] = useState(false);
   const ready = isPostingReady(posting);
+  const deepDone = (profile?.career_values || []).length > 0;
+
+  // 검사 결과는 프로필에 남겨 이후 분석·서사가 계속 쓰게 한다.
+  function onDeepDone(data) {
+    setProfile?.((prev) => ({ ...prev, career_values: data.ranking, career_values_report: data.report_url }));
+    setDeepOpen(false);
+  }
 
   async function run() {
     if (!ready || busy) return;
@@ -331,6 +340,38 @@ function JobPostingAnalysis({ choice, profile }) {
                 </li>
               ))}
             </JobBlock>
+          )}
+
+          {/* 세부 질문 — 진로 질문을 한 직후라 검사 동기가 가장 높은 자리. */}
+          {deepOpen ? (
+            <ValueDeepTest onDone={onDeepDone} onClose={() => setDeepOpen(false)} />
+          ) : deepDone ? (
+            <div className="rounded-xl border border-[#8B6CCF]/25 bg-[#8B6CCF]/[.07] px-3 py-2.5">
+              <p className="text-[10px] font-bold text-[#C7B5F2]">직업가치관검사 반영됨</p>
+              <p className="mt-1 text-[11px] leading-relaxed text-sub">
+                {(profile.career_values || []).slice(0, 3).map((v) => v.name).join(" > ")} 순으로 나왔어요.
+                {" "}다시 분석하면 이 결과까지 반영됩니다.
+              </p>
+              <div className="mt-1.5 flex gap-2.5">
+                <button onClick={run} className="tap text-[10px] font-bold text-cyan">다시 분석하기 →</button>
+                {profile.career_values_report && (
+                  <a href={profile.career_values_report} target="_blank" rel="noreferrer" className="tap text-[10px] text-mut">
+                    공식 결과지 보기 ↗
+                  </a>
+                )}
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setDeepOpen(true)}
+              className="tap w-full rounded-xl border border-dashed border-[#8B6CCF]/40 bg-[#8B6CCF]/[.05] px-3 py-2.5 text-left"
+            >
+              <p className="text-[11px] font-bold text-[#C7B5F2]">세부 질문으로 성향 더 정확히 보기</p>
+              <p className="mt-0.5 text-[10px] leading-relaxed text-mut">
+                직업가치관검사 28문항 · 10분 — 두 가치 중 하나씩 고르면 이 분석과 시뮬레이션에 반영돼요.
+              </p>
+            </button>
           )}
 
           <p className="text-[9px] leading-relaxed text-mut">

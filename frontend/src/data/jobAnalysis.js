@@ -5,6 +5,7 @@
 import { buildDisposition } from "./psychQuestions.js";
 import { computeDiarySignals } from "./diarySignals.js";
 import { CARD_BY_ID } from "./valueCards.js";
+import { valueRankingLine } from "./careerNet.js";
 
 const BASE = import.meta.env.VITE_QMODE_BASE || "http://localhost:8000";
 
@@ -17,6 +18,9 @@ function localPersonaBlock(profile) {
     .map((id) => CARD_BY_ID[id]?.label || id);
   if (values.length) lines.push(`가치 순서(중요한 순): ${values.join(" > ")}`);
   if (profile?.mbti && profile.mbti !== "모름") lines.push(`MBTI: ${profile.mbti}`);
+  // 세부 검사를 했다면 검증된 척도가 우선 근거가 된다(커리어넷 직업가치관검사).
+  const cn = valueRankingLine(profile?.career_values);
+  if (cn) lines.push(cn);
 
   try {
     const sig = computeDiarySignals({ windowDays: 28 });
