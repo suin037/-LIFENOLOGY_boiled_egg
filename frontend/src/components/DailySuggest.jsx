@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Sparkles, Search } from "lucide-react";
-import { fetchSuggestion, getTodaySuggestion, suggestMaterials } from "../data/suggestApi.js";
+import { fetchSuggestion, getTodaySuggestion, suggestMaterials, fetchTracks, getTodayTracks } from "../data/suggestApi.js";
 import { loadSpeech } from "../data/dispositionApi.js";
 
 // 오늘 해볼 만한 것 — 최근 2주 기록을 보고 작게 권한다.
@@ -14,8 +14,16 @@ const KIND_STYLE = {
   meet: { color: "#F0918D", icon: "🫂" },
 };
 
+// 기분을 어느 쪽으로 옮기려는지 — 가라앉은 날 갑자기 신나는 쪽으로 밀지 않는다.
+const SHIFT_LABEL = {
+  stay: "지금 마음 곁에",
+  lift: "천천히 끌어올리기",
+  energize: "기운 내는 쪽으로",
+};
+
 export default function DailySuggest() {
   const [data, setData] = useState(getTodaySuggestion);
+  const [tracks, setTracks] = useState(getTodayTracks);
   const [busy, setBusy] = useState(false);
   // 렌더마다 localStorage 를 다시 파싱하지 않도록 — 1년치면 그것만으로도 눈에 띈다.
   const mat = useMemo(() => suggestMaterials(), []);
@@ -28,6 +36,14 @@ export default function DailySuggest() {
     fetchSuggestion({ speech: loadSpeech() })
       .then((r) => { if (alive) setData(r); })
       .finally(() => { if (alive) setBusy(false); });
+    return () => { alive = false; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 노래는 따로 불러온다 — Deezer 왕복이 있어 느리고, 실패해도 위 제안은 살아야 한다.
+  useEffect(() => {
+    if (tracks || !mat.ready) return;
+    let alive = true;
+    fetchTracks({ speech: loadSpeech() }).then((r) => { if (alive && r?.ok) setTracks(r); });
     return () => { alive = false; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -91,9 +107,47 @@ export default function DailySuggest() {
         })}
       </div>
 
-      {/* 음악·취미는 붙은 데이터가 없어 모델이 아는 선에서 고른다 — 그걸 숨기지 않는다. */}
+      {/* 기분 전환용 노래 — 곡은 Deezer 에서 온 실재하는 값이라 링크가 바로 열린다. */}
+      {tracks?.ok && tracks.items?.length > 0 && (
+        <div className="mt-3 border-t border-white/[.06] pt-3">
+          <div className="mb-1.5 flex items-center justify-between">
+            <span className="text-[11.5px] font-semibold text-ink">🎧 지금 들을 만한 노래</span>
+            {tracks.shift && (
+              <span className="text-[9px] text-[#8FB4F0]">{SHIFT_LABEL[tracks.shift] || ""}</span>
+            )}
+          </div>
+          {tracks.seedWhy && (
+            <p className="mb-1.5 text-[9.5px] leading-relaxed text-mut">{tracks.seedWhy}</p>
+          )}
+          <div className="space-y-1.5">
+            {tracks.items.map((t, i) => (
+              <a
+                key={i}
+                href={t.link}
+                target="_blank"
+                rel="noreferrer"
+                className="tap flex items-start gap-2.5 rounded-xl border border-white/[.06] bg-black/20 p-2.5 hover:border-[#8FB4F0]/40"
+              >
+                {t.cover
+                  ? <img src={t.cover} alt="" className="h-9 w-9 shrink-0 rounded-md object-cover" />
+                  : <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-white/5 text-[13px]">♪</span>}
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[11.5px] font-semibold text-ink">{t.title}</span>
+                  <span className="block truncate text-[10px] text-sub">
+                    {t.artist}{t.year ? ` · ${t.year}` : ""}{t.kind ? ` · ${t.kind}` : ""}
+                  </span>
+                  {t.why && <span className="mt-0.5 block text-[9.5px] leading-relaxed text-mut">{t.why}</span>}
+                </span>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 어디까지가 실측이고 어디부터가 판단인지 숨기지 않는다. */}
       <p className="mt-2 text-[9px] leading-relaxed text-mut">
-        내 기록을 보고 고른 거예요. 곡·모임처럼 실제로 있는지 확인이 필요한 건 검색으로 한 번 봐주세요.
+        내 기록을 보고 고른 거예요. 곡 정보는 Deezer에서 가져온 실제 값이고, 어떤 곡이 맞을지는
+        음향 분석이 아니라 취향·기록을 보고 고른 판단이에요.
       </p>
     </div>
   );

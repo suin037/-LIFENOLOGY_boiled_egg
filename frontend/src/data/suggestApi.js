@@ -45,6 +45,42 @@ export function suggestMaterials(s = loadUniverse()) {
   };
 }
 
+// ── 기분 전환용 노래 ──────────────────────────────────────────
+// 곡 정보는 서버가 Deezer(키 불필요)에서 받아온다 — 제목·아티스트·링크·발매일이
+// 전부 실재하는 값이라, 모델이 없는 곡을 지어낼 수가 없다.
+const TRACK_KEY = "pm.tracks.v1";
+
+export function getTodayTracks() {
+  try {
+    const v = JSON.parse(localStorage.getItem(TRACK_KEY) || "null");
+    return v && v.date === todayKey() ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchTracks({ speech = "polite", state } = {}) {
+  const s = state || loadUniverse();
+  const { records } = suggestMaterials(s);
+  try {
+    const res = await fetch(`${BASE}/media/tracks`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ records, speech, limit: 3 }),
+    });
+    if (!res.ok) throw new Error(`API ${res.status}`);
+    const data = await res.json();
+    if (data?.ok) {
+      const value = { ...data, date: todayKey() };
+      try { localStorage.setItem(TRACK_KEY, JSON.stringify(value)); } catch { /* 무시 */ }
+      return value;
+    }
+    return data;
+  } catch {
+    return { ok: false, reason: "노래를 불러오지 못했어요." };
+  }
+}
+
 export async function fetchSuggestion({ speech = "polite", state } = {}) {
   const s = state || loadUniverse();
   const { records, moodAvg } = suggestMaterials(s);

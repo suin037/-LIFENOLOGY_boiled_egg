@@ -991,6 +991,19 @@ def future_scenario(req: FutureReq):
                        analysis=req.analysis, sims=req.sims, speech=req.speech)
 
 
+class MediaReq(BaseModel):
+    records: list[dict] = []
+    speech: Optional[str] = None
+    limit: int = 3
+
+
+@app.post("/media/tracks")
+def media_tracks(req: MediaReq):
+    """일기 → 실재하는 추천곡. 곡 정보는 Deezer(키 불필요)에서 오고 LLM 은 고르기만 한다."""
+    from qmode import media as MD
+    return MD.tracks(req.records, speech=req.speech, limit=max(1, min(5, req.limit or 3)))
+
+
 class SuggestReq(BaseModel):
     """오늘 해볼 만한 것. 기회(인생 갈림길)와 달리 오늘 크기의 제안이다."""
     records: list[dict] = []          # [{date, text, mood, emotion}] 최근 것부터
