@@ -38,7 +38,7 @@ export default function ValueRankingInput({ value = [], onChange, max = 8 }) {
               type="button"
               onClick={() => toggle(c.id)}
               className={`tap relative rounded-xl border px-3 py-2.5 text-left transition-colors ${
-                on ? "border-cyan bg-[#12203a]" : "border-line bg-[#0E1424]"
+                on ? "border-cyan bg-[#1D1730]" : "border-line bg-[#0E1424]"
               }`}
             >
               {on && (

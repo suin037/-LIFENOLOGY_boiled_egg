@@ -10,6 +10,7 @@ import {
   universeFromResult,
 } from "../data/savedUniverses.js";
 import { actionsFor, chosenChoice } from "../data/actionBridge.js";
+import { Plus } from "lucide-react";
 
 export default function Archive() {
   const navigate = useNavigate();
@@ -59,9 +60,9 @@ export default function Archive() {
 
       <button
         onClick={saveCurrent}
-        className="tap mt-1 w-full rounded-2xl border border-cyan bg-[#12203a] py-2.5 text-[13px] font-semibold text-cyan"
+        className="tap mt-1 w-full rounded-2xl border border-cyan bg-[#1D1730] py-2.5 text-[13px] font-semibold text-cyan"
       >
-        ＋ 지금 결과를 보관함에 저장
+        <span className="inline-flex items-center justify-center gap-2"><Plus size={16} />지금 결과를 보관함에 저장</span>
       </button>
 
       {items.length === 0 ? (
@@ -104,14 +105,14 @@ export default function Archive() {
   );
 }
 
-const ACCENT = { cyan: "#7FD4FF", gold: "#F5C86B", violet: "#9AA8FF" };
+const ACCENT = { cyan: "#8B6CCF", gold: "#F5C86B", violet: "#8B6CCF" };
 function DecBtn({ on, onClick, children, accent }) {
-  const col = ACCENT[accent] || "#7FD4FF";
+  const col = ACCENT[accent] || "#8B6CCF";
   return (
     <button
       onClick={onClick}
       className={`tap flex-1 rounded-xl border px-2 py-2 text-[11px] font-semibold transition-colors ${
-        on ? "bg-[#12203a]" : "border-line bg-[#0E1424] text-sub"
+        on ? "bg-[#1D1730]" : "border-line bg-[#0E1424] text-sub"
       }`}
       style={on ? { borderColor: col, color: col } : undefined}
     >

@@ -1,105 +1,195 @@
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { Html, OrbitControls, Sparkles } from "@react-three/drei";
+import * as THREE from "three";
+import { RotateCcw } from "lucide-react";
 
 const PLANET_POSITIONS = [
-  [-1.55, .75, -.45], [1.35, .9, .65], [0, -.05, 1.15],
-  [-1.35, -.95, .35], [1.45, -.85, -.75],
+  [-5.2, 2.2, -1.2], [0, -1.1, 1.5], [-5.3, -3.1, -6.4],
+  [5.1, -3, -1.8], [5.2, 2.2, -5.2],
 ];
-const GROUP_POSITIONS = [[-1.9,1.25,.5],[1.8,1.35,-.3],[-1.8,-1.45,-.8],[1.85,-1.35,.65],[.15,1.65,-1.1]];
+const PLANET_SIZES = [1.05, 1.35, .9, 1, 1.12];
+const INITIAL_CAMERA = new THREE.Vector3(0, 4.8, 18);
+const UNIVERSE_TARGET = new THREE.Vector3(0, -1.1, 0);
 
-function hexRgb(hex) {
-  const value = hex.replace("#", "");
-  return [0, 2, 4].map((i) => parseInt(value.slice(i, i + 2), 16));
-}
-function rotate([x, y, z], yaw, pitch) {
-  const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
-  const x1 = x * cy - z * sy, z1 = x * sy + z * cy;
-  return [x1, y * cp - z1 * sp, y * sp + z1 * cp];
+function seeded(seed) {
+  let value = seed;
+  return () => ((value = Math.sin(value * 999.91) * 43758.5453) - Math.floor(value));
 }
 
-export default function UniverseMap({ planets, groups = [], scenarios = [], selectedKey, onPlanetSelect, onConstellationOpen }) {
-  const canvasRef = useRef(null);
-  const dataRef = useRef({});
-  const [hint, setHint] = useState(true);
-  dataRef.current = { planets, groups: groups.filter((g) => g.stars.some((s) => !s.empty)).slice(-5), scenarios, selectedKey, onPlanetSelect, onConstellationOpen };
+function Galaxy({ reduced }) {
+  const ref = useRef();
+  const geometry = useMemo(() => {
+    const count = reduced ? 2300 : 5200;
+    const positions = new Float32Array(count * 3);
+    const colors = new Float32Array(count * 3);
+    const random = seeded(17.31);
+    const inner = new THREE.Color("#fff4dc"), outer = new THREE.Color("#7557ba");
+    for (let i = 0; i < count; i++) {
+      const radius = Math.pow(random(), .62) * 8.8;
+      const arm = i % 4;
+      const angle = arm * Math.PI / 2 + radius * .78 + (random() - .5) * (.3 + radius * .07);
+      const spread = .12 + radius * .035;
+      positions[i * 3] = Math.cos(angle) * radius + (random() - .5) * spread;
+      positions[i * 3 + 1] = (random() - .5) * (.18 + radius * .055);
+      positions[i * 3 + 2] = Math.sin(angle) * radius + (random() - .5) * spread;
+      const color = inner.clone().lerp(outer, Math.min(1, radius / 8.8));
+      color.offsetHSL((random() - .5) * .035, 0, (random() - .5) * .12);
+      colors.set(color.toArray(), i * 3);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    return geo;
+  }, [reduced]);
+  useFrame((_, delta) => { if (ref.current) ref.current.rotation.y += delta * .012; });
+  return <group rotation={[-.22, 0, .08]}>
+    <points ref={ref} geometry={geometry}>
+      <pointsMaterial size={reduced ? .035 : .045} vertexColors transparent opacity={.83} sizeAttenuation depthWrite={false} blending={THREE.AdditiveBlending}/>
+    </points>
+    <mesh rotation={[Math.PI / 2, 0, 0]}><circleGeometry args={[1.25, 64]}/><meshBasicMaterial color="#fff0d5" transparent opacity={.055} blending={THREE.AdditiveBlending} depthWrite={false}/></mesh>
+    <pointLight color="#cbb3ff" intensity={9} distance={13}/>
+  </group>;
+}
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    const state = { yaw: -.35, pitch: -.18, zoom: 1, drift: 0, dragging: false, moved: 0, lastX: 0, lastY: 0, hits: [], pointers: new Map(), pinch: 0, raf: 0 };
-    const bgStars = Array.from({ length: 125 }, (_, i) => ({ x: ((i * 73) % 997) / 997, y: ((i * 193) % 991) / 991, r: .35 + (i % 5) * .18, a: .2 + (i % 7) * .08 }));
+function StarLayer({ count, radius, size, opacity, seed }) {
+  const geometry = useMemo(() => {
+    const random = seeded(seed), positions = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      const r = radius * (.55 + random() * .45), theta = random() * Math.PI * 2, phi = Math.acos(2 * random() - 1);
+      positions.set([r * Math.sin(phi) * Math.cos(theta), r * Math.cos(phi) * .62, r * Math.sin(phi) * Math.sin(theta)], i * 3);
+    }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.BufferAttribute(positions, 3)); return geo;
+  }, [count, radius, seed]);
+  return <points geometry={geometry}><pointsMaterial color="#e9ecff" size={size} transparent opacity={opacity} sizeAttenuation depthWrite={false}/></points>;
+}
 
-    function resize() {
-      const dpr = Math.min(2, window.devicePixelRatio || 1), w = canvas.clientWidth, h = canvas.clientHeight;
-      canvas.width = w * dpr; canvas.height = h * dpr;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    }
-    function project(point) {
-      const [x, y, z] = rotate(point, state.yaw, state.pitch);
-      const camera = 4.35, depth = camera - z, focal = Math.min(canvas.clientWidth, canvas.clientHeight) * .9 * state.zoom;
-      return { x: canvas.clientWidth / 2 + x * focal / depth, y: canvas.clientHeight * .47 - y * focal / depth, z, scale: focal / depth };
-    }
-    function sphere(item) {
-      const { p, planet, radius, selected } = item, [r, g, b] = hexRgb(planet.from);
-      const glow = ctx.createRadialGradient(p.x, p.y, radius * .72, p.x, p.y, radius * 1.55);
-      glow.addColorStop(0, `rgba(${r},${g},${b},.18)`); glow.addColorStop(1, `rgba(${r},${g},${b},0)`);
-      ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(p.x, p.y, radius * 1.55, 0, Math.PI * 2); ctx.fill();
-      ctx.save(); ctx.beginPath(); ctx.arc(p.x, p.y, radius, 0, Math.PI * 2); ctx.clip();
-      const body = ctx.createRadialGradient(p.x - radius * .38, p.y - radius * .42, radius * .04, p.x + radius * .28, p.y + radius * .3, radius * 1.15);
-      body.addColorStop(0, "rgba(255,255,255,.94)"); body.addColorStop(.18, planet.to); body.addColorStop(.68, planet.from); body.addColorStop(1, `rgb(${Math.round(r*.28)},${Math.round(g*.28)},${Math.round(b*.28)})`);
-      ctx.fillStyle = body; ctx.fillRect(p.x - radius, p.y - radius, radius * 2, radius * 2);
-      ctx.restore();
-      ctx.strokeStyle = selected ? "rgba(255,255,255,.38)" : "rgba(255,255,255,.12)"; ctx.lineWidth = selected ? 1 : .5;
-      ctx.beginPath(); ctx.arc(p.x, p.y, radius, 0, Math.PI * 2); ctx.stroke();
-      ctx.fillStyle = selected ? "#fff" : "rgba(220,229,247,.8)"; ctx.font = `${selected ? 700 : 600} ${Math.max(9, Math.min(12, radius * .22))}px sans-serif`; ctx.textAlign = "center";
-      ctx.fillText(planet.label, p.x, p.y + radius + 16);
-      state.hits.push({ type: "planet", x: p.x, y: p.y, radius: radius + 12, value: planet });
-    }
-    function constellation(group, index) {
-      // 별자리만 우주 중심을 아주 천천히 공전한다. 행성의 위치와 사용자 카메라는 건드리지 않는다.
-      const origin = rotate(GROUP_POSITIONS[index], state.drift, Math.sin(state.drift * .55) * .06);
-      const points = group.stars.map((star, i) => {
-        const angle = -Math.PI / 2 + i * Math.PI * 2 / group.stars.length;
-        const mood = star.mood || 3, spread = .18 + mood * .025;
-        return { star, p: project([origin[0] + Math.cos(angle) * spread, origin[1] + Math.sin(angle) * spread, origin[2] + (i % 2 ? .08 : -.08)]) };
-      });
-      const avgZ = points.reduce((sum, x) => sum + x.p.z, 0) / points.length;
-      return { kind: "group", group, points, z: avgZ };
-    }
-    function paintConstellation(item) {
-      const visible = item.points.filter(({ star }) => !star.empty);
-      if (!visible.length) return;
-      ctx.strokeStyle = `rgba(220,230,250,${.3 + (item.z + 2) * .055})`; ctx.lineWidth = .65;
-      ctx.beginPath(); visible.forEach(({ p }, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke();
-      visible.forEach(({ p, star }) => { const r = Math.max(1.25, Math.min(2.6, p.scale * .012 * (2 + (star.mood || 3) * .18))); ctx.fillStyle = "#f3f6ff"; ctx.shadowColor = "rgba(185,210,255,.7)"; ctx.shadowBlur = 3; ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0; });
-      const x = visible.reduce((s, v) => s + v.p.x, 0) / visible.length, y = visible.reduce((s, v) => s + v.p.y, 0) / visible.length;
-      state.hits.push({ type: "group", x, y, radius: 38, value: item.group });
-    }
-    function draw() {
-      if (!state.dragging) state.drift += .00022;
-      const w = canvas.clientWidth, h = canvas.clientHeight; ctx.clearRect(0, 0, w, h); state.hits = [];
-      const nebula = ctx.createRadialGradient(w * .52, h * .5, 10, w * .52, h * .5, w * .65);
-      nebula.addColorStop(0, "rgba(111,91,169,.3)"); nebula.addColorStop(.42, "rgba(83,69,139,.17)"); nebula.addColorStop(1, "rgba(2,5,14,0)"); ctx.fillStyle = nebula; ctx.fillRect(0, 0, w, h);
-      bgStars.forEach((s) => { ctx.globalAlpha = s.a; ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(s.x * w, s.y * h, s.r, 0, Math.PI * 2); ctx.fill(); }); ctx.globalAlpha = 1;
-      // 모든 행성의 실제 반지름은 같다. 화면 크기는 오직 카메라와의 거리(p.scale)로 정한다.
-      const items = dataRef.current.planets.map((planet, i) => { const p = project(PLANET_POSITIONS[i]); return { kind: "planet", planet, p, z: p.z, radius: Math.max(14, p.scale * .3), selected: planet.key === dataRef.current.selectedKey }; });
-      dataRef.current.groups.forEach((group, i) => items.push(constellation(group, i)));
-      items.sort((a, b) => a.z - b.z).forEach((item) => item.kind === "planet" ? sphere(item) : paintConstellation(item));
-      state.raf = requestAnimationFrame(draw);
-    }
-    function down(e) { canvas.setPointerCapture(e.pointerId); state.pointers.set(e.pointerId, [e.clientX, e.clientY]); state.dragging = true; state.moved = 0; state.lastX = e.clientX; state.lastY = e.clientY; if (state.pointers.size === 2) { const p = [...state.pointers.values()]; state.pinch = Math.hypot(p[0][0] - p[1][0], p[0][1] - p[1][1]); } setHint(false); }
-    function move(e) { if (!state.pointers.has(e.pointerId)) return; state.pointers.set(e.pointerId, [e.clientX, e.clientY]); if (state.pointers.size === 2) { const p = [...state.pointers.values()], distance = Math.hypot(p[0][0] - p[1][0], p[0][1] - p[1][1]); if (state.pinch) state.zoom = Math.max(.55, Math.min(2.2, state.zoom * distance / state.pinch)); state.pinch = distance; return; } const dx = e.clientX - state.lastX, dy = e.clientY - state.lastY; state.moved += Math.hypot(dx, dy); state.yaw += dx * .009; state.pitch += dy * .009; state.lastX = e.clientX; state.lastY = e.clientY; }
-    function up(e) { state.pointers.delete(e.pointerId); state.dragging = state.pointers.size > 0; if (state.moved < 5) { const rect = canvas.getBoundingClientRect(), x = e.clientX - rect.left, y = e.clientY - rect.top; const hit = [...state.hits].reverse().find((v) => Math.hypot(v.x - x, v.y - y) <= v.radius); if (hit?.type === "planet") dataRef.current.onPlanetSelect?.(hit.value.key); if (hit?.type === "group") dataRef.current.onConstellationOpen?.(hit.value); } }
-    function wheel(e) { e.preventDefault(); state.zoom = Math.max(.55, Math.min(2.2, state.zoom * Math.exp(-e.deltaY * .001))); setHint(false); }
-    canvas.addEventListener("pointerdown", down); canvas.addEventListener("pointermove", move); canvas.addEventListener("pointerup", up); canvas.addEventListener("pointercancel", up); canvas.addEventListener("wheel", wheel, { passive: false }); window.addEventListener("resize", resize); resize(); draw();
-    return () => { cancelAnimationFrame(state.raf); canvas.removeEventListener("pointerdown", down); canvas.removeEventListener("pointermove", move); canvas.removeEventListener("pointerup", up); canvas.removeEventListener("pointercancel", up); canvas.removeEventListener("wheel", wheel); window.removeEventListener("resize", resize); };
-  }, []);
+function OrbitRings() {
+  return <group rotation={[-Math.PI / 2 + .12, 0, .08]}>{[3.2,4.7,6.2,7.8].map((r)=><mesh key={r}><ringGeometry args={[r-.012,r+.012,160]}/><meshBasicMaterial color="#9275d2" transparent opacity={.13} side={THREE.DoubleSide} depthWrite={false}/></mesh>)}</group>;
+}
 
-  return (
-    <div className="relative -mx-5 h-[440px] w-[calc(100%+40px)] overflow-hidden bg-[linear-gradient(180deg,#050a18,#080b20_58%,#040711)] md:h-[360px] lg:h-[clamp(300px,43vh,400px)]">
-      <canvas ref={canvasRef} className="block h-full w-full cursor-grab touch-none active:cursor-grabbing" aria-label="회전과 확대가 가능한 3D 나의 우주" />
-      {hint && <div className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 whitespace-nowrap rounded-full border border-white/10 bg-black/20 px-3 py-1.5 text-[9px] tracking-[.08em] text-white/55">드래그로 회전 · 핀치/휠로 확대</div>}
-      <div className="pointer-events-none absolute bottom-3 right-3 rounded-full border border-white/10 bg-black/25 px-2 py-1 text-[9px] text-white/40">3D VIEW</div>
-    </div>
-  );
+function Planet({ planet, index, selected, onSelect, skin }) {
+  const group = useRef();
+  const mesh = useRef();
+  const position = PLANET_POSITIONS[index];
+  const size = PLANET_SIZES[index];
+  useFrame((state, delta) => {
+    if (mesh.current) mesh.current.rotation.y += delta * (.045 + index * .008);
+    if (group.current) group.current.position.y = position[1] + Math.sin(state.clock.elapsedTime * .28 + index) * .08;
+  });
+  return <group ref={group} position={position}>
+    <mesh ref={mesh} onClick={(e)=>{e.stopPropagation();onSelect(planet.key);}} onDoubleClick={(e)=>{e.stopPropagation();onSelect(planet.key);}}>
+      <sphereGeometry args={[size, 64, 64]}/>
+      <meshPhysicalMaterial
+        color={planet.from}
+        roughness={skin === "glow" ? .14 : skin === "stripe" ? .3 : .24}
+        metalness={skin === "glow" ? .2 : .08}
+        clearcoat={skin === "glow" ? 1 : .82}
+        clearcoatRoughness={skin === "glow" ? .06 : .14}
+        sheen={.72}
+        sheenColor={planet.to}
+        emissive={planet.from}
+        emissiveIntensity={skin === "glow" ? .16 : selected ? .08 : .035}
+      />
+    </mesh>
+    <mesh scale={1.042}><sphereGeometry args={[size,48,48]}/><meshBasicMaterial color={planet.to} side={THREE.BackSide} transparent opacity={skin === "glow" ? .13 : .065} blending={THREE.AdditiveBlending} depthWrite={false}/></mesh>
+    <mesh position={[-size*.34,size*.38,size*.86]} scale={[size*.3,size*.19,size*.07]}>
+      <sphereGeometry args={[1,32,16]}/>
+      <meshBasicMaterial color="#fffaf2" transparent opacity={skin === "glow" ? .48 : .32} blending={THREE.AdditiveBlending} depthWrite={false}/>
+    </mesh>
+    <pointLight position={[-2,2,3]} color={planet.to} intensity={selected ? 3.1 : 1.45} distance={6.5} decay={2}/>
+    {(index===0||skin==="ring")&&<mesh rotation={[Math.PI/2.3,.15,0]}><ringGeometry args={[size*1.28,size*1.48,96]}/><meshBasicMaterial color={planet.to} transparent opacity={.24} side={THREE.DoubleSide} depthWrite={false}/></mesh>}
+    {skin==="stripe"&&[-.5,-.18,.18,.5].map((y)=><mesh key={y} position={[0,y*size,0]} rotation={[Math.PI/2,0,0]}><torusGeometry args={[Math.sqrt(Math.max(.05,size*size-(y*size)*(y*size))),.025,8,64]}/><meshBasicMaterial color={planet.to} transparent opacity={.32}/></mesh>)}
+    <Html center position={[0,-size-0.5,0]} distanceFactor={10} style={{pointerEvents:"none"}}><div className={`whitespace-nowrap text-center drop-shadow-[0_2px_8px_#000] ${selected?"text-white":"text-white/80"}`}><b className="text-[13px]">{planet.label}</b></div></Html>
+  </group>;
+}
+
+function Constellation3D({ group, index, anchorIndex, onOpen }) {
+  const orbit = useRef();
+  const root = PLANET_POSITIONS[anchorIndex];
+  const visible = group.stars.filter((s)=>!s.empty).slice(0,7);
+  const orbitRadius = 2.25 + index * .28;
+  const points = useMemo(() => visible.map((_, i)=>{
+    const a = i * 1.71 + index;
+    const radius = .32 + i * .035;
+    return [Math.cos(a)*radius, Math.sin(a)*radius*.72, (i-3)*.055];
+  }), [group.weekStart, visible.length, index]);
+  const geometry = useMemo(()=>new THREE.BufferGeometry().setFromPoints(points.map((p)=>new THREE.Vector3(...p))),[points]);
+  useFrame((state,delta)=>{
+    if (!orbit.current) return;
+    orbit.current.rotation.y += delta * (.055 + index * .006);
+    orbit.current.rotation.z = Math.sin(state.clock.elapsedTime * .08 + index) * .09;
+  });
+  if (!visible.length) return null;
+  return <group ref={orbit} position={root} rotation={[.18,index*.7,.12]}>
+    <group position={[orbitRadius,0,0]} onClick={(e)=>{e.stopPropagation();onOpen?.(group);}}>
+      <mesh visible={false}><sphereGeometry args={[.72,12,12]}/><meshBasicMaterial transparent opacity={0}/></mesh>
+      <line geometry={geometry}><lineBasicMaterial color="#bda8ee" transparent opacity={.55}/></line>
+      {points.map((p,i)=><mesh key={visible[i].date||visible[i].label||i} position={p} onClick={(e)=>{e.stopPropagation();onOpen?.({...group,selectedPoint:visible[i]});}}><sphereGeometry args={[.05+(visible[i].mood||3)*.008,12,12]}/><meshBasicMaterial color="#f5f2ff"/><pointLight color="#ad91ed" intensity={.2} distance={1}/></mesh>)}
+    </group>
+  </group>;
+}
+
+function CameraRig({ selectedKey, planets, controlsRef, resetSignal }) {
+  const { camera } = useThree();
+  const flight = useRef(null);
+  useEffect(()=>{
+    const index = planets.findIndex((p)=>p.key===selectedKey);
+    const target = index >= 0 ? new THREE.Vector3(...PLANET_POSITIONS[index]) : UNIVERSE_TARGET.clone();
+    // 선택된 행성이 화면 중앙보다 살짝 위에 놓이도록 시선 중심을 아래로 내린다.
+    if (index >= 0) target.y -= .9;
+    const direction = camera.position.clone().sub(target).normalize();
+    flight.current = { target, position: index>=0 ? target.clone().add(direction.multiplyScalar(12)) : INITIAL_CAMERA.clone() };
+  },[selectedKey, resetSignal]);
+  useFrame((_, delta)=>{
+    if (!flight.current || !controlsRef.current) return;
+    const cameraEase = 1 - Math.exp(-delta * 10.5);
+    const targetEase = 1 - Math.exp(-delta * 12.5);
+    camera.position.lerp(flight.current.position, cameraEase);
+    controlsRef.current.target.lerp(flight.current.target, targetEase);
+    controlsRef.current.update();
+    if (camera.position.distanceTo(flight.current.position)<.018) {
+      camera.position.copy(flight.current.position);
+      controlsRef.current.target.copy(flight.current.target);
+      flight.current=null;
+    }
+  });
+  return null;
+}
+
+function Scene({ planets, groups, selectedKey, onPlanetSelect, onConstellationOpen, resetSignal, reduced, skin }) {
+  const controls = useRef();
+  const selectedIndex = Math.max(0, planets.findIndex((planet)=>planet.key===selectedKey));
+  return <>
+    <color attach="background" args={["#01040c"]}/><fog attach="fog" args={["#01040c",18,52]}/>
+    <hemisphereLight color="#f4f1ff" groundColor="#111325" intensity={.58}/><directionalLight position={[-7,9,12]} color="#fff4e8" intensity={3.1}/>
+    <StarLayer count={reduced?500:1100} radius={44} size={.055} opacity={.55} seed={2}/>
+    <StarLayer count={reduced?240:600} radius={25} size={.075} opacity={.7} seed={7}/>
+    <StarLayer count={reduced?90:220} radius={14} size={.1} opacity={.8} seed={13}/>
+    <Sparkles count={reduced?35:75} scale={[24,13,24]} size={1.1} speed={.08} opacity={.24} color="#9374d7" noise={1.5}/>
+    <Galaxy reduced={reduced}/><OrbitRings/>
+    {planets.map((planet,i)=><Planet key={planet.key} planet={planet} index={i} selected={planet.key===selectedKey} onSelect={onPlanetSelect} skin={skin}/>) }
+    {groups.slice(-5).map((group,i)=>{
+      const domainIndex=planets.findIndex((planet)=>planet.key===group.domain);
+      const anchorIndex=selectedKey?selectedIndex:(domainIndex>=0?domainIndex:i%planets.length);
+      return <Constellation3D key={group.weekStart||i} group={group} index={i} anchorIndex={anchorIndex} onOpen={(pickedGroup)=>{
+        onPlanetSelect?.(planets[anchorIndex]?.key);
+        onConstellationOpen?.(pickedGroup, planets[anchorIndex]?.key);
+      }}/>;
+    }) }
+    <OrbitControls ref={controls} target={UNIVERSE_TARGET.toArray()} makeDefault enableDamping dampingFactor={.055} enablePan screenSpacePanning minDistance={2.8} maxDistance={34} rotateSpeed={.42} zoomSpeed={.7} panSpeed={.8} mouseButtons={{LEFT:THREE.MOUSE.ROTATE,MIDDLE:THREE.MOUSE.DOLLY,RIGHT:THREE.MOUSE.PAN}}/>
+    <CameraRig selectedKey={selectedKey} planets={planets} controlsRef={controls} resetSignal={resetSignal}/>
+  </>;
+}
+
+export default function UniverseMap({ planets, groups=[], selectedKey, onPlanetSelect, onConstellationOpen, skin="basic" }) {
+  const [resetSignal,setResetSignal]=useState(0);
+  const reduced = typeof window!=="undefined" && (window.innerWidth<760 || (navigator.hardwareConcurrency||8)<=4);
+  return <div className="relative h-[calc(100dvh-112px)] min-h-[540px] w-full overflow-hidden bg-[#01040c] md:h-[calc(100dvh-104px)] md:min-h-[600px]">
+    <Canvas dpr={reduced?[1,1.25]:[1,1.75]} camera={{position:INITIAL_CAMERA.toArray(),fov:48,near:.1,far:100}} gl={{antialias:!reduced,powerPreference:"high-performance"}} onPointerMissed={()=>onPlanetSelect?.(null)}>
+      <Suspense fallback={null}><Scene planets={planets} groups={groups} selectedKey={selectedKey} onPlanetSelect={onPlanetSelect} onConstellationOpen={onConstellationOpen} resetSignal={resetSignal} reduced={reduced} skin={skin}/></Suspense>
+    </Canvas>
+    <div className="pointer-events-none absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full border border-white/10 bg-[#050914]/70 px-4 py-2 text-[9px] tracking-[.08em] text-white/55 backdrop-blur">왼쪽 드래그 회전 · Shift+드래그/오른쪽 드래그 이동 · 휠/핀치 접근</div>
+    <button onClick={()=>{onPlanetSelect?.(null);setResetSignal((v)=>v+1);}} className="tap absolute bottom-5 right-5 flex items-center gap-2 rounded-full border border-white/10 bg-[#050914]/75 px-3 text-[10px] text-white/65 backdrop-blur"><RotateCcw size={13}/> 우주 중심</button>
+  </div>;
 }

@@ -7,7 +7,7 @@ import {
 function Arrow({ dir, onClick }) {
   return (
     <button type="button" onClick={onClick} aria-label={dir < 0 ? "이전" : "다음"}
-      className="tap flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line bg-card2 text-[16px] text-cyan active:scale-95">
+      className="tap flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-violet-400/25 bg-violet-500/10 text-[16px] text-violet-400 active:scale-95">
       {dir < 0 ? "‹" : "›"}
     </button>
   );

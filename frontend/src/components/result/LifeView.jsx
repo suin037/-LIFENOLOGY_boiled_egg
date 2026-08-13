@@ -37,7 +37,7 @@ export default function LifeView({ a, b, domains = { a: [], b: [] } }) {
       <div className="mt-3 space-y-2.5">
         {empty && <Card><Caption>선택한 삶의 영역에 연결된 수치 데이터가 아직 충분하지 않습니다. 임의 점수는 만들지 않았어요.</Caption></Card>}
         {shared.map((it, i) => <Indicator key={`s${i}`} it={it} />)}
-        {extraA.map((it, i) => <Indicator key={`a${i}`} it={it} tag={`A · ${labelOf(a.choice)}`} tagColor="#7FD4FF" />)}
+        {extraA.map((it, i) => <Indicator key={`a${i}`} it={it} tag={`A · ${labelOf(a.choice)}`} tagColor="#8B6CCF" />)}
         {extraB.map((it, i) => <Indicator key={`b${i}`} it={it} tag={`B · ${labelOf(b.choice)}`} tagColor="#F5C86B" />)}
       </div>
     </div>
@@ -90,7 +90,7 @@ function EvidenceSide({ label, item }) {
 }
 
 function Indicator({ it, tag, tagColor }) {
-  const meta = LIFE_DIMENSIONS[it.dimension] || { icon: "•", color: "#9FB0CE" };
+  const meta = LIFE_DIMENSIONS[it.dimension] || { icon: "•", color: "#8B6CCF" };
   return (
     <div className="rounded-2xl border border-line bg-card p-3.5">
       <div className="flex items-start justify-between gap-2">

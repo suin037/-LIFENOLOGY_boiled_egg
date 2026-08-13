@@ -35,7 +35,7 @@ import {
 import { nextReward, unlockedRewards } from "../data/unlocks.js";
 
 // '전체' 선택 — 특정 영역이 아니라 전체 일기 기반 종합(별자리 만들기 성격).
-const ALL_PLANET = { key: "all", label: "전체", from: "#5A6B8C", to: "#AEB9D0" };
+const ALL_PLANET = { key: "all", label: "전체", from: "#8B6CCF", to: "#AEB9D0" };
 
 // 나의 우주 = 개인화 대시보드. 레벨/XP · 별자리 · 행성 · 평행우주 저장 · 통계.
 // 수치는 전부 localStorage 의 실제 활동 기록(pm.myuniverse.v1)에서 파생된다.
@@ -157,9 +157,9 @@ export default function MyUniverse() {
   }
 
   return (
-    <div className="universe-scene relative -mx-5 -mt-1 flex min-h-full flex-col overflow-hidden px-5 pb-8 md:h-full md:min-h-0 md:pb-1 [&>.bg-card]:my-0 [&>.bg-card]:rounded-none [&>.bg-card]:border-t [&>.bg-card]:border-white/[.07] [&>.bg-card]:bg-transparent [&>.bg-card]:px-0 [&>.bg-card]:py-6">
-      <div className="pointer-events-none absolute inset-0 -z-0 bg-[radial-gradient(circle_at_18%_12%,rgba(94,143,255,.18),transparent_25%),radial-gradient(circle_at_82%_38%,rgba(143,92,246,.13),transparent_28%),linear-gradient(180deg,#070D19_0%,#050A13_58%,#080E1A_100%)]" />
-      <div className="pointer-events-none absolute inset-0 -z-0 opacity-70 [background-image:radial-gradient(circle,rgba(255,255,255,.7)_0_1px,transparent_1.3px),radial-gradient(circle,rgba(126,180,255,.55)_0_1px,transparent_1.4px)] [background-position:0_0,31px_47px] [background-size:67px_67px,91px_91px]" />
+    <div className="universe-scene relative isolate -mx-5 -mt-1 min-h-full overflow-visible px-5 pb-24 lg:mx-0 lg:mt-0 lg:px-0 lg:pb-4 [&>.bg-card]:rounded-none [&>.bg-card]:border-t [&>.bg-card]:border-white/[.07] [&>.bg-card]:bg-transparent [&>.bg-card]:px-0">
+      <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_18%_12%,rgba(139,108,207,.14),transparent_25%),radial-gradient(circle_at_82%_38%,rgba(143,92,246,.13),transparent_28%),linear-gradient(180deg,#070D19_0%,#050A13_58%,#080E1A_100%)]" />
+      <div className="pointer-events-none absolute inset-0 -z-10 opacity-70 [background-image:radial-gradient(circle,rgba(255,255,255,.7)_0_1px,transparent_1.3px),radial-gradient(circle,rgba(139,108,207,.48)_0_1px,transparent_1.4px)] [background-position:0_0,31px_47px] [background-size:67px_67px,91px_91px]" />
       <div className="flex items-start justify-between gap-3 md:shrink-0">
         <div>
           <h1 className="mb-1 mt-2 text-[24px] font-bold leading-[1.2] md:mt-0 md:text-[20px]">나의 우주</h1>
@@ -170,37 +170,6 @@ export default function MyUniverse() {
             {isDemo(u.state) ? "데모 비우기" : "6주 데모 보기"}
           </button>
         )}
-      </div>
-
-      {/* 데모 확인용 — 예시 데이터로 즉시 채우기(옛 리포트도 함께 정리). */}
-      <div className="mb-3 grid grid-cols-2 gap-2">
-        <button
-          onClick={() => {
-            clearSavedReports(REPORT_UID);
-            resetUniverse();
-            seedDemoCheckins();
-            setReportCache({});
-            setPicked(null);
-            setWeekBack(0);
-            refresh();
-          }}
-          className="tap rounded-2xl border border-dashed border-gold/50 bg-[#241d10] py-2.5 text-[12px] font-bold text-gold"
-        >
-          🧪 예시 6주
-        </button>
-        <button
-          onClick={() => {
-            clearSavedReports(REPORT_UID);
-            seedDemoYear();
-            setReportCache({});
-            setPicked(null);
-            setWeekBack(0);
-            refresh();
-          }}
-          className="tap rounded-2xl border border-dashed border-cyan/50 bg-[#12203a] py-2.5 text-[12px] font-bold text-cyan"
-        >
-          🧪 예시 1년치 (개인화 데모)
-        </button>
       </div>
 
       {/* 예시 기록이 들어있는 동안은 항상 밝힌다 — 남의 기록을 내 기록처럼 보여주지 않는다. */}
@@ -226,8 +195,8 @@ export default function MyUniverse() {
       )}
 
       {/* 레벨 / XP */}
-      <Card className="universe-level order-1 !my-3 flex items-center gap-3 !rounded-[20px] !border !border-white/10 !bg-[#101A2A]/75 !p-3.5 shadow-[0_18px_50px_rgba(0,0,0,.24)] backdrop-blur-xl md:!my-1 md:!p-2.5">
-        <div className="h-11 w-11 shrink-0 rounded-full bg-gradient-to-br from-cyan to-[#8B5CF6] md:h-8 md:w-8" />
+      <Card className="universe-level !my-2 flex items-center gap-3 !rounded-[20px] !border !border-white/10 !bg-[#101A2A]/75 !p-3.5 shadow-[0_18px_50px_rgba(0,0,0,.24)] backdrop-blur-xl lg:!my-2 lg:!p-3">
+        <div className="h-11 w-11 shrink-0 rounded-full bg-[#8B6CCF] md:h-8 md:w-8" />
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between">
             <span className="text-sm font-bold">
@@ -239,7 +208,7 @@ export default function MyUniverse() {
           </div>
           <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[#1E2740]">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-cyan to-[#8B5CF6] transition-all"
+              className="h-full rounded-full bg-[#8B6CCF] transition-all"
               style={{ width: `${u.xpPct}%` }}
             />
           </div>
@@ -354,7 +323,7 @@ export default function MyUniverse() {
                     setShowReport(next);
                     if (next) loadWeekReport();
                   }}
-                  className="tap mt-3 w-full rounded-2xl border border-cyan bg-[#12203a] py-2.5 text-[12px] font-bold text-cyan"
+                  className="tap mt-3 w-full rounded-2xl border border-cyan bg-[#1D1730] py-2.5 text-[12px] font-bold text-cyan"
                 >
                   {showReport
                     ? "리포트 접기 ▴"
@@ -391,7 +360,7 @@ export default function MyUniverse() {
             {weekBack === 0 && !u.checkedInToday && (
               <button
                 onClick={() => navigate("/home")}
-                className="tap mt-2.5 w-full rounded-2xl border border-cyan bg-[#12203a] py-2.5 text-[13px] font-semibold text-cyan"
+                className="tap mt-2.5 w-full rounded-2xl border border-cyan bg-[#1D1730] py-2.5 text-[13px] font-semibold text-cyan"
               >
                 오늘 별이 아직 비어 있어요 — 기록하러 가기
               </button>
@@ -405,27 +374,28 @@ export default function MyUniverse() {
       </Card>
 
       {/* 하나의 우주 안에서 다섯 삶의 영역과 전체 별자리를 함께 본다. */}
-      <Card className="order-2 !border-t-0 !py-2 md:min-h-0 md:flex-1 md:!py-1">
-        <div className="mb-3 flex items-end justify-between md:mb-1">
+      <Card className="relative !mt-1 !border-t-0 !py-2 lg:!mt-0 lg:!py-0">
+        <div className="mb-3 flex items-end justify-between md:mb-1 lg:absolute lg:left-5 lg:right-5 lg:top-4 lg:z-30">
           <div>
             <div className="text-[10px] font-bold tracking-[.16em] text-[#8FA2CB]">MY UNIVERSE</div>
             <div className="mt-1 text-[16px] font-bold md:text-[14px]">다섯 세계와 나의 별자리</div>
           </div>
           <span className="text-[10px] text-mut">행성을 눌러 전환</span>
         </div>
-        <div className="no-scrollbar -mx-1 mb-3 flex gap-2 overflow-x-auto px-1 pb-1 md:mb-1 md:gap-1.5">
+        <div className="no-scrollbar -mx-1 mb-3 flex gap-2 overflow-x-auto px-1 pb-1 md:mb-1 md:gap-1.5 lg:absolute lg:left-5 lg:right-5 lg:top-14 lg:z-30 lg:mx-0 lg:mb-0 lg:w-max lg:max-w-[calc(100%-40px)] lg:rounded-full lg:bg-black/20 lg:p-1.5 lg:backdrop-blur-md">
           <button type="button" onClick={() => setViewAll(true)} className={`tap shrink-0 rounded-full border px-4 py-2 text-[11px] font-semibold md:px-3 md:py-1.5 md:text-[10px] ${viewAll ? "border-[#D8E3FF] bg-[#D8E3FF] text-[#10162A]" : "border-white/10 bg-white/[.04] text-sub"}`}>전체</button>
           {PLANETS.map((item) => <button key={item.key} type="button" onClick={() => choosePlanet(item.key)} className={`tap shrink-0 rounded-full border px-4 py-2 text-[11px] font-semibold md:px-3 md:py-1.5 md:text-[10px] ${!viewAll && item.key === planet ? "border-white/25 bg-white/10 text-white" : "border-white/10 bg-white/[.04] text-sub"}`}>{item.label}</button>)}
         </div>
-        <UniverseMap
-          planets={PLANETS}
-          groups={domainGroups}
-          scenarios={isAll ? (u.state.scenarios || []) : scenariosByPlanet(planet)}
-          selectedKey={planet}
-          onPlanetSelect={choosePlanet}
-          onConstellationOpen={openPlanetConstellation}
-        />
-        <div className="relative z-20 -mt-16 rounded-[28px] border border-white/10 bg-[#0A1122]/95 p-4 shadow-[0_-20px_55px_rgba(0,0,0,.35)] backdrop-blur-xl md:-mt-24 md:rounded-[22px] md:p-3">
+        <div className="overflow-hidden rounded-[30px] border border-white/10 bg-[#050A16]/55 lg:grid lg:grid-cols-[minmax(0,1.7fr)_minmax(320px,.72fr)] lg:items-start lg:gap-0">
+          <UniverseMap
+            planets={PLANETS}
+            groups={domainGroups}
+            scenarios={isAll ? (u.state.scenarios || []) : scenariosByPlanet(planet)}
+            selectedKey={planet}
+            onPlanetSelect={choosePlanet}
+            onConstellationOpen={openPlanetConstellation}
+          />
+        <div className="relative z-20 -mt-12 rounded-t-[28px] border border-white/10 bg-[#0A1122]/95 p-4 shadow-[0_-20px_55px_rgba(0,0,0,.35)] backdrop-blur-xl lg:mt-0 lg:min-h-[clamp(600px,70vh,760px)] lg:rounded-none lg:border-y-0 lg:border-r-0 lg:border-l lg:border-white/10 lg:bg-[#0A1122]/88 lg:p-5 lg:shadow-none">
           <div className="mx-auto mb-4 h-1 w-12 rounded-full bg-white/20 md:mb-2" />
           <div className="flex items-center gap-3">
             <div className="h-11 w-11 shrink-0 rounded-full border border-white/30" style={{ background: `radial-gradient(circle at 30% 25%,#fff9,transparent 22%),linear-gradient(145deg,${viewPlanet.to},${viewPlanet.from})`, boxShadow: `0 0 20px ${viewPlanet.from}66` }} />
@@ -447,6 +417,7 @@ export default function MyUniverse() {
             <PlanetDomainReport analysis={domainAnal} planet={viewPlanet} />
             <PlanetConstellations key={isAll ? "all" : planet} groups={domainGroups} valueRanking={profile?.value_ranking} />
           </div>
+        </div>
         </div>
 
       </Card>
@@ -486,7 +457,7 @@ export default function MyUniverse() {
           </div>
         </div>
       )}
-      <p className="order-4 mb-2 mt-1 text-center text-[10px] leading-relaxed text-mut md:hidden">
+      <p className="mb-2 mt-5 text-center text-[10px] leading-relaxed text-mut">
         레벨·별·XP는 앱 참여 지표이며, 실측 데이터 결과가 아닙니다.
         <br />
         {HONESTY_NOTE}
@@ -560,7 +531,7 @@ function AllDomainsReport({ state, onPick, planet }) {
   const rising = active.filter((r) => r.a.trend != null && r.a.trend > 0.1).map((r) => r.label);
   const falling = active.filter((r) => r.a.trend != null && r.a.trend < -0.1).map((r) => r.label);
   const empty = rows.filter((r) => !r.a.ok).map((r) => r.label);
-  const trendCol = (t) => (t == null ? "#67A3FF" : t > 0.1 ? "#5DCAA5" : t < -0.1 ? "#F0736F" : "#8895AF");
+  const trendCol = (t) => (t == null ? "#8B6CCF" : t > 0.1 ? "#5DCAA5" : t < -0.1 ? "#F0736F" : "#8895AF");
   const trendTxt = (t) => (t == null ? "—" : t > 0.1 ? "↗" : t < -0.1 ? "↘" : "→");
 
   return (
@@ -615,7 +586,7 @@ function PlanetDomainReport({ analysis, planet }) {
   const xs = (i) => (s.length === 1 ? W / 2 : PAD + (i * (W - 2 * PAD)) / (s.length - 1));
   const ys = (v) => H - PAD - ((v + 1) / 2) * (H - 2 * PAD); // v: -1..1 → 아래..위
   const pts = s.map((p, i) => `${xs(i).toFixed(1)},${ys(p.v).toFixed(1)}`).join(" ");
-  const trendCol = analysis.trend == null ? "#67A3FF" : analysis.trend > 0.1 ? "#5DCAA5" : analysis.trend < -0.1 ? "#F0736F" : "#67A3FF";
+  const trendCol = analysis.trend == null ? "#8B6CCF" : analysis.trend > 0.1 ? "#5DCAA5" : analysis.trend < -0.1 ? "#F0736F" : "#8B6CCF";
 
   return (
     <div className="mt-2 rounded-xl border border-line bg-[#0E1424] px-3.5 py-3">
@@ -638,7 +609,7 @@ function PlanetDomainReport({ analysis, planet }) {
       {/* 대표 기록 — 그 영역에서 가장 좋았던/힘들었던 날의 실제 한 줄 */}
       <div className="mt-2.5 space-y-1.5">
         {analysis.best.text && (
-          <div className="rounded-lg bg-[#12203a] px-2.5 py-1.5">
+          <div className="rounded-lg bg-[#1D1730] px-2.5 py-1.5">
             <div className="text-[9.5px] text-[#5DCAA5]">🌟 가장 좋았던 날 · {analysis.best.date.slice(5)}</div>
             <div className="mt-0.5 text-[11px] leading-relaxed text-sub">“{analysis.best.text}”</div>
           </div>

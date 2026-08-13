@@ -41,7 +41,7 @@ export default function DiarySignalCard() {
   const shown = (sig.signals || []).filter((x) => x.days > 0).slice(0, 4);
   const hasJobSignal = sig.ok && (sig.jobChangeDays > 0 || shown.length > 0);
   const interp = useMemo(() => (isCareer && hasJobSignal ? interpretSignals(sig, gap) : null), [isCareer, hasJobSignal, sig, gap]);
-  const toneColor = { caution: "#F0C36B", go: "#5DCAA5", mid: "#67A3FF" };
+  const toneColor = { caution: "#F0C36B", go: "#5DCAA5", mid: "#8B6CCF" };
 
   // 그 분야 일기 분석(그래프·감정·대표 기록). 관계면 하위유형만 필터.
   const anal = useMemo(() => domainAnalysis(planetKey, undefined, subtype), [planetKey, subtype]);
@@ -80,7 +80,7 @@ export default function DiarySignalCard() {
                     <div key={s.key} className="flex items-center gap-2">
                       <span className="w-[68px] shrink-0 text-[11px] text-sub">{s.label}</span>
                       <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#223047]">
-                        <div className="h-full rounded-full bg-gradient-to-r from-[#2F6FE8] to-[#67A3FF]"
+                        <div className="h-full rounded-full bg-[#8B6CCF]"
                           style={{ width: `${Math.min(100, Math.round(s.intensity * 100))}%` }} />
                       </div>
                       <span className="w-[34px] shrink-0 text-right text-[10px] tabular-nums text-mut">{s.days}일</span>
@@ -102,7 +102,7 @@ export default function DiarySignalCard() {
           )}
           <Sparkline series={anal.series} trend={anal.trend} />
           {anal.best.text && (
-            <div className="mt-2 rounded-lg bg-[#12203a] px-2.5 py-1.5">
+            <div className="mt-2 rounded-lg bg-[#1D1730] px-2.5 py-1.5">
               <div className="text-[9.5px] text-[#5DCAA5]">🌟 가장 좋았던 날 · {anal.best.date.slice(5)}</div>
               <div className="mt-0.5 text-[11px] leading-relaxed text-sub">“{anal.best.text}”</div>
             </div>
@@ -149,7 +149,7 @@ function Sparkline({ series = [], trend }) {
   const xs = (i) => (series.length === 1 ? W / 2 : PAD + (i * (W - 2 * PAD)) / (series.length - 1));
   const ys = (v) => H - PAD - ((v + 1) / 2) * (H - 2 * PAD);
   const pts = series.map((p, i) => `${xs(i).toFixed(1)},${ys(p.v).toFixed(1)}`).join(" ");
-  const col = trend == null ? "#67A3FF" : trend > 0.1 ? "#5DCAA5" : trend < -0.1 ? "#F0736F" : "#67A3FF";
+  const col = trend == null ? "#8B6CCF" : trend > 0.1 ? "#5DCAA5" : trend < -0.1 ? "#F0736F" : "#8B6CCF";
   return (
     <div className="mt-2.5">
       <div className="mb-1 text-[9.5px] text-mut">기분 흐름 (기록 순서대로 이어짐)</div>

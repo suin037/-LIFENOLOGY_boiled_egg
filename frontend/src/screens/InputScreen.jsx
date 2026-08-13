@@ -99,22 +99,22 @@ export default function InputScreen() {
     <div className="-mx-5 -mt-1 min-h-full bg-[linear-gradient(180deg,#111D39_0%,#0B1325_46%,#171511_100%)] px-5 pb-7 pt-3 lg:mx-auto lg:rounded-[28px] lg:px-8 lg:py-7">
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-[12px] font-semibold text-[#76A7FF]">시뮬레이션</div>
+          <div className="text-[12px] font-semibold text-[#8B6CCF]">시뮬레이션</div>
           <h1 className="mt-0.5 text-[22px] font-bold tracking-[-.035em]">두 미래를 나란히 놓아볼까요?</h1>
         </div>
-        <span className="rounded-full border border-[#4169B5] bg-[#182B52] px-3 py-1 text-[11px] font-bold text-[#8DB4FF]">
+        <span className="rounded-full border border-[#6F55A7] bg-[#211832] px-3 py-1 text-[11px] font-bold text-[#8B6CCF]">
           {completed} / 2
         </span>
       </div>
 
       <div className="mt-3 h-1 overflow-hidden rounded-full bg-white/10">
-        <div className="h-full rounded-full bg-gradient-to-r from-[#4C7FFF] to-[#86B3FF] transition-all duration-300" style={{ width: `${completed * 50}%` }} />
+        <div className="h-full rounded-full bg-[#8B6CCF] transition-all duration-300" style={{ width: `${completed * 50}%` }} />
       </div>
 
       <div className="mt-4 flex items-center gap-3 rounded-[18px] border border-white/10 bg-white/[.055] px-3.5 py-3 backdrop-blur">
         <Mascot which="cosmo" size={42} />
         <div>
-          <div className="text-[11px] font-bold text-[#89B6FF]">코스모 · 고민과 선택</div>
+          <div className="text-[11px] font-bold text-[#8B6CCF]">코스모 · 고민과 선택</div>
           <p className="mt-0.5 text-[12px] text-sub">
             {!normalizedA ? "먼저 마음에 떠오르는 첫 번째 길을 적어보세요." : !normalizedB ? "좋아요. 반대편에 놓을 두 번째 길은 무엇인가요?" : "두 갈림길이 준비됐어요. 같은 기준으로 비교해볼게요."}
           </p>
@@ -153,7 +153,8 @@ export default function InputScreen() {
         <section className="mt-4 rounded-[22px] border border-cyan/30 bg-[#0B1729]/90 p-4">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <div className="text-[13px] font-bold text-ink">이직 예측을 위한 현재 일자리 정보</div>
+              <div className="text-[13px] font-bold text-ink">이직 결과를 더 정확히 비교하려면</div>
+              <div className="mt-1 text-[11px] leading-relaxed text-muted">이직 시뮬레이션을 선택했을 때만 한 번 입력해요. 입력값은 다음 비교에도 다시 사용할 수 있어요.</div>
               <p className="mt-1 text-[11px] leading-relaxed text-mut">유사 조건 비교에 사용하며, 선택 결과를 확정하는 정보는 아니에요.</p>
             </div>
             <span className="shrink-0 rounded-full bg-cyan/15 px-2 py-1 text-[9px] font-bold text-cyan">필수</span>
@@ -207,7 +208,7 @@ export default function InputScreen() {
         {emotions.length > 0 && <Caption>감정은 결과 설명의 말투와 맥락에 반영됩니다.</Caption>}
       </details>
 
-      <button type="button" disabled={blocked} onClick={() => navigate("/simulate")} className={`tap mt-4 flex w-full items-center justify-center gap-2 rounded-full py-4 text-[15px] font-bold transition-all ${blocked ? "bg-white/10 text-mut" : "bg-[#EAF1FF] text-[#08101D] shadow-[0_14px_34px_rgba(117,160,255,.25)]"}`}>
+      <button type="button" disabled={blocked} onClick={() => navigate("/simulate")} className={`tap mt-4 flex w-full items-center justify-center gap-2 rounded-full py-4 text-[15px] font-bold transition-all ${blocked ? "bg-white/10 text-mut" : "bg-[#F4F0FF] text-[#08101D] shadow-[0_14px_34px_rgba(139,108,207,.25)]"}`}>
         두 미래 비교 시작하기 <ArrowRight size={17} />
       </button>
       <p className="mt-2 text-center text-[10px] text-mut">두 길을 채우면 코스모가 같은 조건으로 결과를 비교해요.</p>
@@ -227,7 +228,7 @@ function JobField({ label, children }) {
 function ChoicePanel({ side, text, domains, domainAuto, active, grow, suggestions, onFocus, onText, onSuggestion, onDomain, onRedetect }) {
   const [editingDomains, setEditingDomains] = useState(false);
   const isA = side === "A";
-  const accentText = isA ? "text-[#78A8FF]" : "text-[#FFB85C]";
+  const accentText = isA ? "text-[#8B6CCF]" : "text-[#FFB85C]";
 
   return (
     <section onClick={onFocus} style={{ flexGrow: grow, flexBasis: 0 }} className={`relative min-h-[240px] px-5 py-6 transition-[flex-grow,background-color] duration-500 ease-out lg:px-8 lg:py-9 ${isA ? "bg-[radial-gradient(circle_at_15%_10%,rgba(69,116,225,.19),transparent_48%)]" : "bg-[radial-gradient(circle_at_85%_90%,rgba(211,137,49,.15),transparent_48%)]"} ${active ? "opacity-100" : "opacity-75"}`}>
@@ -255,7 +256,7 @@ function ChoicePanel({ side, text, domains, domainAuto, active, grow, suggestion
               {LIFE_DOMAINS.map((domain) => {
                 const selected = domains.includes(domain.key);
                 const DomainIcon = DOMAIN_ICONS[domain.key];
-                return <button type="button" key={domain.key} aria-pressed={selected} onClick={(event) => { event.stopPropagation(); onDomain(domain.key); }} className={`tap flex min-w-0 items-center justify-center gap-1 rounded-xl border px-2 py-2 text-[9px] ${selected ? `${isA ? "border-[#5E91F4] bg-[#10284B]" : "border-[#D8933E] bg-[#352511]"} ${accentText}` : "border-white/10 bg-black/10 text-mut"}`}>{DomainIcon && <DomainIcon size={12} />}{domain.label}</button>;
+                return <button type="button" key={domain.key} aria-pressed={selected} onClick={(event) => { event.stopPropagation(); onDomain(domain.key); }} className={`tap flex min-w-0 items-center justify-center gap-1 rounded-xl border px-2 py-2 text-[9px] ${selected ? `${isA ? "border-[#8B6CCF] bg-[#211832]" : "border-[#D8933E] bg-[#352511]"} ${accentText}` : "border-white/10 bg-black/10 text-mut"}`}>{DomainIcon && <DomainIcon size={12} className="text-violet-400" />}{domain.label}</button>;
               })}
               {!domainAuto && <button type="button" onClick={(event) => { event.stopPropagation(); onRedetect(); }} className={`col-span-3 py-1 text-[10px] ${accentText}`}>자동 감지 다시 적용</button>}
             </div>

@@ -76,7 +76,7 @@ export default function ActionView({ a, b, domains = { a: [], b: [] } }) {
         <div className="mt-2 flex flex-wrap gap-1">{selected.domains.map((d) => <span key={d} className="rounded-full border border-line px-2 py-1 text-[10px] text-mut">{domainLabel(d)}</span>)}</div>
       )}
       {reflected.length > 0 && (
-        <p className="mt-2 rounded-lg border border-cyan/25 bg-[#12203a] px-2.5 py-1.5 text-[10px] leading-relaxed text-sub">
+        <p className="mt-2 rounded-lg border border-cyan/25 bg-[#1D1730] px-2.5 py-1.5 text-[10px] leading-relaxed text-sub">
           🗒 최근 일기 반영: {reflected.map((r) => `${r.signal} ${r.days}일`).join(" · ")} — 이 상태에 맞춰 아래 실험을 골랐어요.
         </p>
       )}
@@ -125,6 +125,6 @@ export default function ActionView({ a, b, domains = { a: [], b: [] } }) {
 }
 
 function GoalButton({ side, result, onClick }) {
-  const color = side === "A" ? "text-cyan border-cyan/50 bg-[#12203a]" : "text-gold border-gold/50 bg-[#241d10]";
+  const color = side === "A" ? "text-cyan border-cyan/50 bg-[#1D1730]" : "text-gold border-gold/50 bg-[#241d10]";
   return <button onClick={onClick} className={`tap rounded-xl border p-3 text-left ${color}`}><span className="text-[10px] font-bold">UNIVERSE {side}</span><span className="mt-1 block text-[12px] font-semibold">{labelOf(result.choice)}를 목표로</span></button>;
 }

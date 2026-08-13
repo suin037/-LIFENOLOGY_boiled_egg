@@ -57,7 +57,7 @@ export default function Simulate() {
       <div className="relative mx-auto my-7 h-[126px] w-[220px]">
         <div className="absolute left-1/2 top-1/2 h-[92px] w-[180px] -translate-x-1/2 -translate-y-1/2 rounded-[50%] border border-cyan/20" />
         <div className="absolute left-1/2 top-1/2 h-[126px] w-[126px] -translate-x-1/2 -translate-y-1/2 animate-spin-slow rounded-full border border-dashed border-white/10" />
-        <div className="absolute left-1/2 top-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-gradient-to-br from-[#397EF4] to-[#183E83] shadow-[0_0_38px_rgba(76,145,255,.35)]">
+        <div className="absolute left-1/2 top-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[#8B6CCF] shadow-[0_0_38px_rgba(139,108,207,.28)]">
           <GitCompareArrows size={25} className="text-white" strokeWidth={1.8} />
         </div>
         <ChoiceOrb side="A" className="left-0 top-[41px]" />
@@ -76,7 +76,7 @@ export default function Simulate() {
         </div>
         <div className="h-1.5 overflow-hidden rounded-full bg-[#223047]">
           <div
-            className="h-full rounded-full bg-gradient-to-r from-[#2F6FE8] to-[#67A3FF] transition-[width] duration-500 ease-out"
+            className="h-full rounded-full bg-[#8B6CCF] transition-[width] duration-500 ease-out"
             style={{ width: `${progress}%` }}
           />
         </div>
@@ -92,7 +92,7 @@ export default function Simulate() {
                   isActive ? "bg-card2 text-ink" : isDone ? "text-sub" : "text-mut"
                 }`}
               >
-                <span className={`flex h-6 w-6 items-center justify-center rounded-full ${isDone ? "bg-cyan/15 text-cyan" : isActive ? "bg-white/10 text-ink" : "text-mut"}`}>
+                <span className={`flex h-6 w-6 items-center justify-center rounded-full ${isDone ? "bg-violet-500/15 text-violet-400" : isActive ? "bg-violet-500/10 text-violet-300" : "text-violet-400/50"}`}>
                   {isDone ? <Check size={14} strokeWidth={2.5} /> : <Icon size={14} strokeWidth={1.8} />}
                 </span>
                 <span>{label}</span>

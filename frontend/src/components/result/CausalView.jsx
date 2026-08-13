@@ -46,7 +46,7 @@ function SideCausal({ result }) {
         {hasDescriptive && (
           <>
             <div className="mt-2.5 text-xs text-sub">겉보기 (그냥 비교)</div>
-            <Bar value={descriptive} scale={scale} tone="bg-gradient-to-r from-cyan to-cyan-deep opacity-60" />
+            <Bar value={descriptive} scale={scale} tone="bg-[#8B6CCF] opacity-60" />
             <div className="flex justify-end text-xs font-bold text-ink">{signed(descriptive)}만원</div>
           </>
         )}

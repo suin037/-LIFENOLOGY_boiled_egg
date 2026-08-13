@@ -185,7 +185,7 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
                 onChange={(e) => setEditText(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && commitEdit()}
                 onBlur={commitEdit}
-                className="rounded-2xl border border-cyan bg-[#12203a] px-3 py-1.5 text-[13px] text-ink outline-none"
+                className="rounded-2xl border border-cyan bg-[#1D1730] px-3 py-1.5 text-[13px] text-ink outline-none"
               />
               <button onMouseDown={(e) => e.preventDefault()} onClick={commitEdit} className="tap text-[10px] text-cyan">완료</button>
             </div>
@@ -198,7 +198,7 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
               >
                 ✎
               </button>
-              <span className="rounded-2xl bg-[#12203a] px-3 py-1.5 text-[13px]" style={{ color: "#dbeafe" }}>
+              <span className="rounded-2xl bg-[#1D1730] px-3 py-1.5 text-[13px]" style={{ color: "#E9E1FA" }}>
                 {m.text}
               </span>
             </div>
@@ -277,7 +277,7 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
             onClick={save}
             disabled={busy || !hasUser}
             className={`tap mt-2 w-full rounded-2xl py-2.5 text-[13px] font-bold transition-colors ${
-              hasUser ? "bg-gradient-to-r from-cyan to-[#7FD4FF] text-[#04203a]" : "bg-[#1E2740] text-mut"
+              hasUser ? "bg-[#8B6CCF] text-white" : "bg-[#1E2740] text-mut"
             }`}
           >
             오늘 기록 저장

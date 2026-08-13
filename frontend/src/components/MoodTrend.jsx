@@ -33,7 +33,7 @@ export default function MoodTrend({ days = 7 }) {
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 8, right: 8, left: -28, bottom: 0 }}>
             <YAxis domain={[1, 5]} ticks={[1, 3, 5]} tick={false} axisLine={false} tickLine={false} width={0} />
-            <XAxis dataKey="date" tick={{ fill: "#5A6B8C", fontSize: 9 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+            <XAxis dataKey="date" tick={{ fill: "#8B6CCF", fontSize: 9 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
             <Tooltip
               contentStyle={{ background: "#141B2E", border: "1px solid #28324D", borderRadius: 10, fontSize: 12, color: "#EAF0FB" }}
               formatter={(v) => [`${moodEmoji(v)} ${v}/5`, "기분"]}

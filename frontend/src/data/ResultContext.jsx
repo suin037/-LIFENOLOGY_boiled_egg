@@ -52,11 +52,12 @@ export function ResultProvider({ children }) {
     const choiceA = opts.choiceA || choices.a;
     const choiceB = opts.choiceB || choices.b;
     const currentDiary = opts.diary ?? diary;
+    const scenarioDomain = loadUniverse().planet;
     noteSimulationRun();
     // 그 날 그 영역(현재 행성)에서 시나리오를 만들었음을 기록 → 지구본에 ◆ 로 표시.
     try {
       recordScenario({
-        domain: loadUniverse().planet,
+        domain: scenarioDomain,
         title: choiceB ? `${choiceA} vs ${choiceB}` : `${choiceA} 시나리오`,
       });
     } catch {
@@ -95,6 +96,25 @@ export function ResultProvider({ children }) {
         imageLoading: false,
       };
       setResult(preview);
+      try {
+        const summarize = (side) => {
+          if (!side) return "";
+          const signals = [
+            side.choice,
+            side.expected_wage != null ? `예상 소득 ${Math.round(side.expected_wage).toLocaleString()}만원` : "",
+            side.causal_effect != null ? `추정 변화 ${Number(side.causal_effect).toFixed(1)}%` : "",
+            side.risk_label || side.coverage || "",
+          ].filter(Boolean);
+          return signals.join(" · ");
+        };
+        recordScenario({
+          domain: scenarioDomain,
+          title: choiceB ? `${choiceA} vs ${choiceB}` : `${choiceA} 시나리오`,
+          br: [summarize(preview.a), summarize(preview.b)].filter(Boolean),
+        });
+      } catch {
+        /* 우주 패널 요약 저장 실패는 결과 화면을 막지 않는다. */
+      }
     } catch (error) {
       const fallback = { ...pair, dataMode: "demo", narrativeError: error.message };
       setResult(fallback);

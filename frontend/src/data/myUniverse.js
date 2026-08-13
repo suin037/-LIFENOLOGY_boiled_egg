@@ -99,6 +99,9 @@ export function addCheckin(entry = {}) {
   const date = entry.date || todayKey();
   const valence =
     entry.valence != null ? Number(entry.valence) : moodToValence(entry.mood);
+  const answerValues = Array.isArray(entry.answers)
+    ? entry.answers
+    : Object.values(entry.answers || {});
   const star = {
     date,
     mood: entry.mood ?? null,
@@ -112,12 +115,59 @@ export function addCheckin(entry = {}) {
     domains: entry.domains ?? null, // 자동 분류 영역(행성) key 배열 — /tag 결과
     diaryId: entry.diaryId ?? null,
     hasDiary: Boolean(
-      entry.text?.trim() || entry.note?.trim() || entry.answers?.length || entry.diaryId,
+      entry.text?.trim() || entry.note?.trim()
+      || answerValues.some((value) => String(value?.a ?? value ?? "").trim())
+      || entry.diaryId,
     ),
   };
   return patch((s) => {
+    const previous = s.checkins.find((c) => c.date === date);
+    if (previous) {
+      star.domains = entry.domains ?? previous.domains ?? null;
+      star.experiments = entry.experiments ?? previous.experiments ?? [];
+    }
     const rest = s.checkins.filter((c) => c.date !== date);
     s.checkins = [...rest, star].sort((a, b) => a.date.localeCompare(b.date));
+    return s;
+  });
+}
+
+/**
+ * JY diary entries(pm_diary_v5)를 나의 우주 별 저장소에 병합한다.
+ * 나의 우주에서 생성한 domains/experiments는 보존하고 일기 원문과 체크인 값만 갱신한다.
+ */
+export function syncDiaryEntries(entries = []) {
+  if (!Array.isArray(entries) || !entries.length) return loadUniverse();
+  return patch((s) => {
+    const byDate = new Map(s.checkins.map((item) => [item.date, item]));
+    for (const entry of entries) {
+      if (!entry?.date) continue;
+      const previous = byDate.get(entry.date) || {};
+      const answers = entry.answers ?? previous.answers ?? null;
+      const answerValues = Array.isArray(answers) ? answers : Object.values(answers || {});
+      const text = entry.text ?? previous.text ?? "";
+      const note = entry.note ?? text ?? previous.note ?? "";
+      byDate.set(entry.date, {
+        ...previous,
+        date: entry.date,
+        mood: entry.mood ?? previous.mood ?? null,
+        valence: entry.valence ?? moodToValence(entry.mood) ?? previous.valence ?? null,
+        energy: entry.energy ?? previous.energy ?? null,
+        skill: entry.competency ?? entry.skill ?? previous.skill ?? null,
+        keyword: entry.emotion ?? entry.keyword ?? previous.keyword ?? null,
+        note,
+        text,
+        answers,
+        diaryId: entry.id ?? entry.diaryId ?? previous.diaryId ?? `e-${entry.date}`,
+        domains: previous.domains ?? entry.domains ?? null,
+        experiments: previous.experiments ?? entry.experiments ?? [],
+        hasDiary: Boolean(
+          String(text).trim() || String(note).trim()
+          || answerValues.some((value) => String(value?.a ?? value ?? "").trim()),
+        ),
+      });
+    }
+    s.checkins = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
     return s;
   });
 }

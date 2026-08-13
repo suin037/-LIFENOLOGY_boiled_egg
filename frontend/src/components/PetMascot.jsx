@@ -8,7 +8,7 @@ import { hasCheckedInToday } from "../data/myUniverse.js";
 // 3D 느낌은 CSS 소프트 그라디언트·그림자·squash/stretch로 '말랑말랑'하게.
 const GUIDES = [
   { key: "nova", name: "노바", color: "#FF9EC0", glow: "rgba(255,158,192,.45)" },
-  { key: "cosmo", name: "코스모", color: "#7CC3FF", glow: "rgba(124,195,255,.45)" },
+  { key: "cosmo", name: "코스모", color: "#8B6CCF", glow: "rgba(124,195,255,.45)" },
   { key: "lumi", name: "루미", color: "#FFD97A", glow: "rgba(255,217,122,.45)" },
 ];
 
@@ -217,7 +217,7 @@ export default function PetMascot({ rumination, onCompare }) {
       {/* 상태 + 액션 */}
       <div className="mt-1 flex items-center gap-2 text-[11px]">
         <span className="text-mut">기분</span>
-        <span className="font-semibold" style={{ color: mood === "기쁨" ? "#5DCAA5" : mood === "시무룩" ? "#F0A0A0" : "#9FB0CE" }}>
+        <span className="font-semibold" style={{ color: mood === "기쁨" ? "#5DCAA5" : mood === "시무룩" ? "#F0A0A0" : "#8B6CCF" }}>
           {mood === "기쁨" ? "😊 기쁨" : mood === "시무룩" ? "🥺 시무룩" : "🙂 보통"}
         </span>
       </div>

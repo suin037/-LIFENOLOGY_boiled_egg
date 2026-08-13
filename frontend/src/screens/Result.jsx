@@ -201,7 +201,7 @@ function PersonaScenario({ a, b }) {
   }
 
   return (
-    <div className="mb-3 mt-1 rounded-2xl border border-cyan bg-[#12203a] p-3.5">
+    <div className="mb-3 mt-1 rounded-2xl border border-cyan bg-[#1D1730] p-3.5">
       <div className="flex items-center justify-between">
         <div className="text-[13px] font-bold text-cyan">🔮 내 성향이 반영된 이직 서사</div>
         <button

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useResult } from "../data/ResultContext.jsx";
 import { Eyebrow, Card } from "../components/ui.jsx";
@@ -13,6 +13,9 @@ import Mascot from "../components/Mascot.jsx";
 import PrivacyVault from "../components/PrivacyVault.jsx";
 import { LEVEL_TITLES, XP_RULES, universeSummary } from "../data/myUniverse.js";
 import { LEVEL_REWARDS } from "../data/unlocks.js";
+import PetMascot from "../components/PetMascot.jsx";
+import PlanetShop from "../components/PlanetShop.jsx";
+import { jobChangeRumination } from "../data/diarySignals.js";
 
 const OCCUPATIONS = [
   "연구·공학기술",
@@ -124,12 +127,19 @@ function LevelRule({ label, xp }) {
 
 export default function Settings() {
   const navigate = useNavigate();
-  const { profile, setProfile, setOnboarded } = useResult();
+  const { profile, setProfile, setOnboarded, setChoices } = useResult();
   const [prefs, setPrefs] = useState(loadPrefs);
   const [editingAvatar, setEditingAvatar] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
+  const [planetShopOpen, setPlanetShopOpen] = useState(false);
   const [profileDraft, setProfileDraft] = useState(null);
   const universe = universeSummary();
+  const rumination = useMemo(() => jobChangeRumination({ windowDays: 28, threshold: 4 }), []);
+
+  function startJobCompare() {
+    setChoices({ a: "이직", b: "유지" });
+    navigate("/input");
+  }
 
   function startProfileEdit() {
     setProfileDraft({
@@ -181,6 +191,15 @@ export default function Settings() {
         </button>
       </div>
       <h1 className="mb-3 text-[22px] font-bold">프로필 · 설정</h1>
+
+      <div className="lg:grid lg:grid-cols-[minmax(440px,1fr)_minmax(440px,1fr)] lg:items-start lg:gap-x-6 [&>*]:min-w-0">
+
+      {/* 생활 관리 친구 — 홈을 방해하지 않도록 설정에서 관리한다. */}
+      <PetMascot rumination={rumination} onCompare={startJobCompare} />
+
+      <Card>
+        <div className="flex items-center justify-between gap-4"><div><div className="text-xs font-semibold text-mut">나의 우주 꾸미기</div><p className="mt-1 text-[10px] leading-relaxed text-sub">영역 색은 유지하고 행성의 질감·광택·고리를 변경합니다.</p></div><button type="button" onClick={()=>setPlanetShopOpen(true)} className="tap shrink-0 rounded-xl bg-[#8B6CCF] px-4 text-[11px] font-bold">상점 열기</button></div>
+      </Card>
 
       {/* 개인정보 암호화 */}
       <PrivacyVault />
@@ -413,10 +432,12 @@ export default function Settings() {
 
       <button
         onClick={resetToStart}
-        className="tap mt-2 w-full rounded-2xl border border-line py-3 text-[13px] text-mut"
+        className="tap mt-2 w-full rounded-2xl border border-line py-3 text-[13px] text-mut lg:col-span-2"
       >
         처음 화면으로 (로그아웃)
       </button>
+      </div>
+      {planetShopOpen&&<PlanetShop onClose={()=>setPlanetShopOpen(false)}/>} 
     </div>
   );
 }
