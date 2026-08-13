@@ -4,7 +4,7 @@ import { Archive, CalendarDays, ChevronRight, Plus, X } from "lucide-react";
 import UniverseMap from "../components/UniverseMap.jsx";
 import Constellation from "../components/Constellation.jsx";
 import { PLANETS } from "../data/result.js";
-import { adaptiveGroups, loadUniverse, resetUniverse, scenariosByPlanet, seedDemoCheckins, todayKey } from "../data/myUniverse.js";
+import { adaptiveGroups, hasRecord, loadUniverse, resetUniverse, scenariosByPlanet, seedDemoCheckins, starGroupsOf, todayKey } from "../data/myUniverse.js";
 import { seedDemoEunwoo, seedDemoYear } from "../data/demoYear.js";
 import { domainAnalysis, domainMonths, domainReport } from "../data/diarySignals.js";
 import { futureMaterials, getCachedFuture, writeFuture, getCachedOpportunities, scanOpportunities } from "../data/futureApi.js";
@@ -25,11 +25,13 @@ const KEYWORDS = {
   relation: ["가족", "친구", "동료", "소통"], health: ["회복", "수면", "운동", "마음 건강"],
 };
 
-function domainsOf(entry) {
-  return Array.isArray(entry.domains) && entry.domains.length ? entry.domains : ["career"];
-}
+// 그 행성의 기록 — 별·분석과 같은 규칙(hasRecord + 저장된 domains)을 쓴다.
+// 전에는 domains 가 없으면 career 로 밀어넣고 기분만 찍은 날도 셌다. 그래서
+// '최근 기록'에 "(체크인만 남긴 날)"이 뜨고 개수도 별과 어긋났다.
 function planetEntries(state, key) {
-  return (state.checkins || []).filter((entry) => !entry.empty && domainsOf(entry).includes(key));
+  return (state.checkins || []).filter(
+    (entry) => hasRecord(entry) && Array.isArray(entry.domains) && entry.domains.includes(key),
+  );
 }
 function dateLabel(date) { const [, month, day] = String(date).split("-"); return `${Number(month)}.${Number(day)}`; }
 
@@ -62,33 +64,14 @@ export default function MyUniverseV2() {
   const allGroups = useMemo(() => adaptiveGroups(null, state), [state]);
   const selectedGroups = useMemo(() => planet ? adaptiveGroups(planet.key, state) : allGroups, [planet, state, allGroups]);
   const currentGroup = week || selectedGroups[selectedGroups.length - 1] || allGroups[allGroups.length - 1] || null;
-  const futureGroups = useMemo(() => {
-    const source = planet ? scenariosByPlanet(planet.key, state) : (state.scenarios || []);
-    const mapped = source.map((scenario,index)=>({
-      ...scenario,
-      scenario,
-      weekStart: `${scenario.date || "future"}-${scenario.domain || "all"}-${index}`,
-      stars: [
-        { label:"현재", horizon:"현재", empty:false },
-        { label:"3개월", horizon:"3개월", empty:false },
-        { label:"1년", horizon:"1년", empty:false },
-        { label:"3년", horizon:"3년", empty:false },
-      ],
-    }));
-    const visiblePlanets = planet ? [planet] : PLANETS;
-    for (const item of visiblePlanets) {
-      if (mapped.some((group)=>group.domain===item.key)) continue;
-      mapped.push({
-        domain:item.key,
-        placeholder:true,
-        title:`${item.label} 미래 탐색`,
-        weekStart:`future-${item.key}`,
-        scenario:{domain:item.key,title:`${item.label} 미래 탐색`,br:[]},
-        stars:["현재","3개월","1년","3년"].map((label)=>({label,horizon:label,empty:false})),
-      });
-    }
-    return mapped;
-  },[planet,state]);
+
+  // 행성 둘레를 도는 별자리 = 그 영역의 일기. 전에는 시나리오 표식(현재/3개월/1년/3년
+  // 고정 4개)이 돌고 있어서, 기록이 20개여도 별은 4개만 보였다.
+  // "당신의 기록이 별이 되고, 별들이 연결되어 우주가 됩니다" 가 이 화면의 약속이다.
+  const orbitGroups = useMemo(() => {
+    if (planet) return starGroupsOf(planet.key, state);
+    return PLANETS.flatMap((item) => starGroupsOf(item.key, state));
+  }, [planet, state]);
 
   function openPlanet(key) { setPlanet(PLANETS.find((item) => item.key === key)); setWeek(null); setFuture(null); }
   function openWeek(group) { setWeek(group || selectedGroups[selectedGroups.length - 1] || null); setRecord(null); setReport(false); }
@@ -113,14 +96,14 @@ export default function MyUniverseV2() {
         <button type="button" onClick={() => navigate("/archive")} className="tap flex items-center gap-2 rounded-full border border-white/10 bg-black/25 px-3 text-[10px] text-sub backdrop-blur"><Archive size={13} /> 보관함</button>
       </div>
       <div className={`transition-[margin] duration-300 ease-out ${(planet||future)?"md:mr-[450px]":""}`}>
-        <UniverseMap planets={PLANETS} groups={futureGroups} skin={skin} scenarios={state.scenarios || []} selectedKey={planet?.key} onPlanetSelect={(key)=>key ? openPlanet(key) : (setPlanet(null),setFuture(null))} onConstellationOpen={(group,key)=>{
-          if (key) setPlanet(PLANETS.find((item)=>item.key===key));
-          setFuture(group);
-        }} />
+        <UniverseMap planets={PLANETS} groups={orbitGroups} skin={skin} scenarios={state.scenarios || []} selectedKey={planet?.key} onPlanetSelect={(key)=>key ? openPlanet(key) : (setPlanet(null),setFuture(null))} onConstellationOpen={(group,key)=>{
+          // 기록 별자리를 누르면 그 영역 전체(기록·기회·N년 뒤)를 연다.
+          if (key) openPlanet(key);
+        }} onScenarioOpen={(scenario)=>setFuture({ scenario, ...scenario })} />
       </div>
       <p className="pointer-events-none absolute bottom-5 left-1/2 z-20 -translate-x-1/2 text-[10px] text-white/40">행성을 클릭해 영역별 미래를 비교해보세요 · 드래그 회전 · 휠/핀치 확대</p>
 
-      {planet && !future && <PlanetModal planet={planet} state={state} groups={futureGroups} scenarios={scenariosByPlanet(planet.key, state)} onClose={() => setPlanet(null)} onSimulate={() => navigate("/input")} onArchive={() => navigate("/archive")} onOpportunity={pickOpportunity} />}
+      {planet && !future && <PlanetModal planet={planet} state={state} groups={orbitGroups} scenarios={scenariosByPlanet(planet.key, state)} onClose={() => setPlanet(null)} onSimulate={() => navigate("/input")} onArchive={() => navigate("/archive")} onOpportunity={pickOpportunity} onOpenScenario={setFuture} />}
       {future && <FutureScenarioPanel planet={planet} future={future} onClose={()=>setFuture(null)} onCompare={()=>navigate("/input")}/>} 
     </div>
   );
@@ -489,7 +472,7 @@ function FutureYears({ planet, state }) {
   );
 }
 
-function PlanetModal({ planet, state, groups, scenarios, onClose, onSimulate, onArchive, onOpportunity }) {
+function PlanetModal({ planet, state, groups, scenarios, onClose, onSimulate, onArchive, onOpportunity, onOpenScenario }) {
   const entries = planetEntries(state, planet.key), recent = entries.slice(-3).reverse();
   const futures = [...(scenarios || [])].reverse();
   return <div className="absolute inset-y-5 right-5 z-40 w-[min(430px,calc(100%-40px))] overflow-y-auto rounded-[24px] border border-white/10 bg-[#09111F]/94 p-5 shadow-[0_30px_90px_rgba(0,0,0,.6)] backdrop-blur-xl"><div>
@@ -497,7 +480,9 @@ function PlanetModal({ planet, state, groups, scenarios, onClose, onSimulate, on
     <p className="mt-4 text-[11px] leading-relaxed text-sub">{DESCRIPTIONS[planet.key]}</p>
     <div className="mt-5 rounded-[18px] border border-[#8B6CCF]/25 bg-[#8B6CCF]/[.07] p-4">
       <div className="flex items-center justify-between"><p className="text-[11px] font-bold">이 영역에서 탐색한 미래</p><span className="text-[10px] text-[#A88BE8]">{futures.length}개 시나리오</span></div>
-      <div className="mt-3 space-y-2">{futures.length ? futures.slice(0,3).map((scenario, i)=><div key={`${scenario.date}-${i}`} className="rounded-xl border border-white/[.07] bg-black/20 p-3"><div className="flex justify-between gap-3"><p className="text-[11px] font-semibold">{scenario.title}</p><span className="shrink-0 text-[9px] text-mut">{scenario.date}</span></div>{scenario.br?.length>0&&<p className="mt-2 line-clamp-2 text-[10px] leading-relaxed text-sub">{scenario.br.join(" · ")}</p>}</div>) : <p className="py-2 text-[10px] leading-relaxed text-mut">아직 이 영역에서 만든 미래 시뮬레이션이 없어요. 선택지를 비교하면 결과가 이 행성에 쌓입니다.</p>}</div>
+      {/* 시나리오 카드를 눌러 시점별 패널을 연다 — 별자리는 이제 기록을 그리므로,
+          미래 패널로 가는 길은 여기다. */}
+      <div className="mt-3 space-y-2">{futures.length ? futures.slice(0,3).map((scenario, i)=><button key={`${scenario.date}-${i}`} onClick={()=>onOpenScenario?.({scenario, ...scenario})} className="tap w-full rounded-xl border border-white/[.07] bg-black/20 p-3 text-left hover:border-[#8B6CCF]/45"><div className="flex justify-between gap-3"><p className="text-[11px] font-semibold">{scenario.title}</p><span className="shrink-0 text-[9px] text-mut">{scenario.date}</span></div>{scenario.br?.length>0&&<p className="mt-2 line-clamp-2 text-[10px] leading-relaxed text-sub">{scenario.br.join(" · ")}</p>}</button>) : <p className="py-2 text-[10px] leading-relaxed text-mut">아직 이 영역에서 만든 미래 시뮬레이션이 없어요. 선택지를 비교하면 결과가 이 행성에 쌓입니다.</p>}</div>
       <button onClick={onSimulate} className="tap mt-3 w-full rounded-xl bg-[#8B6CCF] text-[12px] font-bold">{futures.length ? "새 미래 시뮬레이션" : "첫 미래 시뮬레이션 시작"}</button>
     </div>
     {/* 이 영역의 일기 분석 — 행성이 시나리오만 담으면 '내 기록'과 끊긴다.

@@ -364,6 +364,34 @@ export function adaptiveGroups(planetKey, s = loadUniverse()) {
   return groups;
 }
 
+/**
+ * 3D 우주에 띄울 그 영역의 기록 별자리 — 정확히 7개씩 끊고, 개수 제한을 두지 않는다.
+ *
+ * adaptiveGroups 는 그룹을 8개로 묶느라 한 별자리에 7개보다 많은 별이 들어갈 수 있는데,
+ * 3D 쪽은 별자리당 7개만 그린다. 그래서 기록이 많아질수록 그릴수록 별이 조용히 사라졌다.
+ * 여기서는 7개 고정으로 끊어, 띄운 별의 총합이 곧 그 영역의 기록 수가 되게 한다.
+ */
+export function starGroupsOf(planetKey, s = loadUniverse()) {
+  const stars = s.checkins
+    .filter((c) => hasRecord(c)
+      && (!planetKey || (Array.isArray(c.domains) && c.domains.includes(planetKey))))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const groups = [];
+  for (let i = 0; i < stars.length; i += STARS_PER_CONSTELLATION) {
+    const chunk = stars.slice(i, i + STARS_PER_CONSTELLATION);
+    groups.push({
+      index: groups.length,
+      domain: planetKey || null,
+      stars: chunk,
+      filled: chunk.length,
+      complete: chunk.length === STARS_PER_CONSTELLATION,
+      weekStart: `${planetKey || "all"}-${chunk[0].date}`,
+      label: `${chunk[0].date.slice(5)}~${chunk[chunk.length - 1].date.slice(5)}`,
+    });
+  }
+  return groups;
+}
+
 // 그 날 그 영역에서 평행우주 시나리오를 만들었음을 기록 → 지구본 ◆. (date,domain) upsert.
 export function recordScenario({ domain, title, br = [], date } = {}) {
   const d = date || todayKey();
