@@ -2,7 +2,8 @@ import { useState } from "react";
 import { redactPII } from "../data/piiRedact.js";
 
 // 관계 상담 입력 — 선택지가 '관계' 영역으로 잡히면 공고 담기 대신 이 칸이 나온다.
-// 카톡 대화(붙여넣기 또는 스크린샷)를 담아두면, 시뮬레이션 후 결과에서 관계 분석을 보여준다.
+// 대화·연락 내역(붙여넣기 또는 화면 캡처)을 담아두면, 시뮬레이션 후 결과에서 관계 분석을 보여준다.
+// 특정 메신저를 지목하지 않는다 — 문자·DM·메신저 무엇이든 같은 방식으로 받는다.
 //
 // 프라이버시: 대화는 가장 민감한 기록이라 두 겹으로 다룬다.
 //   1) 보내기 전 이름·전화번호·주소 등을 프론트에서 마스킹(redactPII)
@@ -34,7 +35,7 @@ export default function RelationshipInput({ talks, setTalks }) {
     );
     const ok = read.filter(Boolean);
     setImages(ok);
-    setNote(ok.length ? `스크린샷 ${ok.length}장 준비됐어요. 담기 전까지는 이 브라우저에만 있어요.` : null);
+    setNote(ok.length ? `캡처 ${ok.length}장 준비됐어요. 공유하기 전까지는 이 브라우저에만 있어요.` : null);
   }
 
   function add() {
@@ -47,7 +48,7 @@ export default function RelationshipInput({ talks, setTalks }) {
         // 보내기 전에 개인정보를 지운다 — 이름·번호가 서버로 가지 않게.
         transcript: redactPII(text.trim()),
         images,
-        label: `${tag} · ${images.length ? `스크린샷 ${images.length}장` : `대화 ${text.trim().length}자`}`,
+        label: `${tag} · ${images.length ? `캡처 ${images.length}장` : `대화 ${text.trim().length}자`}`,
       },
     ]);
     setText(""); setImages([]); setNote(null); setOpen(false);
@@ -62,12 +63,13 @@ export default function RelationshipInput({ talks, setTalks }) {
   return (
     <details className="mt-3 rounded-2xl border border-white/10 bg-[#0B1423]/80 px-3.5 py-3" open>
       <summary className="cursor-pointer text-[11px] font-semibold text-sub">
-        이 관계의 대화 담기 · 선택
+        대화·연락 내역 공유 · 선택
         {list.length > 0 && <span className="ml-1 text-[10px] text-[#C7B5F2]">{list.length}개</span>}
       </summary>
       <p className="mt-2 text-[10px] leading-relaxed text-mut">
-        카톡 대화를 담아두면, 시뮬레이션 후 결과에서 <b className="text-sub">이 관계에서 오가는 신호와
-        당신의 성향</b>을 함께 짚어드려요. 이름·연락처는 보내기 전에 자동으로 가려지고, 서버에는 암호화해 보관합니다.
+        대화 내역이나 연락 내역을 공유해 주시면, 시뮬레이션 후 결과에서 <b className="text-sub">이 관계에서
+        오가는 신호와 당신의 성향</b>을 함께 짚어드려요. 이름·연락처는 보내기 전에 자동으로 가려지고,
+        서버에는 암호화해 보관합니다.
       </p>
 
       {list.length > 0 && (
@@ -80,7 +82,7 @@ export default function RelationshipInput({ talks, setTalks }) {
           ))}
           {!open && (
             <button type="button" onClick={() => setOpen(true)} className="tap rounded-full border border-dashed border-white/20 px-2.5 py-1 text-[10px] text-mut">
-              ＋ 대화 추가
+              ＋ 내역 추가
             </button>
           )}
         </div>
@@ -107,12 +109,12 @@ export default function RelationshipInput({ talks, setTalks }) {
             value={text}
             onChange={(event) => setText(event.target.value)}
             rows={4}
-            placeholder="카톡 대화를 붙여넣어 주세요. (긴 대화면 최근 부분만으로도 충분해요)"
+            placeholder="주고받은 대화를 붙여넣어 주세요. (길면 최근 부분만으로도 충분해요)"
             className="mt-2 w-full resize-none rounded-xl border border-line bg-bg px-3 py-2.5 text-[11px] leading-relaxed text-ink outline-none placeholder:text-mut focus:border-[#8B6CCF]"
           />
 
           <label className="mt-2 block">
-            <span className="mb-1 block text-[10px] text-mut">또는 스크린샷 (최대 3장)</span>
+            <span className="mb-1 block text-[10px] text-mut">또는 대화 화면 캡처 (최대 3장)</span>
             <input
               type="file"
               accept="image/*"
@@ -133,7 +135,7 @@ export default function RelationshipInput({ talks, setTalks }) {
                 ready ? "bg-[#8B6CCF] text-white" : "bg-white/10 text-mut"
               }`}
             >
-              {list.length ? "이 대화도 담기" : "이 대화 담기"}
+              {list.length ? "이 내역도 공유하기" : "이 내역 공유하기"}
             </button>
             {list.length > 0 && (
               <button type="button" onClick={() => { setOpen(false); setText(""); setImages([]); setNote(null); }} className="tap shrink-0 rounded-xl border border-white/10 px-3 text-[11px] text-sub">

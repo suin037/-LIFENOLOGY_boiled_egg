@@ -62,7 +62,7 @@ export function ResultProvider({ children }) {
     ({ ...getPredictionPair({ profile: DEFAULT_PROFILE, choiceA: "이직", choiceB: "유지" }), dataMode: "demo" }),
   );
   const [onboarded, setOnboarded] = useState(false);
-  // 관계 선택지일 때 담아두는 대화(카톡 붙여넣기·스크린샷). 공고와 같은 흐름:
+  // 관계 선택지일 때 담아두는 대화·연락 내역(붙여넣기·화면 캡처). 공고와 같은 흐름:
   // 입력에서 담고, 시뮬레이션 후 결과에서 분석을 본다.
   const [talks, setTalks] = useState([]);              // [{id, tag, transcript, images, label}]
   const [relResults, setRelResults] = useState([]);

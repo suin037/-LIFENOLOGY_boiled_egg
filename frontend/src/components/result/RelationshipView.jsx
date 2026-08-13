@@ -10,14 +10,14 @@ export default function RelationshipView() {
   const list = relResults || [];
 
   if (relBusy && !list.length) {
-    return <p className="px-1 py-6 text-center text-[12px] text-mut">담아둔 대화 {talks?.length || 0}개를 읽고 있어요…</p>;
+    return <p className="px-1 py-6 text-center text-[12px] text-mut">공유해 주신 대화 {talks?.length || 0}개를 읽고 있어요…</p>;
   }
   if (!list.length) {
     return (
       <div className="rounded-2xl border border-dashed border-white/10 px-3.5 py-6 text-center">
-        <p className="text-[12px] text-sub">아직 담은 대화가 없어요.</p>
+        <p className="text-[12px] text-sub">아직 공유된 대화가 없어요.</p>
         <p className="mt-1 text-[10px] leading-relaxed text-mut">
-          시뮬레이션 입력에서 카톡 대화를 담으면 여기서 관계 신호를 볼 수 있어요.
+          시뮬레이션 입력에서 대화·연락 내역을 공유하면 여기서 관계 신호를 볼 수 있어요.
         </p>
       </div>
     );
