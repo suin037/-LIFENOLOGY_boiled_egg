@@ -17,21 +17,79 @@ function seeded(seed) {
   return () => ((value = Math.sin(value * 999.91) * 43758.5453) - Math.floor(value));
 }
 
+function makeSoftTexture(stops) {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 256;
+  const context = canvas.getContext("2d");
+  const gradient = context.createRadialGradient(128, 128, 0, 128, 128, 128);
+  stops.forEach(([position, color]) => gradient.addColorStop(position, color));
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, 256, 256);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+function makePlanetTexture(from, to, seed) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 512; canvas.height = 256;
+  const context = canvas.getContext("2d");
+  const image = context.createImageData(canvas.width, canvas.height);
+  const base = new THREE.Color(from), accent = new THREE.Color(to);
+  const random = seeded(seed + 10);
+  const phases = Array.from({ length: 8 }, () => random() * Math.PI * 2);
+  for (let y = 0; y < canvas.height; y++) {
+    for (let x = 0; x < canvas.width; x++) {
+      const u = x / canvas.width, v = y / canvas.height;
+      const broad = Math.sin(u * 12 + phases[0]) * .35 + Math.sin(v * 16 + phases[1]) * .28;
+      const detail = Math.sin((u + v) * 37 + phases[2]) * .16 + Math.sin((u - v) * 61 + phases[3]) * .09;
+      const cloud = Math.sin(u * 5 + Math.sin(v * 9 + phases[4]) * 1.8) * .22;
+      const mix = THREE.MathUtils.clamp(.34 + broad + detail + cloud, 0, 1);
+      const shade = base.clone().lerp(accent, mix * .55).multiplyScalar(.62 + mix * .42);
+      const at = (y * canvas.width + x) * 4;
+      image.data[at] = shade.r * 255; image.data[at + 1] = shade.g * 255;
+      image.data[at + 2] = shade.b * 255; image.data[at + 3] = 255;
+    }
+  }
+  context.putImageData(image, 0, 0);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  return texture;
+}
+
+function Nebulae({ reduced }) {
+  const texture = useMemo(() => makeSoftTexture([
+    [0, "rgba(91,111,210,.24)"], [.28, "rgba(67,51,147,.16)"],
+    [.62, "rgba(35,23,91,.07)"], [1, "rgba(0,0,0,0)"],
+  ]), []);
+  const warm = useMemo(() => makeSoftTexture([
+    [0, "rgba(255,213,155,.18)"], [.22, "rgba(152,93,143,.10)"], [1, "rgba(0,0,0,0)"],
+  ]), []);
+  const clouds = reduced ? [[-9,5,-18,18,8,texture],[10,-5,-24,23,10,texture]] : [
+    [-11,6,-20,22,9,texture],[12,-6,-27,27,12,texture],[-3,-9,-15,16,7,warm],[5,9,-32,22,9,texture],
+  ];
+  return <group>{clouds.map(([x,y,z,w,h,map],index)=><sprite key={index} position={[x,y,z]} scale={[w,h,1]}>
+    <spriteMaterial map={map} transparent opacity={.7} depthWrite={false} blending={THREE.AdditiveBlending}/>
+  </sprite>)}</group>;
+}
+
 function Galaxy({ reduced }) {
   const ref = useRef();
   const geometry = useMemo(() => {
-    const count = reduced ? 2300 : 5200;
+    const count = reduced ? 3000 : 7200;
     const positions = new Float32Array(count * 3);
     const colors = new Float32Array(count * 3);
     const random = seeded(17.31);
     const inner = new THREE.Color("#fff4dc"), outer = new THREE.Color("#7557ba");
     for (let i = 0; i < count; i++) {
-      const radius = Math.pow(random(), .62) * 8.8;
+      const radius = Math.pow(random(), .72) * 9.8;
       const arm = i % 4;
       const angle = arm * Math.PI / 2 + radius * .78 + (random() - .5) * (.3 + radius * .07);
-      const spread = .12 + radius * .035;
+      const spread = .08 + radius * .045;
       positions[i * 3] = Math.cos(angle) * radius + (random() - .5) * spread;
-      positions[i * 3 + 1] = (random() - .5) * (.18 + radius * .055);
+      positions[i * 3 + 1] = (random() - .5) * (.28 + radius * .075);
       positions[i * 3 + 2] = Math.sin(angle) * radius + (random() - .5) * spread;
       const color = inner.clone().lerp(outer, Math.min(1, radius / 8.8));
       color.offsetHSL((random() - .5) * .035, 0, (random() - .5) * .12);
@@ -43,16 +101,17 @@ function Galaxy({ reduced }) {
     return geo;
   }, [reduced]);
   useFrame((_, delta) => { if (ref.current) ref.current.rotation.y += delta * .012; });
-  return <group rotation={[-.22, 0, .08]}>
+  const core = useMemo(() => makeSoftTexture([[0,"rgba(255,247,217,.95)"],[.12,"rgba(255,219,162,.45)"],[.42,"rgba(147,112,214,.12)"],[1,"rgba(0,0,0,0)"]]), []);
+  return <group rotation={[-.36, 0, .12]} position={[0,-.3,-3]}>
     <points ref={ref} geometry={geometry}>
-      <pointsMaterial size={reduced ? .035 : .045} vertexColors transparent opacity={.83} sizeAttenuation depthWrite={false} blending={THREE.AdditiveBlending}/>
+      <pointsMaterial size={reduced ? .025 : .034} vertexColors transparent opacity={.72} sizeAttenuation depthWrite={false} blending={THREE.AdditiveBlending}/>
     </points>
-    <mesh rotation={[Math.PI / 2, 0, 0]}><circleGeometry args={[1.25, 64]}/><meshBasicMaterial color="#fff0d5" transparent opacity={.055} blending={THREE.AdditiveBlending} depthWrite={false}/></mesh>
-    <pointLight color="#cbb3ff" intensity={9} distance={13}/>
+    <sprite scale={[5.2,5.2,1]}><spriteMaterial map={core} transparent opacity={.68} depthWrite={false} blending={THREE.AdditiveBlending}/></sprite>
+    <pointLight color="#ffe3ba" intensity={7} distance={12}/>
   </group>;
 }
 
-function StarLayer({ count, radius, size, opacity, seed }) {
+function StarLayer({ count, radius, size, opacity, seed, color="#e9ecff" }) {
   const geometry = useMemo(() => {
     const random = seeded(seed), positions = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
@@ -61,11 +120,13 @@ function StarLayer({ count, radius, size, opacity, seed }) {
     }
     const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.BufferAttribute(positions, 3)); return geo;
   }, [count, radius, seed]);
-  return <points geometry={geometry}><pointsMaterial color="#e9ecff" size={size} transparent opacity={opacity} sizeAttenuation depthWrite={false}/></points>;
+  const ref = useRef();
+  useFrame((state) => { if (ref.current) ref.current.material.opacity = opacity * (.92 + Math.sin(state.clock.elapsedTime * .38 + seed) * .08); });
+  return <points ref={ref} geometry={geometry}><pointsMaterial color={color} size={size} transparent opacity={opacity} sizeAttenuation depthWrite={false}/></points>;
 }
 
 function OrbitRings() {
-  return <group rotation={[-Math.PI / 2 + .12, 0, .08]}>{[3.2,4.7,6.2,7.8].map((r)=><mesh key={r}><ringGeometry args={[r-.012,r+.012,160]}/><meshBasicMaterial color="#9275d2" transparent opacity={.13} side={THREE.DoubleSide} depthWrite={false}/></mesh>)}</group>;
+  return <group rotation={[-Math.PI / 2 + .19, 0, .1]}>{[3.2,4.7,6.2,7.8].map((r,i)=><mesh key={r} rotation={[0,i*.025,i*.018]}><ringGeometry args={[r-.006,r+.006,160]}/><meshBasicMaterial color="#8f8eb0" transparent opacity={.055+i*.008} side={THREE.DoubleSide} depthWrite={false}/></mesh>)}</group>;
 }
 
 function Planet({ planet, index, selected, onSelect, skin }) {
@@ -73,6 +134,7 @@ function Planet({ planet, index, selected, onSelect, skin }) {
   const mesh = useRef();
   const position = PLANET_POSITIONS[index];
   const size = PLANET_SIZES[index];
+  const texture = useMemo(() => makePlanetTexture(planet.from, planet.to, index * 13.7), [planet.from, planet.to, index]);
   useFrame((state, delta) => {
     if (mesh.current) mesh.current.rotation.y += delta * (.045 + index * .008);
     if (group.current) group.current.position.y = position[1] + Math.sin(state.clock.elapsedTime * .28 + index) * .08;
@@ -81,23 +143,26 @@ function Planet({ planet, index, selected, onSelect, skin }) {
     <mesh ref={mesh} onClick={(e)=>{e.stopPropagation();onSelect(planet.key);}} onDoubleClick={(e)=>{e.stopPropagation();onSelect(planet.key);}}>
       <sphereGeometry args={[size, 64, 64]}/>
       <meshPhysicalMaterial
-        color={planet.from}
-        roughness={skin === "glow" ? .14 : skin === "stripe" ? .3 : .24}
-        metalness={skin === "glow" ? .2 : .08}
-        clearcoat={skin === "glow" ? 1 : .82}
-        clearcoatRoughness={skin === "glow" ? .06 : .14}
-        sheen={.72}
+        map={texture}
+        bumpMap={texture}
+        bumpScale={.045}
+        color="#ffffff"
+        roughness={skin === "glow" ? .34 : skin === "stripe" ? .64 : .52}
+        metalness={.03}
+        clearcoat={skin === "glow" ? .42 : .18}
+        clearcoatRoughness={.28}
+        sheen={.28}
         sheenColor={planet.to}
         emissive={planet.from}
-        emissiveIntensity={skin === "glow" ? .16 : selected ? .08 : .035}
+        emissiveIntensity={skin === "glow" ? .065 : selected ? .035 : .012}
       />
     </mesh>
-    <mesh scale={1.042}><sphereGeometry args={[size,48,48]}/><meshBasicMaterial color={planet.to} side={THREE.BackSide} transparent opacity={skin === "glow" ? .13 : .065} blending={THREE.AdditiveBlending} depthWrite={false}/></mesh>
+    <mesh scale={1.028}><sphereGeometry args={[size,48,48]}/><meshBasicMaterial color={planet.to} side={THREE.BackSide} transparent opacity={skin === "glow" ? .09 : .04} blending={THREE.AdditiveBlending} depthWrite={false}/></mesh>
     <mesh position={[-size*.34,size*.38,size*.86]} scale={[size*.3,size*.19,size*.07]}>
       <sphereGeometry args={[1,32,16]}/>
-      <meshBasicMaterial color="#fffaf2" transparent opacity={skin === "glow" ? .48 : .32} blending={THREE.AdditiveBlending} depthWrite={false}/>
+      <meshBasicMaterial color="#fffaf2" transparent opacity={skin === "glow" ? .28 : .16} blending={THREE.AdditiveBlending} depthWrite={false}/>
     </mesh>
-    <pointLight position={[-2,2,3]} color={planet.to} intensity={selected ? 3.1 : 1.45} distance={6.5} decay={2}/>
+    <pointLight position={[-2,2,3]} color={planet.to} intensity={selected ? 1.5 : .55} distance={5.5} decay={2}/>
     {(index===0||skin==="ring")&&<mesh rotation={[Math.PI/2.3,.15,0]}><ringGeometry args={[size*1.28,size*1.48,96]}/><meshBasicMaterial color={planet.to} transparent opacity={.24} side={THREE.DoubleSide} depthWrite={false}/></mesh>}
     {skin==="stripe"&&[-.5,-.18,.18,.5].map((y)=><mesh key={y} position={[0,y*size,0]} rotation={[Math.PI/2,0,0]}><torusGeometry args={[Math.sqrt(Math.max(.05,size*size-(y*size)*(y*size))),.025,8,64]}/><meshBasicMaterial color={planet.to} transparent opacity={.32}/></mesh>)}
     <Html center position={[0,-size-0.5,0]} distanceFactor={10} style={{pointerEvents:"none"}}><div className={`whitespace-nowrap text-center drop-shadow-[0_2px_8px_#000] ${selected?"text-white":"text-white/80"}`}><b className="text-[13px]">{planet.label}</b></div></Html>
@@ -161,12 +226,16 @@ function Scene({ planets, groups, selectedKey, onPlanetSelect, onConstellationOp
   const controls = useRef();
   const selectedIndex = Math.max(0, planets.findIndex((planet)=>planet.key===selectedKey));
   return <>
-    <color attach="background" args={["#01040c"]}/><fog attach="fog" args={["#01040c",18,52]}/>
-    <hemisphereLight color="#f4f1ff" groundColor="#111325" intensity={.58}/><directionalLight position={[-7,9,12]} color="#fff4e8" intensity={3.1}/>
-    <StarLayer count={reduced?500:1100} radius={44} size={.055} opacity={.55} seed={2}/>
-    <StarLayer count={reduced?240:600} radius={25} size={.075} opacity={.7} seed={7}/>
-    <StarLayer count={reduced?90:220} radius={14} size={.1} opacity={.8} seed={13}/>
-    <Sparkles count={reduced?35:75} scale={[24,13,24]} size={1.1} speed={.08} opacity={.24} color="#9374d7" noise={1.5}/>
+    <color attach="background" args={["#01030a"]}/><fog attach="fog" args={["#02050d",20,58]}/>
+    <ambientLight color="#536080" intensity={.18}/>
+    <hemisphereLight color="#bfcaf0" groundColor="#050611" intensity={.3}/>
+    <directionalLight position={[-9,10,13]} color="#fff1dc" intensity={3.7}/>
+    <directionalLight position={[11,-5,-9]} color="#617bd1" intensity={.42}/>
+    <Nebulae reduced={reduced}/>
+    <StarLayer count={reduced?700:1500} radius={48} size={.025} opacity={.38} seed={2} color="#bfc9e8"/>
+    <StarLayer count={reduced?320:760} radius={27} size={.052} opacity={.58} seed={7} color="#e1e8ff"/>
+    <StarLayer count={reduced?95:260} radius={14} size={.095} opacity={.78} seed={13} color="#fff5df"/>
+    <Sparkles count={reduced?22:48} scale={[25,14,25]} size={.72} speed={.045} opacity={.16} color="#bac8ff" noise={1.8}/>
     <Galaxy reduced={reduced}/><OrbitRings/>
     {planets.map((planet,i)=><Planet key={planet.key} planet={planet} index={i} selected={planet.key===selectedKey} onSelect={onPlanetSelect} skin={skin}/>) }
     {groups.slice(-5).map((group,i)=>{
@@ -177,7 +246,7 @@ function Scene({ planets, groups, selectedKey, onPlanetSelect, onConstellationOp
         onConstellationOpen?.(pickedGroup, planets[anchorIndex]?.key);
       }}/>;
     }) }
-    <OrbitControls ref={controls} target={UNIVERSE_TARGET.toArray()} makeDefault enableDamping dampingFactor={.055} enablePan screenSpacePanning minDistance={2.8} maxDistance={34} rotateSpeed={.42} zoomSpeed={.7} panSpeed={.8} mouseButtons={{LEFT:THREE.MOUSE.ROTATE,MIDDLE:THREE.MOUSE.DOLLY,RIGHT:THREE.MOUSE.PAN}}/>
+    <OrbitControls ref={controls} target={UNIVERSE_TARGET.toArray()} makeDefault enableDamping dampingFactor={.11} enablePan screenSpacePanning minDistance={2.8} maxDistance={34} rotateSpeed={.22} zoomSpeed={.62} panSpeed={.48} mouseButtons={{LEFT:THREE.MOUSE.ROTATE,MIDDLE:THREE.MOUSE.DOLLY,RIGHT:THREE.MOUSE.PAN}}/>
     <CameraRig selectedKey={selectedKey} planets={planets} controlsRef={controls} resetSignal={resetSignal}/>
   </>;
 }

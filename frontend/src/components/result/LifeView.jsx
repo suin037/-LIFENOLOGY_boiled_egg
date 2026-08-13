@@ -1,5 +1,6 @@
 import { Card, Caption } from "../ui.jsx";
 import { LIFE_DIMENSIONS, labelOf } from "../../data/prediction.js";
+import ObservedIndicators from "./ObservedIndicators.jsx";
 
 // 생활지표(L1) — 공통 지표는 한 번, 선택지별 지표는 A/B 태그로.
 const DOMAIN_MATCH = {
@@ -33,6 +34,7 @@ export default function LifeView({ a, b, domains = { a: [], b: [] } }) {
   return (
     <div>
       {(a.indicator_evidence || b.indicator_evidence) && <EvidenceSummary a={a} b={b} />}
+      <ObservedIndicators a={a} b={b} />
       <h2 className="mb-1 mt-1 text-base font-semibold">이 선택과 관련된 핵심 지표</h2>
       <div className="mt-3 space-y-2.5">
         {empty && <Card><Caption>선택한 삶의 영역에 연결된 수치 데이터가 아직 충분하지 않습니다. 임의 점수는 만들지 않았어요.</Caption></Card>}
@@ -46,6 +48,7 @@ export default function LifeView({ a, b, domains = { a: [], b: [] } }) {
 
 const EVIDENCE_LABEL = {
   directional_evidence: "방향 근거 있음",
+  matched_observation: "유사 사례 관측 근거",
   insufficient_evidence: "근거 부족",
   reference_only: "참고 통계만",
   user_provided_state: "현재 상태 입력",

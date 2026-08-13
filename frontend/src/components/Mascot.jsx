@@ -1,7 +1,7 @@
 const DEF = {
   nova: { light: "#FFE9F0", main: "#FF9EC0", dark: "#F0688F", eye: "#5A2A3E", accent: "stars" },
   lumi: { light: "#FFF7DA", main: "#FFD97A", dark: "#F0AE3A", eye: "#7A5A1E", accent: "topstar" },
-  cosmo: { light: "#EAF6FF", main: "#8B6CCF", dark: "#3FA9E0", eye: "#274A66", accent: "ring" },
+  cosmo: { light: "#EAF6FF", main: "#7CC3FF", dark: "#3FA9E0", eye: "#274A66", accent: "ring" },
 };
 
 function starPath(cx, cy, outer, inner, points = 5) {

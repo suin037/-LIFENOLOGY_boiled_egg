@@ -98,6 +98,8 @@ function buildSide(scenario, choice, detail, profile, evidence, domainCov, domai
     domain_stats: domainStats || {},
     // 새 후보 모델: 검증 집단효과와 실험적 개인 추정치가 분리된 원응답.
     validated_prediction: validatedPrediction || null,
+    parallel_trajectory: validatedPrediction?.parallel_trajectory || null,
+    observed_outcomes: validatedPrediction?.observed_outcomes || null,
     // 각 지표의 숫자와 그 숫자를 뒷받침하는 근거 수준을 분리한다.
     indicator_evidence: indicatorEvidence || null,
   };
@@ -133,6 +135,7 @@ export function mapSimulateToPair(sim, { choiceA, choiceB, detailA = "", detailB
     (s.trajectory && s.trajectory.length) ||
     (s.neighbors && s.neighbors.length) ||
     s.causal_effect != null || s.expected_wage != null || s.survival_months != null ||
+    s.parallel_trajectory?.status === "available" ||
     (s.life_indicators && s.life_indicators.length);
   if (!hasReal(a) && !hasReal(b)) return null;
   return { a, b };
