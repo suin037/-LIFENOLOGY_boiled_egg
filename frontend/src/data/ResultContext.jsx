@@ -44,6 +44,8 @@ export function ResultProvider({ children }) {
     ({ ...getPredictionPair({ profile: DEFAULT_PROFILE, choiceA: "이직", choiceB: "유지" }), dataMode: "demo" }),
   );
   const [onboarded, setOnboarded] = useState(false);
+  // 입력 화면에서 분석한 공고 — 시뮬레이션 결과 화면에서도 다시 볼 수 있게 여기 둔다.
+  const [jobAnalysis, setJobAnalysis] = useState(null);
   const simulationRunRef = useRef(0);
 
   // 선택(choices)+심정(diary) → 결과 쌍 {a,b} 생성. (지금은 목업)
@@ -192,8 +194,9 @@ export function ResultProvider({ children }) {
       diary, setDiary,
       result, setResult,
       runSimulation, retryVisuals, onboarded, setOnboarded,
+      jobAnalysis, setJobAnalysis,
     }),
-    [profile, choices, scenarioTexts, scenarioDomains, diary, result, onboarded],
+    [profile, choices, scenarioTexts, scenarioDomains, diary, result, onboarded, jobAnalysis],
   );
 
   return <ResultContext.Provider value={value}>{children}</ResultContext.Provider>;

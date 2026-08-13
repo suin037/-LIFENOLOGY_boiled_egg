@@ -29,7 +29,7 @@ for p in (str(DIARY), str(ROOT)):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from fastapi import FastAPI                              # noqa: E402
+from fastapi import FastAPI, File, UploadFile            # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware       # noqa: E402
 from pydantic import BaseModel                           # noqa: E402
 
@@ -552,6 +552,92 @@ _JOB_SCHEMA = (
     "없으면 friction 을 비워라. 단정·진단 금지, 담백하게. 한국어만 쓰고 한자는 쓰지 마라. "
     "설명·인사말 없이 JSON 하나만 출력한다."
 )
+
+
+# 공고를 붙여넣기 말고 URL·PDF 로도 받는다. 다만 채용 사이트 상당수가 JS 렌더링이라
+# URL 만으로는 제목·회사 정도만 건지는 경우가 많다 — 그럴 땐 부족하다고 알려준다.
+class JobExtractReq(BaseModel):
+    url: str = ""
+
+
+_UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36"}
+
+
+def _strip_html(html):
+    import re
+    t = re.sub(r"<script.*?</script>|<style.*?</style>", " ", html, flags=re.S)
+    t = re.sub(r"<[^>]+>", " ", t)
+    return re.sub(r"\s+", " ", t).strip()
+
+
+@app.post("/job/extract-url")
+def job_extract_url(req: JobExtractReq):
+    """공고 URL → 텍스트. JSON-LD(JobPosting)를 먼저 보고, 없으면 본문 텍스트."""
+    import re, urllib.request
+    url = (req.url or "").strip()
+    if not url.startswith("http"):
+        return {"ok": False, "reason": "bad_url"}
+    try:
+        rq = urllib.request.Request(url, headers=_UA)
+        with urllib.request.urlopen(rq, timeout=15) as r:
+            html = r.read().decode("utf-8", "ignore")
+    except Exception as e:      # noqa: BLE001
+        return {"ok": False, "reason": f"fetch_failed: {type(e).__name__}"}
+
+    title = company = ""
+    parts = []
+    for m in re.finditer(r'<script[^>]*type=["\']application/ld\+json["\'][^>]*>(.*?)</script>', html, re.S):
+        try:
+            d = json.loads(m.group(1))
+        except Exception:      # noqa: BLE001
+            continue
+        items = d if isinstance(d, list) else [d]
+        for it in items:
+            if isinstance(it, dict) and it.get("@type") == "JobPosting":
+                title = it.get("title") or title
+                company = ((it.get("hiringOrganization") or {}).get("name")) or company
+                body = _strip_html(it.get("description") or "")
+                if body:
+                    parts.append(body)
+                for k in ("responsibilities", "qualifications", "skills", "experienceRequirements"):
+                    v = it.get(k)
+                    if isinstance(v, str) and v.strip():
+                        parts.append(_strip_html(v))
+    if not title:
+        m = re.search(r'<meta[^>]+property=["\']og:title["\'][^>]+content=["\']([^"\']+)', html)
+        title = m.group(1) if m else ""
+
+    text = "\n".join(parts).strip()
+    if len(text) < 200:      # JS 렌더링이라 본문을 못 건진 경우 — 페이지 텍스트로 보완
+        page = _strip_html(html)
+        if len(page) > len(text):
+            text = page[:6000]
+    head = " ".join(x for x in (company, title) if x)
+    full = (head + "\n" + text).strip()
+    # 본문이 얇으면(내비게이션만 긁힌 경우) 사용자에게 붙여넣기를 권한다.
+    thin = len(text) < 300
+    return {"ok": True, "title": title, "company": company, "text": full[:6000],
+            "thin": thin, "chars": len(full)}
+
+
+@app.post("/job/extract-pdf")
+async def job_extract_pdf(file: UploadFile = File(...)):
+    """공고 PDF → 텍스트. 채용 페이지를 PDF로 저장해 오는 경우가 많다."""
+    try:
+        raw = await file.read()
+        import io as _io
+        from pypdf import PdfReader
+        reader = PdfReader(_io.BytesIO(raw))
+        pages = [(p.extract_text() or "") for p in reader.pages[:10]]
+        text = "\n".join(pages).strip()
+        text = " ".join(text.split())
+        if len(text) < 100:
+            return {"ok": False, "reason": "no_text",
+                    "hint": "이미지로 스캔된 PDF 같아요. 본문을 붙여넣어 주세요."}
+        return {"ok": True, "text": text[:6000], "chars": len(text),
+                "pages": len(reader.pages)}
+    except Exception as e:      # noqa: BLE001
+        return {"ok": False, "reason": str(e)}
 
 
 @app.post("/job/analyze")

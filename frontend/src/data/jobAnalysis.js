@@ -64,3 +64,23 @@ export async function analyzeJobPosting({ posting, choice = null, uid = "me", pr
 export function isPostingReady(text) {
   return String(text || "").trim().length >= 30;
 }
+
+/** 공고 URL → 텍스트. 사이트가 JS 렌더링이면 얇게 잡히므로 thin 을 함께 준다. */
+export async function extractFromUrl(url) {
+  const res = await fetch(`${BASE}/job/extract-url`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url }),
+  });
+  if (!res.ok) throw new Error(`API ${res.status}`);
+  return res.json();
+}
+
+/** 공고 PDF → 텍스트(채용 페이지를 PDF로 저장해 오는 경우). */
+export async function extractFromPdf(file) {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(`${BASE}/job/extract-pdf`, { method: "POST", body: form });
+  if (!res.ok) throw new Error(`API ${res.status}`);
+  return res.json();
+}

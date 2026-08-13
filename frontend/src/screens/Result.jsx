@@ -13,10 +13,11 @@ import EvidenceView from "../components/result/EvidenceView.jsx";
 import ActionView from "../components/result/ActionView.jsx";
 import AvatarComparison from "../components/result/AvatarComparison.jsx";
 import DiarySignalCard from "../components/result/DiarySignalCard.jsx";
+import JobAnalysisView from "../components/result/JobAnalysisView.jsx";
 
 export default function Result() {
   const navigate = useNavigate();
-  const { result, profile, scenarioDomains, retryVisuals } = useResult();
+  const { result, profile, scenarioDomains, retryVisuals, jobAnalysis } = useResult();
   const { a, b } = result;
 
   const tabs = [
@@ -24,6 +25,8 @@ export default function Result() {
     { key: "change", label: "변화 흐름", View: ChangeView },
     { key: "evidence", label: "분석 상세", View: EvidenceView },
     { key: "next", label: "다음 단계", View: ActionView },
+    // 입력에서 공고를 분석했을 때만 — 예측 수치 옆에서 그 공고를 다시 확인한다.
+    ...(jobAnalysis ? [{ key: "job", label: "공고 분석", View: JobAnalysisView }] : []),
   ];
 
   const [tab, setTab] = useState("indicators");

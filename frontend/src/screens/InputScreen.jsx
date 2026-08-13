@@ -4,7 +4,7 @@ import { useResult } from "../data/ResultContext.jsx";
 import { LIFE_DOMAINS, classifyChoice, detectLifeDomains, domainLabel, labelOf } from "../data/choices.js";
 import { detectEmotions } from "../data/DiaryContext.jsx";
 import { Caption } from "../components/ui.jsx";
-import { analyzeJobPosting, isPostingReady } from "../data/jobAnalysis.js";
+import { analyzeJobPosting, isPostingReady, extractFromUrl, extractFromPdf } from "../data/jobAnalysis.js";
 import ValueDeepTest from "../components/ValueDeepTest.jsx";
 import Mascot from "../components/Mascot.jsx";
 import { BriefcaseBusiness, GraduationCap, Sprout, Wallet, HeartPulse, House, Users, Leaf, Compass, ArrowRight } from "lucide-react";
@@ -38,7 +38,7 @@ export default function InputScreen() {
   const {
     profile, setProfile, choices, setChoices,
     scenarioTexts, setScenarioTexts, scenarioDomains, setScenarioDomains,
-    diary, setDiary,
+    diary, setDiary, setJobAnalysis,
   } = useResult();
   const textA = scenarioTexts.a;
   const textB = scenarioTexts.b;
@@ -212,7 +212,7 @@ export default function InputScreen() {
 
       {/* 지원하려는 공고가 있으면 붙여넣기 → 요구역량 + 내 성향과의 접점·마찰점.
           공고 수집은 약관 문제가 커서 크롤링 대신 붙여넣기로 받는다. */}
-      <JobPostingAnalysis choice={textA || choices.a} profile={profile} setProfile={setProfile} />
+      <JobPostingAnalysis choice={textA || choices.a} profile={profile} setProfile={setProfile} onAnalyzed={setJobAnalysis} />
 
       <details className="mt-3 rounded-2xl border border-white/10 bg-[#0B1423]/80 px-3.5 py-3">
         <summary className="cursor-pointer text-[11px] font-semibold text-sub">지금 심정도 덧붙이기 · 선택</summary>
@@ -229,14 +229,48 @@ export default function InputScreen() {
 }
 
 // 채용 공고 붙여넣기 → 직무 분석. 요구역량은 공고에서, 접점·마찰점은 내 성향과 대조해서.
-function JobPostingAnalysis({ choice, profile, setProfile }) {
+function JobPostingAnalysis({ choice, profile, setProfile, onAnalyzed }) {
   const [posting, setPosting] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   const [result, setResult] = useState(null);
   const [deepOpen, setDeepOpen] = useState(false);
+  const [mode, setMode] = useState("paste");   // paste | url | pdf
+  const [url, setUrl] = useState("");
+  const [note, setNote] = useState(null);      // 불러오기 결과 안내
   const ready = isPostingReady(posting);
   const deepDone = (profile?.career_values || []).length > 0;
+
+  async function loadUrl() {
+    setBusy(true); setErr(null); setNote(null);
+    try {
+      const data = await extractFromUrl(url.trim());
+      if (!data.ok) { setNote("주소를 읽지 못했어요. 본문을 붙여넣어 주세요."); return; }
+      setPosting(data.text || "");
+      setNote(data.thin
+        ? `${data.company || ""} ${data.title || ""} — 제목만 읽혔어요. 이 사이트는 본문이 스크립트로 그려져서, 아래 칸에 본문을 붙여넣으면 훨씬 정확해집니다.`.trim()
+        : `불러왔어요 (${data.chars}자). 빠진 부분이 있으면 아래에서 직접 고쳐도 돼요.`);
+    } catch {
+      setNote("주소를 읽지 못했어요. 본문을 붙여넣어 주세요.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function loadPdf(file) {
+    if (!file) return;
+    setBusy(true); setErr(null); setNote(null);
+    try {
+      const data = await extractFromPdf(file);
+      if (!data.ok) { setNote(data.hint || "PDF에서 글자를 찾지 못했어요. 본문을 붙여넣어 주세요."); return; }
+      setPosting(data.text || "");
+      setNote(`PDF ${data.pages}쪽에서 ${data.chars}자를 읽었어요.`);
+    } catch {
+      setNote("PDF를 읽지 못했어요. 본문을 붙여넣어 주세요.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   // 검사 결과는 프로필에 남겨 이후 분석·서사가 계속 쓰게 한다.
   function onDeepDone(data) {
@@ -249,7 +283,7 @@ function JobPostingAnalysis({ choice, profile, setProfile }) {
     setBusy(true); setErr(null); setResult(null);
     try {
       const data = await analyzeJobPosting({ posting, choice, profile });
-      if (data.ok) setResult(data);
+      if (data.ok) { setResult(data); onAnalyzed?.(data); }
       else setErr(data.reason === "no_api_key" ? "분석 서버에 API 키가 없어요" : "분석에 실패했어요");
     } catch {
       setErr("분석 서버에 연결하지 못했어요 (로컬 API가 켜져 있나요?)");
@@ -264,8 +298,56 @@ function JobPostingAnalysis({ choice, profile, setProfile }) {
         지원하려는 공고 붙여넣기 · 선택
       </summary>
       <p className="mt-2 text-[10px] leading-relaxed text-mut">
-        공고 본문을 붙여넣으면 요구 역량과 함께, 당신의 기록에서 만든 성향과 <b className="text-sub">맞는 지점·부딪힐 지점</b>을 짚어드려요.
+        공고를 넣으면 요구 역량과 함께, 당신의 기록에서 만든 성향과 <b className="text-sub">맞는 지점·부딪힐 지점</b>을 짚어드려요.
       </p>
+
+      {/* 입력 방식 — 붙여넣기 / URL / PDF. 채용 사이트가 JS 렌더링이면 URL 로는 얇게
+          잡히므로, 그럴 때 붙여넣기를 권하는 안내를 함께 띄운다. */}
+      <div className="mt-2 flex gap-1.5">
+        {[["paste", "붙여넣기"], ["url", "URL"], ["pdf", "PDF"]].map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => { setMode(key); setNote(null); }}
+            className={`tap flex-1 rounded-lg border px-2 py-1.5 text-[10px] transition-colors ${
+              mode === key ? "border-[#8B6CCF] bg-[#8B6CCF]/15 text-[#C7B5F2]" : "border-white/10 text-sub"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {mode === "url" && (
+        <div className="mt-2 flex gap-1.5">
+          <input
+            value={url}
+            onChange={(event) => setUrl(event.target.value)}
+            placeholder="채용 공고 주소 붙여넣기"
+            className="min-w-0 flex-1 rounded-xl border border-line bg-bg px-3 py-2 text-[11px] text-ink outline-none placeholder:text-mut focus:border-cyan"
+          />
+          <button
+            type="button"
+            onClick={loadUrl}
+            disabled={!url.trim() || busy}
+            className="tap shrink-0 rounded-xl bg-white/10 px-3 text-[11px] font-bold text-ink disabled:opacity-40"
+          >
+            불러오기
+          </button>
+        </div>
+      )}
+
+      {mode === "pdf" && (
+        <input
+          type="file"
+          accept="application/pdf"
+          onChange={(event) => loadPdf(event.target.files?.[0])}
+          className="mt-2 w-full rounded-xl border border-line bg-bg px-3 py-2 text-[10px] text-sub file:mr-2 file:rounded-lg file:border-0 file:bg-[#8B6CCF] file:px-2 file:py-1 file:text-[10px] file:text-white"
+        />
+      )}
+
+      {note && <p className="mt-1.5 text-[10px] leading-relaxed text-[#FFB36B]">{note}</p>}
+
       <textarea
         value={posting}
         onChange={(event) => setPosting(event.target.value)}
