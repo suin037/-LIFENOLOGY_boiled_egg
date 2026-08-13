@@ -39,18 +39,41 @@ export async function tagDomain(text) {
   }
 }
 
-// 마스코트 대화 한 턴 → 답변 텍스트. 실패 시 간단 폴백.
-export async function chatTurn(messages, persona = "lumi") {
+// 마스코트 대화 한 턴 → { reply, stage, suggest_compose }. 실패 시 간단 폴백.
+//  · context: 프론트가 가진 기억 {recent:[{date,emotion,text}], hardStreak} — 로컬 우선이라 이 경로가 기본.
+//  · speech : 말투 "polite"(기본) | "casual". 사용자가 화면에서 켜고 끈다.
+//  · role   : 이 대화의 역할(일상 되묻기 / 마음 살피기 / 건강 체크).
+export async function chatTurn(messages, opts = {}) {
+  const { persona = "lumi", context = null, speech = "polite", role = null } = opts;
   try {
     const res = await fetch(`${BASE}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages, persona }),
+      body: JSON.stringify({ messages, persona, context, speech, role }),
     });
     if (!res.ok) throw new Error();
-    return (await res.json()).reply;
+    return await res.json();
   } catch {
-    return "그랬구나. 조금 더 얘기해줄래?";
+    return {
+      reply: speech === "casual" ? "그랬구나." : "그러셨군요.",
+      stage: "open",
+      suggest_compose: false,
+    };
+  }
+}
+
+// 한 주치 기록 → 위로 한마디(주 1회). 리포트가 아니라 말 한마디만.
+export async function weeklyComfort(entries, { persona = "lumi", speech = "polite" } = {}) {
+  try {
+    const res = await fetch(`${BASE}/chat/comfort`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ entries, persona, speech }),
+    });
+    if (!res.ok) throw new Error();
+    return ((await res.json()).text || "").trim() || null;
+  } catch {
+    return null; // 서버 없으면 위로 칸을 아예 띄우지 않는다
   }
 }
 

@@ -954,14 +954,35 @@ class ChatMsg(BaseModel):
 class ChatReq(BaseModel):
     messages: list[ChatMsg] = []
     persona: Optional[str] = "lumi"   # lumi(공감)/cosmo(분석)/nova(재미)
+    uid: Optional[str] = None         # 있으면 서버 DB(SQLite)에서 지난 일기·성향을 꺼낸다
+    context: Optional[dict] = None    # 프론트가 보낸 기억 — {recent:[{date,emotion,text}], hardStreak}
+                                      # 로컬 우선 설계라 PII 마스킹된 이 경로가 기본이다.
+    role: Optional[str] = None        # 이 대화의 역할(일상 되묻기 / 마음 살피기 / 건강 체크)
+    speech: Optional[str] = None      # 말투 — "polite"(기본) | "casual". 사용자가 켜고 끈다.
 
 
 @app.post("/chat")
 def chat_turn(req: ChatReq):
-    """대화 한 턴 → 마스코트 답변."""
+    """대화 한 턴 → 마스코트 답변 + 진행 단계(stage/suggest_compose)."""
     from qmode import chatbot as CB
     msgs = [m.model_dump() for m in req.messages]
-    return {"reply": CB.chat(msgs, persona=req.persona or "lumi")}
+    reply = CB.chat(msgs, persona=req.persona or "lumi", uid=req.uid,
+                    context=req.context, role=req.role, speech=req.speech)
+    return {"reply": reply, **CB.stage_info(msgs)}
+
+
+class ComfortReq(BaseModel):
+    entries: list[dict] = []          # 그 주 기록 [{date, text, mood, emotion}]
+    persona: Optional[str] = "lumi"
+    speech: Optional[str] = None
+
+
+@app.post("/chat/comfort")
+def chat_comfort(req: ComfortReq):
+    """한 주치 기록 → 위로 한마디(주 1회). 분석·할 거리는 /report 몫이고 여기는 위로만."""
+    from qmode import chatbot as CB
+    return {"text": CB.comfort(req.entries, persona=req.persona or "lumi",
+                               speech=req.speech)}
 
 
 @app.post("/diary/compose")
@@ -973,9 +994,20 @@ def diary_compose(req: ChatReq):
 
 
 @app.get("/chat/opener")
-def chat_opener(persona: str = "lumi"):
+def chat_opener(persona: str = "lumi", uid: Optional[str] = None,
+                speech: Optional[str] = None):
+    """첫 인사 — uid 주면 지난 일기를 잇는 기억 오프너(서버 DB 경로)."""
     from qmode import chatbot as CB
-    return {"opener": CB.opener(persona), "persona": persona}
+    return {"opener": CB.opener(persona, uid=uid, speech=speech), "persona": persona}
+
+
+@app.post("/chat/opener")
+def chat_opener_ctx(req: ChatReq):
+    """첫 인사 — 프론트 기억(context)으로 지난 일기를 잇는다(로컬 우선 기본 경로)."""
+    from qmode import chatbot as CB
+    return {"opener": CB.opener(req.persona or "lumi", uid=req.uid,
+                                context=req.context, speech=req.speech),
+            "persona": req.persona or "lumi"}
 
 
 # ── 감정 모델(로컬 파인튜닝 klue/roberta) — 감정 미선택 시 일기에서 추론 ──
