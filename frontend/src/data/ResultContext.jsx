@@ -62,8 +62,29 @@ export function ResultProvider({ children }) {
     ({ ...getPredictionPair({ profile: DEFAULT_PROFILE, choiceA: "이직", choiceB: "유지" }), dataMode: "demo" }),
   );
   const [onboarded, setOnboarded] = useState(false);
-  // 입력 화면에서 분석한 공고 — 시뮬레이션 결과 화면에서도 다시 볼 수 있게 여기 둔다.
-  const [jobAnalysis, setJobAnalysis] = useState(null);
+  // 공고는 입력 화면에서 '담기만' 하고(원문), 분석은 시뮬레이션을 돌린 뒤 결과 화면에서 보여준다.
+  const [postings, setPostings] = useState([]);        // [{id, text, label}]
+  const [jobAnalyses, setJobAnalyses] = useState([]);  // 분석 결과(순서 = postings)
+  const [jobBusy, setJobBusy] = useState(false);
+
+  /** 담아둔 공고들을 한꺼번에 분석한다 — 시뮬레이션 시작과 함께 백그라운드로 돌린다. */
+  async function analyzePostings(list = postings, choice = null) {
+    if (!list.length) { setJobAnalyses([]); return; }
+    setJobBusy(true);
+    try {
+      const { analyzeJobPosting } = await import("./jobAnalysis.js");
+      const results = await Promise.all(
+        list.map((p) =>
+          analyzeJobPosting({ posting: p.text, choice, profile })
+            .then((data) => (data.ok ? { ...data, posting: p.text } : { ok: false, label: p.label, reason: data.reason }))
+            .catch(() => ({ ok: false, label: p.label, reason: "network" })),
+        ),
+      );
+      setJobAnalyses(results);
+    } finally {
+      setJobBusy(false);
+    }
+  }
   const simulationRunRef = useRef(0);
 
   // 선택(choices)+심정(diary) → 결과 쌍 {a,b} 생성. (지금은 목업)
@@ -212,9 +233,11 @@ export function ResultProvider({ children }) {
       diary, setDiary,
       result, setResult,
       runSimulation, retryVisuals, onboarded, setOnboarded,
-      jobAnalysis, setJobAnalysis,
+      postings, setPostings,
+      jobAnalyses, setJobAnalyses, jobBusy, analyzePostings,
     }),
-    [profile, choices, scenarioTexts, scenarioDomains, diary, result, onboarded, jobAnalysis],
+    [profile, choices, scenarioTexts, scenarioDomains, diary, result, onboarded,
+     postings, jobAnalyses, jobBusy],
   );
 
   return <ResultContext.Provider value={value}>{children}</ResultContext.Provider>;

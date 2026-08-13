@@ -4,9 +4,8 @@ import { useResult } from "../data/ResultContext.jsx";
 import { LIFE_DOMAINS, classifyChoice, detectLifeDomains, domainLabel, labelOf } from "../data/choices.js";
 import { detectEmotions } from "../data/DiaryContext.jsx";
 import { Caption } from "../components/ui.jsx";
-import { analyzeJobPosting, isPostingReady, extractFromUrl, extractFromPdf } from "../data/jobAnalysis.js";
 import ValueDeepTest from "../components/ValueDeepTest.jsx";
-import CompanyAnalysis from "../components/CompanyAnalysis.jsx";
+import JobPostingInput from "../components/JobPostingInput.jsx";
 import Mascot from "../components/Mascot.jsx";
 import { BriefcaseBusiness, GraduationCap, Sprout, Wallet, HeartPulse, House, Users, Leaf, Compass, ArrowRight } from "lucide-react";
 
@@ -39,7 +38,7 @@ export default function InputScreen() {
   const {
     profile, setProfile, choices, setChoices,
     scenarioTexts, setScenarioTexts, scenarioDomains, setScenarioDomains,
-    diary, setDiary, setJobAnalysis,
+    diary, setDiary, postings, setPostings, analyzePostings,
   } = useResult();
   const textA = scenarioTexts.a;
   const textB = scenarioTexts.b;
@@ -101,6 +100,8 @@ export default function InputScreen() {
       a: prev.a?.length ? prev.a : fallback(choices.a),
       b: prev.b?.length ? prev.b : fallback(choices.b),
     }));
+    // 담아둔 공고는 시뮬레이션과 함께 분석을 시작한다(결과 화면에서 확인).
+    analyzePostings(postings, textA || choices.a);
     navigate("/simulate");
   }
 
@@ -213,7 +214,7 @@ export default function InputScreen() {
 
       {/* 지원하려는 공고가 있으면 붙여넣기 → 요구역량 + 내 성향과의 접점·마찰점.
           공고 수집은 약관 문제가 커서 크롤링 대신 붙여넣기로 받는다. */}
-      <JobPostingAnalysis choice={textA || choices.a} profile={profile} setProfile={setProfile} onAnalyzed={setJobAnalysis} />
+      <JobPostingInput postings={postings} setPostings={setPostings} />
 
       {/* 가치관 검사는 공고 분석 안에서도 권하지만, 공고가 없어도 할 수 있게 여기에도 둔다. */}
       <ValueTestSection profile={profile} setProfile={setProfile} />
@@ -233,245 +234,6 @@ export default function InputScreen() {
 }
 
 // 채용 공고 붙여넣기 → 직무 분석. 요구역량은 공고에서, 접점·마찰점은 내 성향과 대조해서.
-function JobPostingAnalysis({ choice, profile, setProfile, onAnalyzed }) {
-  const [posting, setPosting] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState(null);
-  const [result, setResult] = useState(null);
-  const [deepOpen, setDeepOpen] = useState(false);
-  const [mode, setMode] = useState("paste");   // paste | url | pdf
-  const [url, setUrl] = useState("");
-  const [note, setNote] = useState(null);      // 불러오기 결과 안내
-  const ready = isPostingReady(posting);
-  const deepDone = (profile?.career_values || []).length > 0;
-
-  async function loadUrl() {
-    setBusy(true); setErr(null); setNote(null);
-    try {
-      const data = await extractFromUrl(url.trim());
-      if (!data.ok) { setNote("주소를 읽지 못했어요. 본문을 붙여넣어 주세요."); return; }
-      setPosting(data.text || "");
-      setNote(data.thin
-        ? `${data.company || ""} ${data.title || ""} — 제목만 읽혔어요. 이 사이트는 본문이 스크립트로 그려져서, 아래 칸에 본문을 붙여넣으면 훨씬 정확해집니다.`.trim()
-        : `불러왔어요 (${data.chars}자). 빠진 부분이 있으면 아래에서 직접 고쳐도 돼요.`);
-    } catch {
-      setNote("주소를 읽지 못했어요. 본문을 붙여넣어 주세요.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function loadPdf(file) {
-    if (!file) return;
-    setBusy(true); setErr(null); setNote(null);
-    try {
-      const data = await extractFromPdf(file);
-      if (!data.ok) { setNote(data.hint || "PDF에서 글자를 찾지 못했어요. 본문을 붙여넣어 주세요."); return; }
-      setPosting(data.text || "");
-      setNote(`PDF ${data.pages}쪽에서 ${data.chars}자를 읽었어요.`);
-    } catch {
-      setNote("PDF를 읽지 못했어요. 본문을 붙여넣어 주세요.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  // 검사 결과는 프로필에 남겨 이후 분석·서사가 계속 쓰게 한다.
-  function onDeepDone(data) {
-    setProfile?.((prev) => ({ ...prev, career_values: data.ranking, career_values_report: data.report_url }));
-    setDeepOpen(false);
-  }
-
-  async function run() {
-    if (!ready || busy) return;
-    setBusy(true); setErr(null); setResult(null);
-    try {
-      const data = await analyzeJobPosting({ posting, choice, profile });
-      if (data.ok) { setResult(data); onAnalyzed?.(data); }
-      else setErr(data.reason === "no_api_key" ? "분석 서버에 API 키가 없어요" : "분석에 실패했어요");
-    } catch {
-      setErr("분석 서버에 연결하지 못했어요 (로컬 API가 켜져 있나요?)");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <details className="mt-3 rounded-2xl border border-white/10 bg-[#0B1423]/80 px-3.5 py-3">
-      <summary className="cursor-pointer text-[11px] font-semibold text-sub">
-        지원하려는 공고 붙여넣기 · 선택
-      </summary>
-      <p className="mt-2 text-[10px] leading-relaxed text-mut">
-        공고를 넣으면 요구 역량과 함께, 당신의 기록에서 만든 성향과 <b className="text-sub">맞는 지점·부딪힐 지점</b>을 짚어드려요.
-      </p>
-
-      {/* 입력 방식 — 붙여넣기 / URL / PDF. 채용 사이트가 JS 렌더링이면 URL 로는 얇게
-          잡히므로, 그럴 때 붙여넣기를 권하는 안내를 함께 띄운다. */}
-      <div className="mt-2 flex gap-1.5">
-        {[["paste", "붙여넣기"], ["url", "URL"], ["pdf", "PDF"]].map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => { setMode(key); setNote(null); }}
-            className={`tap flex-1 rounded-lg border px-2 py-1.5 text-[10px] transition-colors ${
-              mode === key ? "border-[#8B6CCF] bg-[#8B6CCF]/15 text-[#C7B5F2]" : "border-white/10 text-sub"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {mode === "url" && (
-        <div className="mt-2 flex gap-1.5">
-          <input
-            value={url}
-            onChange={(event) => setUrl(event.target.value)}
-            placeholder="채용 공고 주소 붙여넣기"
-            className="min-w-0 flex-1 rounded-xl border border-line bg-bg px-3 py-2 text-[11px] text-ink outline-none placeholder:text-mut focus:border-cyan"
-          />
-          <button
-            type="button"
-            onClick={loadUrl}
-            disabled={!url.trim() || busy}
-            className="tap shrink-0 rounded-xl bg-white/10 px-3 text-[11px] font-bold text-ink disabled:opacity-40"
-          >
-            불러오기
-          </button>
-        </div>
-      )}
-
-      {mode === "pdf" && (
-        <input
-          type="file"
-          accept="application/pdf"
-          onChange={(event) => loadPdf(event.target.files?.[0])}
-          className="mt-2 w-full rounded-xl border border-line bg-bg px-3 py-2 text-[10px] text-sub file:mr-2 file:rounded-lg file:border-0 file:bg-[#8B6CCF] file:px-2 file:py-1 file:text-[10px] file:text-white"
-        />
-      )}
-
-      {note && <p className="mt-1.5 text-[10px] leading-relaxed text-[#FFB36B]">{note}</p>}
-
-      <textarea
-        value={posting}
-        onChange={(event) => setPosting(event.target.value)}
-        rows={4}
-        placeholder="채용 공고 본문을 붙여넣어 주세요 (주요 업무·자격 요건 포함)"
-        className="mt-2 w-full resize-none rounded-xl border border-line bg-bg px-3 py-2.5 text-[11px] leading-relaxed text-ink outline-none placeholder:text-mut focus:border-cyan"
-      />
-      <button
-        type="button"
-        onClick={run}
-        disabled={!ready || busy}
-        className={`tap mt-2 w-full rounded-xl py-2.5 text-[12px] font-bold transition-colors ${
-          ready && !busy ? "bg-[#8B6CCF] text-white" : "bg-white/10 text-mut"
-        }`}
-      >
-        {busy ? "공고를 읽는 중…" : "이 공고 분석하기"}
-      </button>
-      {err && <p className="mt-2 text-[10px] leading-relaxed text-[#F0736F]">{err}</p>}
-
-      {result && (
-        <div className="mt-3 space-y-2.5">
-          <div className="rounded-xl border border-[#8B6CCF]/25 bg-[#8B6CCF]/[.07] px-3 py-2.5">
-            <b className="text-[12px] text-[#C7B5F2]">{result.role || "이 직무"}</b>
-            {result.company && <span className="ml-1.5 text-[10px] text-mut">{result.company}</span>}
-            {!result.persona_used && (
-              <p className="mt-1 text-[9px] text-mut">일기 기록이 쌓이면 성향과 대조한 분석까지 나와요.</p>
-            )}
-          </div>
-
-          {result.requirements?.length > 0 && (
-            <JobBlock title="요구 역량">
-              {result.requirements.map((item, i) => (
-                <li key={i} className="text-[11px] leading-relaxed text-sub">· {item}</li>
-              ))}
-            </JobBlock>
-          )}
-
-          {result.fit?.length > 0 && (
-            <JobBlock title="나와 맞는 지점" tone="#5DCAA5">
-              {result.fit.map((item, i) => (
-                <li key={i} className="text-[11px] leading-relaxed text-sub">
-                  <b className="text-ink">{item.point}</b> — {item.why}
-                </li>
-              ))}
-            </JobBlock>
-          )}
-
-          {result.friction?.length > 0 && (
-            <JobBlock title="부딪힐 수 있는 지점" tone="#F0A45E">
-              {result.friction.map((item, i) => (
-                <li key={i} className="text-[11px] leading-relaxed text-sub">
-                  <b className="text-ink">{item.point}</b> — {item.why}
-                </li>
-              ))}
-            </JobBlock>
-          )}
-
-          {result.prep?.length > 0 && (
-            <JobBlock title="지원 전 준비">
-              {result.prep.map((item, i) => (
-                <li key={i} className="text-[11px] leading-relaxed text-sub">· {item}</li>
-              ))}
-            </JobBlock>
-          )}
-
-          {result.questions?.length > 0 && (
-            <JobBlock title="예상 면접 질문">
-              {result.questions.map((item, i) => (
-                <li key={i} className="text-[11px] leading-relaxed text-sub">
-                  <b className="text-ink">Q. {item.q}</b>
-                  <span className="mt-0.5 block text-[10px] text-mut">→ {item.angle}</span>
-                </li>
-              ))}
-            </JobBlock>
-          )}
-
-          {/* 공고에서 회사명이 잡혔으면 그 회사의 공시·재무까지 이어서 본다. */}
-          {result.company && <CompanyAnalysis company={result.company} />}
-
-          {/* 세부 질문 — 진로 질문을 한 직후라 검사 동기가 가장 높은 자리. */}
-          {deepOpen ? (
-            <ValueDeepTest onDone={onDeepDone} onClose={() => setDeepOpen(false)} />
-          ) : deepDone ? (
-            <div className="rounded-xl border border-[#8B6CCF]/25 bg-[#8B6CCF]/[.07] px-3 py-2.5">
-              <p className="text-[10px] font-bold text-[#C7B5F2]">직업가치관검사 반영됨</p>
-              <p className="mt-1 text-[11px] leading-relaxed text-sub">
-                {(profile.career_values || []).slice(0, 3).map((v) => v.name).join(" > ")} 순으로 나왔어요.
-                {" "}다시 분석하면 이 결과까지 반영됩니다.
-              </p>
-              <div className="mt-1.5 flex gap-2.5">
-                <button onClick={run} className="tap text-[10px] font-bold text-cyan">다시 분석하기 →</button>
-                {profile.career_values_report && (
-                  <a href={profile.career_values_report} target="_blank" rel="noreferrer" className="tap text-[10px] text-mut">
-                    공식 결과지 보기 ↗
-                  </a>
-                )}
-              </div>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setDeepOpen(true)}
-              className="tap w-full rounded-xl border border-dashed border-[#8B6CCF]/40 bg-[#8B6CCF]/[.05] px-3 py-2.5 text-left"
-            >
-              <p className="text-[11px] font-bold text-[#C7B5F2]">세부 질문으로 성향 더 정확히 보기</p>
-              <p className="mt-0.5 text-[10px] leading-relaxed text-mut">
-                직업가치관검사 28문항 · 10분 — 두 가치 중 하나씩 고르면 이 분석과 시뮬레이션에 반영돼요.
-              </p>
-            </button>
-          )}
-
-          <p className="text-[9px] leading-relaxed text-mut">
-            공고 원문과 당신의 기록만으로 정리한 것이며, 회사 내부 사정이나 합격 가능성을 예측하지 않습니다.
-          </p>
-        </div>
-      )}
-    </details>
-  );
-}
-
 // 직업가치관검사 단독 섹션 — 공고 없이도 검사만 할 수 있게. 결과는 프로필에 남아
 // 이후 공고 분석·시뮬레이션 서사가 계속 쓴다.
 function ValueTestSection({ profile, setProfile }) {

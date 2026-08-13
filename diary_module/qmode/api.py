@@ -757,6 +757,23 @@ def job_analyze(req: JobAnalyzeReq):
     R1._load_dotenv()
     if not os.getenv("ANTHROPIC_API_KEY"):
         return {"ok": False, "reason": "no_api_key"}
+    # 과부하(529)·순간 오류는 사용자 잘못이 아니다 — 짧게 한 번 더 시도한다.
+    def _ask(client, prompt, max_tokens):
+        import time as _t
+        for attempt in range(3):
+            try:
+                resp = client.messages.create(
+                    model="claude-sonnet-5", max_tokens=max_tokens,
+                    thinking={"type": "disabled"},
+                    messages=[{"role": "user", "content": prompt}])
+                return "".join(b.text for b in resp.content if b.type == "text").strip()
+            except Exception as e:      # noqa: BLE001
+                transient = any(s in str(e).lower() for s in ("529", "overload", "rate", "500", "timeout"))
+                if attempt == 2 or not transient:
+                    raise
+                _t.sleep(1.5 * (attempt + 1))
+        return ""
+
     prompt = (
         "[채용 공고]\n" + text[:6000] + "\n\n"
         + (f"{pb}\n\n" if pb else "")
@@ -766,11 +783,7 @@ def job_analyze(req: JobAnalyzeReq):
     )
     try:
         from anthropic import Anthropic
-        resp = Anthropic().messages.create(
-            model="claude-sonnet-5", max_tokens=1200, thinking={"type": "disabled"},
-            messages=[{"role": "user", "content": prompt}],
-        )
-        txt = "".join(b.text for b in resp.content if b.type == "text").strip()
+        txt = _ask(Anthropic(), prompt, 1200)
         # 코드펜스든 설명이 앞에 붙든, 첫 '{' ~ 마지막 '}' 만 취한다.
         s, e = txt.find("{"), txt.rfind("}")
         if s < 0 or e <= s:

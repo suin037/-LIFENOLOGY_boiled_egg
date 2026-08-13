@@ -1,16 +1,73 @@
+import { useState } from "react";
 import { useResult } from "../../data/ResultContext.jsx";
 import CompanyAnalysis from "../CompanyAnalysis.jsx";
 
 // 결과 화면의 '공고 분석' 탭 — 입력에서 분석한 공고를 예측 수치와 나란히 다시 본다.
 // 예측은 '비슷한 사람들이 어떻게 됐나'를, 이 탭은 '내가 가려는 그 자리는 어떤가'를 말한다.
 export default function JobAnalysisView() {
-  const { jobAnalysis: j, profile } = useResult();
+  const { jobAnalyses, jobBusy, postings, profile, analyzePostings } = useResult();
+  const [at, setAt] = useState(0);
+  const list = jobAnalyses || [];
+
+  if (jobBusy && !list.length) {
+    return (
+      <p className="px-1 py-6 text-center text-[12px] text-mut">
+        담아둔 공고 {postings?.length || 0}개를 읽고 있어요…
+      </p>
+    );
+  }
+  if (!list.length) {
+    return (
+      <div className="rounded-2xl border border-dashed border-white/10 px-3.5 py-6 text-center">
+        <p className="text-[12px] text-sub">아직 분석한 공고가 없어요.</p>
+        <p className="mt-1 text-[10px] leading-relaxed text-mut">
+          시뮬레이션 입력 화면에서 공고를 담으면 여기서 요구 역량과 성향 대조를 볼 수 있어요.
+        </p>
+      </div>
+    );
+  }
+
+  const j = list[Math.min(at, list.length - 1)];
   if (!j) return null;
+  if (!j.ok) {
+    return (
+      <div className="rounded-2xl border border-white/10 bg-black/15 px-3.5 py-4">
+        <p className="text-[12px] text-[#F0736F]">
+          {j.label ? `'${j.label}' ` : ""}공고를 분석하지 못했어요
+          {j.reason?.includes("529") || j.reason === "network" ? " (일시적인 연결 문제예요)" : ""}.
+        </p>
+        <button
+          onClick={() => analyzePostings()}
+          className="tap mt-2 text-[11px] font-bold text-cyan"
+        >
+          다시 시도하기 →
+        </button>
+      </div>
+    );
+  }
 
   const values = (profile?.career_values || []).slice(0, 3).map((v) => v.name);
 
   return (
     <div className="space-y-2.5">
+      {/* 공고가 둘 이상이면 나란히 두고 오간다 — 같은 성향으로 어디가 더 맞는지 비교. */}
+      {list.length > 1 && (
+        <div className="flex flex-wrap gap-1.5">
+          {list.map((item, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => setAt(i)}
+              className={`tap rounded-full border px-3 py-1.5 text-[11px] transition-colors ${
+                i === at ? "border-[#8B6CCF] bg-[#8B6CCF]/20 text-[#C7B5F2]" : "border-white/10 text-sub"
+              }`}
+            >
+              {item.company || item.role || `공고 ${i + 1}`}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="rounded-2xl border border-[#8B6CCF]/25 bg-[#8B6CCF]/[.07] px-3.5 py-3">
         <p className="text-[10px] tracking-[.12em] text-[#9F85DD]">JOB POSTING</p>
         <b className="mt-1 block text-[15px] text-ink">{j.role || "분석한 공고"}</b>
