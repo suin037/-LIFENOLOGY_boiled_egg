@@ -5,6 +5,7 @@ import { generateSceneImages, runCompareRaw, runSimulateRaw } from "../api.js";
 import { mapSimulateToPair } from "./simulateAdapter.js";
 import { avatarToPngBlob } from "./avatarImage.js";
 import { initDemoFromUrl, noteSimulationRun, recordScenario, loadUniverse } from "./myUniverse.js";
+import { toPlanetKey } from "./choices.js";
 
 // 결과 데이터 + 온보딩 프로필을 한 곳에 모으는 컨텍스트.
 // runSimulation() 이 선택(choices)+심정(diary)으로 결과 쌍{a,b}을 만든다.
@@ -117,7 +118,14 @@ export function ResultProvider({ children }) {
     const choiceA = opts.choiceA || choices.a;
     const choiceB = opts.choiceB || choices.b;
     const currentDiary = opts.diary ?? diary;
-    const scenarioDomain = loadUniverse().planet;
+    // 시나리오가 꽂힐 행성 — 선택지에서 감지한 영역으로 정한다.
+    // 예전엔 loadUniverse().planet(마지막에 고른 행성)을 썼는데, 새 우주 화면은 그 값을
+    // 저장하지 않아 항상 기본값 'career'가 되고 모든 시나리오가 진로 행성에만 쌓였다.
+    const domainsForScenario = [
+      ...(opts.choiceADomains ?? scenarioDomains.a ?? []),
+      ...(opts.choiceBDomains ?? scenarioDomains.b ?? []),
+    ];
+    const scenarioDomain = toPlanetKey(domainsForScenario) || loadUniverse().planet || "career";
     noteSimulationRun();
     // 그 날 그 영역(현재 행성)에서 시나리오를 만들었음을 기록 → 지구본에 ◆ 로 표시.
     try {

@@ -50,3 +50,27 @@ export function classifyChoice(text) {
   // 근거 키워드가 없으면 오분류하지 않고 사용자가 직접 고르게 한다.
   return null;
 }
+
+// ── 삶의 영역(LIFE_DOMAINS) → 나의 우주 행성(PLANETS) 키 ──────────────
+// 두 키 체계가 다르다. 시뮬레이션 분류는 9개(career·education·business…),
+// 행성은 5개(career·life·relation·health·growth). 시나리오를 올바른 행성에
+// 꽂으려면 이 변환이 필요하다. (일기 태깅 domain_tag.py 는 이미 행성 키로 나온다.)
+const DOMAIN_TO_PLANET = {
+  career: "career",
+  business: "career",          // 창업도 일의 영역
+  finance: "career",           // 행성 '진로'가 진로·일·돈을 포괄
+  education: "growth",
+  long_term_values: "growth",
+  health: "health",
+  relationship: "relation",
+  housing: "life",
+  lifestyle: "life",
+};
+
+/** 감지된 영역 배열 → 행성 키 하나. 없으면 null(호출부가 기본값 결정). */
+export function toPlanetKey(domains = []) {
+  for (const d of domains) {
+    if (DOMAIN_TO_PLANET[d]) return DOMAIN_TO_PLANET[d];
+  }
+  return null;
+}
