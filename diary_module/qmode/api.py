@@ -991,6 +991,20 @@ def future_scenario(req: FutureReq):
                        analysis=req.analysis, sims=req.sims, speech=req.speech)
 
 
+class SuggestReq(BaseModel):
+    """오늘 해볼 만한 것. 기회(인생 갈림길)와 달리 오늘 크기의 제안이다."""
+    records: list[dict] = []          # [{date, text, mood, emotion}] 최근 것부터
+    moodAvg: Optional[float] = None
+    speech: Optional[str] = None
+
+
+@app.post("/suggest/daily")
+def suggest_daily(req: SuggestReq):
+    """최근 기록 → 오늘 해볼 만한 것 3개. 기록이 무거운 날엔 권하지 않고 care 로 답한다."""
+    from qmode import suggest as SG
+    return SG.suggest(req.records, mood_avg=req.moodAvg, speech=req.speech)
+
+
 class OpportunityReq(BaseModel):
     """그 영역에서 아직 안 가본 길. 이미 비교한 갈림길(sims)은 빼고 찾는다."""
     domain: Optional[str] = None

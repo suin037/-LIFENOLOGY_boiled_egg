@@ -4,6 +4,7 @@ import { Orbit, ChevronRight, Sparkles, GitCompareArrows } from "lucide-react";
 import { useResult } from "../data/ResultContext.jsx";
 import { Button } from "../components/ui.jsx";
 import DiaryToday from "../components/DiaryToday.jsx";
+import DailySuggest from "../components/DailySuggest.jsx";
 import { universeSummary } from "../data/myUniverse.js";
 import { jobChangeRumination } from "../data/diarySignals.js";
 
@@ -37,6 +38,9 @@ export default function HomeHub() {
       <div className="lg:mt-6 lg:grid lg:grid-cols-[minmax(0,1.45fr)_minmax(300px,.75fr)] lg:items-start lg:gap-7">
         <DiaryToday />
         <aside className="lg:sticky lg:top-0">
+
+      {/* 오늘 해볼 만한 것 — 인생 갈림길(기회 카드)보다 작은, 오늘 크기의 제안 */}
+      <DailySuggest />
 
       {/* 반복 고민 넛지 — 최근 2주 이직 고민이 잦으면 비교를 먼저 제안 */}
       {rumination.prompt && (
