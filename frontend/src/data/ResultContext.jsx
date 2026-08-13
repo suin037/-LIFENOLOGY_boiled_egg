@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { getPredictionPair } from "./prediction.js";
 import { DEFAULT_AVATAR } from "./avatarOptions.js";
 import { generateSceneImages, runCompareRaw, runSimulateRaw } from "../api.js";
@@ -34,8 +34,26 @@ const DEFAULT_PROFILE = {
   avatarConfig: DEFAULT_AVATAR, // 아바타 빌더 선택(피부·머리·안경·배경)
 };
 
+// 프로필 영속 — 온보딩 입력·가치관 검사 결과가 새로고침에 날아가지 않도록 저장한다.
+// (검사는 28문항 10분짜리라 다시 하라고 할 수 없다.)
+const PROFILE_KEY = "pm.profile.v1";
+
+function loadProfile() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(PROFILE_KEY) || "null");
+    return saved ? { ...DEFAULT_PROFILE, ...saved } : DEFAULT_PROFILE;
+  } catch {
+    return DEFAULT_PROFILE;
+  }
+}
+
 export function ResultProvider({ children }) {
-  const [profile, setProfile] = useState(DEFAULT_PROFILE);
+  const [profile, setProfile] = useState(loadProfile);
+  useEffect(() => {
+    try {
+      localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+    } catch { /* 저장 실패는 무시 — 기능은 계속 동작 */ }
+  }, [profile]);
   const [choices, setChoices] = useState({ a: "이직", b: "유지" });
   const [scenarioTexts, setScenarioTexts] = useState({ a: "", b: "" });
   const [scenarioDomains, setScenarioDomains] = useState({ a: [], b: [] });

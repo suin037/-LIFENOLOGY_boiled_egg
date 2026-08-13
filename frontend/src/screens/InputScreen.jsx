@@ -214,6 +214,9 @@ export default function InputScreen() {
           공고 수집은 약관 문제가 커서 크롤링 대신 붙여넣기로 받는다. */}
       <JobPostingAnalysis choice={textA || choices.a} profile={profile} setProfile={setProfile} onAnalyzed={setJobAnalysis} />
 
+      {/* 가치관 검사는 공고 분석 안에서도 권하지만, 공고가 없어도 할 수 있게 여기에도 둔다. */}
+      <ValueTestSection profile={profile} setProfile={setProfile} />
+
       <details className="mt-3 rounded-2xl border border-white/10 bg-[#0B1423]/80 px-3.5 py-3">
         <summary className="cursor-pointer text-[11px] font-semibold text-sub">지금 심정도 덧붙이기 · 선택</summary>
         <input value={diary} onChange={(event) => setDiary(event.target.value)} placeholder="왜 이 선택이 망설여지는지 한 줄로 적어보세요" className="mt-3 w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-xs text-ink outline-none focus:border-cyan" />
@@ -460,6 +463,61 @@ function JobPostingAnalysis({ choice, profile, setProfile, onAnalyzed }) {
             공고 원문과 당신의 기록만으로 정리한 것이며, 회사 내부 사정이나 합격 가능성을 예측하지 않습니다.
           </p>
         </div>
+      )}
+    </details>
+  );
+}
+
+// 직업가치관검사 단독 섹션 — 공고 없이도 검사만 할 수 있게. 결과는 프로필에 남아
+// 이후 공고 분석·시뮬레이션 서사가 계속 쓴다.
+function ValueTestSection({ profile, setProfile }) {
+  const [open, setOpen] = useState(false);
+  const done = (profile?.career_values || []).length > 0;
+
+  return (
+    <details className="mt-3 rounded-2xl border border-white/10 bg-[#0B1423]/80 px-3.5 py-3">
+      <summary className="cursor-pointer text-[11px] font-semibold text-sub">
+        직업가치관검사 · 선택 {done && <span className="ml-1 text-[10px] text-[#C7B5F2]">완료</span>}
+      </summary>
+      {done && !open ? (
+        <div className="mt-2 rounded-xl border border-[#8B6CCF]/25 bg-[#8B6CCF]/[.07] px-3 py-2.5">
+          <p className="text-[11px] leading-relaxed text-sub">
+            {(profile.career_values || []).slice(0, 3).map((v) => v.name).join(" > ")} 순으로 나왔어요.
+            공고 분석과 결과 서사에 반영됩니다.
+          </p>
+          <div className="mt-1.5 flex gap-2.5">
+            <button onClick={() => setOpen(true)} className="tap text-[10px] text-mut">다시 하기</button>
+            {profile.career_values_report && (
+              <a href={profile.career_values_report} target="_blank" rel="noreferrer" className="tap text-[10px] text-mut">
+                공식 결과지 ↗
+              </a>
+            )}
+          </div>
+        </div>
+      ) : open ? (
+        <div className="mt-2">
+          <ValueDeepTest
+            onDone={(data) => {
+              setProfile((prev) => ({ ...prev, career_values: data.ranking, career_values_report: data.report_url }));
+              setOpen(false);
+            }}
+            onClose={() => setOpen(false)}
+          />
+        </div>
+      ) : (
+        <>
+          <p className="mt-2 text-[10px] leading-relaxed text-mut">
+            커리어넷(한국직업능력연구원) 직업가치관검사 28문항 · 10분. 두 가치 중 하나씩 고르면
+            8개 가치의 우선순위가 나오고, 공고 분석·결과 서사에 반영됩니다.
+          </p>
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="tap mt-2 w-full rounded-xl border border-[#8B6CCF]/40 bg-[#8B6CCF]/[.08] py-2.5 text-[12px] font-bold text-[#C7B5F2]"
+          >
+            검사 시작하기
+          </button>
+        </>
       )}
     </details>
   );
