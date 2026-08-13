@@ -31,11 +31,31 @@ export default function HomeCalendar() {
   function moveYear(delta) { setYear((value)=>value+delta); setMonth(null); setWeek(null); setStar(null); }
 
   return <section className="mt-5 rounded-[24px] border border-white/[.08] bg-[#0B1322] p-4 lg:p-5">
-    <div className="flex items-center justify-between gap-3"><div><p className="text-[10px] tracking-[.15em] text-[#9F85DD]">CONSTELLATION ARCHIVE</p><h2 className="mt-1 text-[17px] font-bold">나의 기록 별자리</h2></div><div className="flex items-center gap-1"><button onClick={()=>moveYear(-1)} className="tap flex h-9 w-9 items-center justify-center rounded-full border border-white/10"><ChevronLeft size={16}/></button><span className="min-w-[74px] text-center text-[13px] font-bold">{year}년</span><button onClick={()=>moveYear(1)} className="tap flex h-9 w-9 items-center justify-center rounded-full border border-white/10"><ChevronRight size={16}/></button></div></div>
-    <p className="mt-3 text-[10px] leading-relaxed text-mut">달마다 그 달의 별자리(황도 12궁) 모양으로 기록이 모입니다. 성단을 누르면 같은 별들이 그달의 주간 별자리로 펼쳐집니다.</p>
+    <div className="flex items-center justify-between gap-3"><div><p className="text-[10px] tracking-[.15em] text-[#9F85DD]">CONSTELLATION ARCHIVE</p><h2 className="mt-1 text-[17px] font-bold">나의 기록 별자리</h2></div><div className="flex items-center gap-1"><button onClick={()=>moveYear(-1)} className="tap flex h-9 w-9 items-center justify-center rounded-full border border-white/10"><ChevronLeft size={16}/></button><span className="min-w-[92px] text-center text-[13px] font-bold">{year}년{month?` ${Number(month.slice(5))}월`:""}</span><button onClick={()=>moveYear(1)} className="tap flex h-9 w-9 items-center justify-center rounded-full border border-white/10"><ChevronRight size={16}/></button></div></div>
+    {/* 월 선택 — 성단을 정확히 누르지 않아도 달을 고를 수 있게(리포트까지 닿는 길). */}
+    <div className="mt-3 flex flex-wrap gap-1">
+      {months.map((item)=>{
+        const on=month===item.key, has=item.count>0;
+        return <button key={item.key} disabled={!has} onClick={()=>{setMonth(on?null:item.key);setWeek(null);setStar(null);}}
+          className={`tap rounded-full border px-2.5 py-1 text-[10px] transition-colors ${on?"border-[#8B6CCF] bg-[#8B6CCF]/20 text-[#C7B5F2]":has?"border-white/10 text-sub hover:border-[#8B6CCF]/50":"border-white/5 text-mut opacity-40"}`}>
+          {item.index}월 <span className="text-[8px] text-mut">{zodiacOf(item.index).ko}</span>
+        </button>;
+      })}
+    </div>
+    <p className="mt-2.5 text-[10px] leading-relaxed text-mut">달마다 그 달의 별자리(황도 12궁) 모양으로 기록이 모입니다. 달을 고르면 같은 별들이 그달의 주간 별자리로 펼쳐집니다.</p>
     <div className="mt-4"><JyConstellationArchive monthGroups={populatedMonths} weeksByMonth={weeksByMonth} focusMonth={month} onMonthPick={(key)=>{setMonth(key);setWeek(null);setStar(null);}} onWeekOpen={(group)=>{setWeek(group);setStar(null);}}/></div>
     {month && <>
       <div className="mt-4 flex items-center justify-between rounded-xl border border-[#8B6CCF]/20 bg-[#8B6CCF]/[.07] px-3 py-2.5"><div><b className="text-[12px] text-[#C7B5F2]">{Number(month.slice(5))}월 · {zodiacOf(Number(month.slice(5))).ko}</b><p className="mt-0.5 text-[9px] text-mut">{months.find((item)=>item.key===month)?.count || 0}일 기록</p></div><button onClick={()=>{setMonth(null);setWeek(null);setStar(null);}} className="tap text-[10px] text-sub">12개월 보기</button></div>
+      {/* 주 선택 — 별을 정확히 못 눌러도 주간 별자리·리포트로 갈 수 있게. */}
+      {monthWeeks.length>0&&<div className="mt-2 flex flex-wrap gap-1">
+        {monthWeeks.map((group)=>{
+          const on=week?.weekStart===group.weekStart, days=group.stars.filter((item)=>!item.empty).length;
+          return <button key={group.weekStart} onClick={()=>{setWeek(on?null:group);setStar(null);}}
+            className={`tap rounded-lg border px-2 py-1 text-[10px] transition-colors ${on?"border-[#8B6CCF] bg-[#8B6CCF]/20 text-[#C7B5F2]":"border-white/10 text-sub hover:border-[#8B6CCF]/50"}`}>
+            {shortDate(group.weekStart)}~ <span className="text-[8px] text-mut">{days}일</span>
+          </button>;
+        })}
+      </div>}
       {week&&<div className="mt-3 rounded-[18px] border border-white/[.07] bg-black/15 p-4"><div className="flex items-center justify-between"><div><p className="text-[9px] text-[#A88BE8]">WEEK CONSTELLATION</p><b className="text-[12px]">별을 눌러 그날의 기록 보기</b></div><button onClick={()=>setReport(week)} className="tap rounded-full bg-[#8B6CCF] px-3 py-1.5 text-[10px] font-bold">주간 리포트</button></div><div className="mx-auto mt-2 max-w-[330px]"><Constellation size={230} stars={week.stars} todayDate={todayKey()} selectedDate={star?.date} onSelect={setStar}/></div>{star&&<div className="mt-3 rounded-xl bg-white/[.035] p-3"><div className="flex justify-between text-[10px]"><b>{star.date}</b><span className="text-[#BBA4ED]">기분 {star.mood || "-"}/5</span></div><p className="mt-2 text-[11px] leading-relaxed text-sub">{star.text||star.note||"간단한 체크인만 남긴 날입니다."}</p></div>}</div>}
     </>}
     {report&&<WeeklyReport group={report} onClose={()=>setReport(null)}/>} 
