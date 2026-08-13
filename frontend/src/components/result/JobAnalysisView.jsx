@@ -1,11 +1,12 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useResult } from "../../data/ResultContext.jsx";
-import CompanyAnalysis from "../CompanyAnalysis.jsx";
 
 // 결과 화면의 '공고 분석' 탭 — 입력에서 분석한 공고를 예측 수치와 나란히 다시 본다.
 // 예측은 '비슷한 사람들이 어떻게 됐나'를, 이 탭은 '내가 가려는 그 자리는 어떤가'를 말한다.
 export default function JobAnalysisView() {
   const { jobAnalyses, jobBusy, postings, profile, analyzePostings } = useResult();
+  const navigate = useNavigate();
   const [at, setAt] = useState(0);
   const list = jobAnalyses || [];
 
@@ -79,7 +80,19 @@ export default function JobAnalysisView() {
         )}
       </div>
 
-      {j.company && <CompanyAnalysis company={j.company} />}
+      {/* 기업 분석은 창을 겹쳐 놓지 않고 전용 화면으로 보낸다(회사명은 들고 간다). */}
+      {j.company && (
+        <button
+          type="button"
+          onClick={() => navigate(`/company?name=${encodeURIComponent(j.company)}`)}
+          className="tap flex w-full items-center justify-between rounded-2xl border border-white/[.07] bg-black/15 px-3.5 py-2.5 text-left"
+        >
+          <span className="text-[11px] leading-relaxed text-sub">
+            <b className="text-ink">{j.company}</b>의 재무·공시도 볼까요
+          </span>
+          <span className="shrink-0 text-[11px] font-bold text-[#C7B5F2]">기업 분석 →</span>
+        </button>
+      )}
 
       {j.requirements?.length > 0 && (
         <Block title="요구 역량">

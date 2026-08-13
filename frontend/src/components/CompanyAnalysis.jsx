@@ -1,12 +1,18 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { analyzeCompany, formatWon, growthRate } from "../data/companyAnalysis.js";
 
 // 기업 분석 — 공고에서 뽑힌 회사명으로 OpenDART 공시·재무를 불러와 보여준다.
 // 숫자는 공시 원문 그대로, 해석만 AI가 한다. 근거(공시 원문 링크)를 함께 건다.
-export default function CompanyAnalysis({ company }) {
+export default function CompanyAnalysis({ company, auto = false }) {
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+
+  // 전용 화면에서는 검색하자마자 바로 불러온다(버튼을 한 번 더 누르게 하지 않는다).
+  useEffect(() => {
+    if (auto && company) run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auto, company]);
 
   async function run() {
     if (busy) return;

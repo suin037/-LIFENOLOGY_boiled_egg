@@ -103,7 +103,16 @@ def find_company(name, limit=5):
 
 
 # ── 2) 재무 — 매출·영업이익·당기순이익 ──────────────────────────────────
-_ACCOUNTS = {"매출액": "revenue", "영업이익": "operating", "당기순이익": "net"}
+# 공시 계정명 그대로 매칭 — 순이익은 '당기순이익(손실)' 로 온다.
+_ACCOUNTS = {
+    "매출액": "revenue",
+    "영업이익": "operating",
+    "당기순이익(손실)": "net",
+    "당기순이익": "net",
+    "자산총계": "assets",
+    "부채총계": "liabilities",
+    "자본총계": "equity",
+}
 
 
 def _to_num(v):
