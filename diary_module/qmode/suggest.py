@@ -52,9 +52,10 @@ _SPEECH = {
 _HEAVY = ("죽고 싶", "사라지고 싶", "살기 싫", "자해", "못 버티", "무너지",
           "숨이 막", "아무 의미 없")
 
+# 음악은 여기서 다루지 않는다 — media.py 가 Deezer 로 실재 확인한 곡을 따로 내놓는다.
+# 한 카드에서 검증된 노래와 검증 안 된 음악 조언이 같이 뜨면 어느 쪽을 믿을지 알 수 없다.
 _KINDS = {
     "move": "몸",
-    "listen": "듣기",
     "try": "해보기",
     "rest": "쉬기",
     "meet": "사람",
@@ -64,7 +65,7 @@ _SYSTEM = (
     "너는 사용자의 최근 기록을 읽고, 오늘 해볼 만한 작은 것 3개를 건네는 사람이다.\n"
     "\n"
     "각 제안:\n"
-    '- kind : "move"(몸 움직이기) | "listen"(듣기) | "try"(해보기) | "rest"(쉬기) | "meet"(사람)\n'
+    '- kind : "move"(몸 움직이기) | "try"(해보기) | "rest"(쉬기) | "meet"(사람)\n'
     "- title: 12자 안팎. 무엇을 하는지 바로 알게.\n"
     "- why  : 왜 이걸 골랐는지 1~2문장. 기록의 구체적 사실을 짚어라.\n"
     "- how  : 지금 당장 할 수 있는 형태 1문장. 문턱을 낮춰라.\n"
@@ -73,9 +74,10 @@ _SYSTEM = (
     "규칙\n"
     "1) 기분이 낮은 날엔 큰 걸 권하지 마라. '헬스 등록' 말고 '집 앞 열 걸음'이다.\n"
     "   기운이 있는 날엔 조금 더 벌려도 된다. 기록의 온도에 맞춰라.\n"
-    "2) 세 개의 결을 다르게 섞어라(몸 하나, 듣거나 보는 것 하나, 나머지 하나).\n"
-    "3) 음악은 사용자가 좋다고 적은 곡·가수가 있을 때만 그걸 근거로 삼아라.\n"
-    "   없으면 곡명을 지어내지 말고 분위기·장르로 말하고 search 에 검색어를 넣어라.\n"
+    "2) 세 개의 결을 다르게 섞어라(몸 하나, 해보거나 쉬는 것 하나, 나머지 하나).\n"
+    "3) 노래·음악·플레이리스트는 어떤 kind 로도 제안하지 마라(제목에도, how 에도,\n"
+    "   search 에도). 곡 추천은 다른 화면이 실제 곡 정보로 따로 내놓는다 —\n"
+    "   여기서 또 말하면 검증된 추천과 아닌 것이 한 카드에 섞인다.\n"
     "4) 취미는 '요즘 유행'이라고 단정하지 마라. 네가 아는 시점이 지났을 수 있다.\n"
     "   '해볼 만한 것'으로 놓고, 확실치 않은 고유명사는 search 로 돌려라.\n"
     "5) 진단·치료·영양제·병원 권유 금지. 훈계하지 마라.\n"
@@ -102,6 +104,15 @@ def _records_block(records):
             (r.get("emotion") or "").strip()) if x)
         lines.append(f"- {r.get('date') or '?'}: {text[:140]}" + (f" ({meta})" if meta else ""))
     return "\n".join(lines)
+
+
+_MUSIC_WORDS = ("노래", "음악", "플레이리스트", "플리", "앨범", "디스코그래피",
+                "가수", "밴드", "음원", "playlist")
+
+
+def _mentions_music(item):
+    blob = " ".join(str(item.get(k) or "") for k in ("title", "how", "search", "why"))
+    return any(w in blob for w in _MUSIC_WORDS)
 
 
 def _too_heavy(records):
@@ -151,6 +162,9 @@ def suggest(records, mood_avg=None, speech="polite", model=None, max_tokens=1200
                     "how": str(it.get("how") or "").strip(),
                     "search": str(it.get("search") or "").strip(),
                 })
+            # 음악은 프롬프트로만 막으면 새어 나온다(kind 를 '해보기'로 바꿔 곡을
+            # 권하는 식으로). 검증된 곡 추천과 섞이지 않게 여기서 확실히 걸러낸다.
+            items = [it for it in items if not _mentions_music(it)]
             if not items:
                 raise ValueError("no items")
             return {"ok": True, "items": items[:3]}

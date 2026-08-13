@@ -193,12 +193,17 @@ function Constellation3D({ group, index, anchorIndex, onOpen }) {
   const root = PLANET_POSITIONS[anchorIndex];
   // 별자리 하나는 최대 7별로 끊어 넘어온다(starGroupsOf). 여기서 또 자르면 별이 사라진다.
   const visible = group.stars.filter((s)=>!s.empty);
-  const orbitRadius = 2.25 + index * .28;
+  // 그 행성 안에서 몇 번째 별자리인지로 궤도를 잡는다.
+  // 전엔 '전체 배열에서 몇 번째'를 썼는데, 다섯 행성 것이 한 배열로 들어오면서
+  // 뒤쪽 별자리가 행성에서 7 이상 떨어져 나가 우주에 흩뿌려진 것처럼 보였다.
+  const ord = group.index ?? index;
+  const planetSize = PLANET_SIZES[anchorIndex] ?? 1;
+  const orbitRadius = planetSize + .75 + (ord % 3) * .3;   // 행성에 붙어 도는 좁은 띠
   const points = useMemo(() => visible.map((_, i)=>{
-    const a = i * 1.71 + index;
+    const a = i * 1.71 + ord;
     const radius = .32 + i * .035;
     return [Math.cos(a)*radius, Math.sin(a)*radius*.72, (i-3)*.055];
-  }), [group.weekStart, visible.length, index]);
+  }), [group.weekStart, visible.length, ord]);
   const geometry = useMemo(()=>new THREE.BufferGeometry().setFromPoints(points.map((p)=>new THREE.Vector3(...p))),[points]);
   // 별을 Points 하나로 그린다 — 별마다 mesh + pointLight 를 두면 기록이 늘수록
   // 드로우콜과 동적 광원이 같이 늘어난다(1년치면 광원만 100개가 넘어 프레임이 무너졌다).
@@ -209,13 +214,14 @@ function Constellation3D({ group, index, anchorIndex, onOpen }) {
   },[points]);
   useFrame((state,delta)=>{
     if (!orbit.current) return;
-    orbit.current.rotation.y += delta * (.055 + index * .006);
-    orbit.current.rotation.z = Math.sin(state.clock.elapsedTime * .08 + index) * .09;
+    orbit.current.rotation.y += delta * (.055 + (ord % 5) * .006);
+    orbit.current.rotation.z = Math.sin(state.clock.elapsedTime * .08 + ord) * .09;
   });
   if (!visible.length) return null;
-  return <group ref={orbit} position={root} rotation={[.18,index*.7,.12]}>
+  // 황금각(2.4rad)으로 돌려 별자리가 몇 개든 행성 둘레에 고르게 퍼지게 한다.
+  return <group ref={orbit} position={root} rotation={[.18+(ord%3)*.24, ord*2.39996, .12]}>
     <group position={[orbitRadius,0,0]} onClick={(e)=>{e.stopPropagation();onOpen?.(group);}}>
-      <mesh visible={false}><sphereGeometry args={[.72,12,12]}/><meshBasicMaterial transparent opacity={0}/></mesh>
+      <mesh visible={false}><sphereGeometry args={[.5,10,10]}/><meshBasicMaterial transparent opacity={0}/></mesh>
       <line geometry={geometry}><lineBasicMaterial color="#9FB0CE" transparent opacity={.42}/></line>
       {/* 기록은 하얀 별. 시나리오(마름모)와 한눈에 갈라지도록 색을 섞지 않는다. */}
       <points geometry={starGeo}>
