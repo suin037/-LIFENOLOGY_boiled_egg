@@ -47,7 +47,8 @@ export default function JyConstellationArchive({monthGroups,weeksByMonth,focusMo
         {!active&&<g onClick={()=>onMonthPick(mo.m.monthKey)} style={{cursor:"pointer"}}><circle cx={mo.cx} cy={mo.cy} r={mo.isNow?17:14} fill="none" stroke={mo.isNow?"#A8CDF5":"#8B6CCF"} strokeOpacity={mo.isNow?.7:.14}/><circle cx={mo.cx} cy={mo.cy} r="18" fill="transparent"/><text x={mo.cx} y={mo.cy+(mo.labelUp?-19:23)} textAnchor="middle" fill="#9FB0CE" fontSize="6.5">{mo.num}월</text><text x={mo.cx} y={mo.cy+(mo.labelUp?-12.5:29.5)} textAnchor="middle" fill="#8B6CCF" fontSize="5">{mo.zodiac.ko}</text></g>}
       </g>})}
     </g>
-    {focused&&<g pointerEvents="none"><text x={CX} y="32" textAnchor="middle" fill="#EDF1FF" fontSize="16" fontWeight="700">{focused.m.monthKey.slice(0,4)}년 {focused.num}월 · {focused.zodiac.ko}</text><text x={CX} y="45" textAnchor="middle" fill="#9FB0CE" fontSize="6">주간 별자리를 눌러 기록을 확인하세요</text></g>}
+    {/* 연·월 제목은 SVG 밖(HTML)에서 넘김 버튼과 함께 그린다 — 크기 조절과 겹침 관리가 쉽다. */}
+    {focused&&<text x={CX} y="30" textAnchor="middle" fill="#9FB0CE" fontSize="6" pointerEvents="none">주간 별자리를 눌러 기록을 확인하세요</text>}
   </svg></div>;
 }
 function short(value){const [,m,d]=String(value||"").split("-");return m&&d?`${Number(m)}.${Number(d)}`:value;}

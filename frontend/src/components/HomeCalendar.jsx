@@ -47,7 +47,7 @@ export default function HomeCalendar() {
   const atLast = month ? allMonths.indexOf(month) >= allMonths.length - 1 : false;
 
   return <section className="mt-5 rounded-[24px] border border-white/[.08] bg-[#0B1322] p-4 lg:p-5">
-    <div className="flex items-center justify-between gap-3"><div><p className="text-[10px] tracking-[.15em] text-[#9F85DD]">CONSTELLATION ARCHIVE</p><h2 className="mt-1 text-[17px] font-bold">나의 기록 별자리</h2></div><div className="flex items-center gap-1"><button onClick={()=>step(-1)} disabled={atFirst} className="tap flex h-9 w-9 items-center justify-center rounded-full border border-white/10 disabled:opacity-25" aria-label={month?"이전 달":"이전 해"}><ChevronLeft size={16}/></button><div className="min-w-[104px] text-center"><span className="text-[13px] font-bold">{year}년{month?` ${Number(month.slice(5))}월`:""}</span>{month&&<span className="block text-[9px] text-[#8B6CCF]">{zodiacOf(Number(month.slice(5))).ko}</span>}</div><button onClick={()=>step(1)} disabled={atLast} className="tap flex h-9 w-9 items-center justify-center rounded-full border border-white/10 disabled:opacity-25" aria-label={month?"다음 달":"다음 해"}><ChevronRight size={16}/></button></div></div>
+    <div className="flex items-center justify-between gap-3"><div><p className="text-[10px] tracking-[.15em] text-[#9F85DD]">CONSTELLATION ARCHIVE</p><h2 className="mt-1 text-[17px] font-bold">나의 기록 별자리</h2></div>{/* 넘김 버튼은 아래 제목 줄에 붙였다 — 여기 두면 모달 닫기(×) 버튼과 겹친다. */}</div>
     {/* 월 선택 — 성단을 정확히 누르지 않아도 달을 고를 수 있게(리포트까지 닿는 길). */}
     <div className="mt-3 flex flex-wrap gap-1">
       {months.map((item)=>{
@@ -59,7 +59,23 @@ export default function HomeCalendar() {
       })}
     </div>
     <p className="mt-2.5 text-[10px] leading-relaxed text-mut">달마다 그 달의 별자리(황도 12궁) 모양으로 기록이 모입니다. 달을 고르면 같은 별들이 그달의 주간 별자리로 펼쳐집니다.</p>
-    <div className="mt-4"><JyConstellationArchive monthGroups={populatedMonths} weeksByMonth={weeksByMonth} focusMonth={month} onMonthPick={(key)=>{setMonth(key);setWeek(null);setStar(null);}} onWeekOpen={(group)=>{setWeek(group);setStar(null);}}/></div>
+    {/* 연·월 제목 + 넘김 — 큰 글씨 옆에 화살표를 붙여 한 손으로 오갈 수 있게. */}
+    <div className="mt-3 flex items-center justify-center gap-2">
+      <button onClick={()=>step(-1)} disabled={atFirst}
+        className="tap flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 disabled:opacity-25"
+        aria-label={month?"이전 달":"이전 해"}><ChevronLeft size={16}/></button>
+      <div className="min-w-[150px] text-center">
+        <div className="text-[17px] font-bold leading-tight text-ink">
+          {year}년{month?` ${Number(month.slice(5))}월`:""}
+          {month&&<span className="text-[#C7B5F2]"> · {zodiacOf(Number(month.slice(5))).ko}</span>}
+        </div>
+      </div>
+      <button onClick={()=>step(1)} disabled={atLast}
+        className="tap flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 disabled:opacity-25"
+        aria-label={month?"다음 달":"다음 해"}><ChevronRight size={16}/></button>
+    </div>
+
+    <div className="mt-3"><JyConstellationArchive monthGroups={populatedMonths} weeksByMonth={weeksByMonth} focusMonth={month} onMonthPick={(key)=>{setMonth(key);setWeek(null);setStar(null);}} onWeekOpen={(group)=>{setWeek(group);setStar(null);}}/></div>
     {month && <>
       <div className="mt-4 flex items-center justify-between rounded-xl border border-[#8B6CCF]/20 bg-[#8B6CCF]/[.07] px-3 py-2.5"><div><b className="text-[12px] text-[#C7B5F2]">{Number(month.slice(5))}월 · {zodiacOf(Number(month.slice(5))).ko}</b><p className="mt-0.5 text-[9px] text-mut">{months.find((item)=>item.key===month)?.count || 0}일 기록</p></div><button onClick={()=>{setMonth(null);setWeek(null);setStar(null);}} className="tap text-[10px] text-sub">12개월 보기</button></div>
       {/* 주 선택 — 별을 정확히 못 눌러도 주간 별자리·리포트로 갈 수 있게. */}
