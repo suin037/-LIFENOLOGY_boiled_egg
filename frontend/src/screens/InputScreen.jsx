@@ -114,13 +114,20 @@ export default function InputScreen() {
   }
 
   function startComparison() {
+    const fallback = (choice) => {
+      if (["이직", "유지"].includes(choice)) return ["career"];
+      if (choice === "진학") return ["education"];
+      if (choice === "창업") return ["business"];
+      if (choice === "휴식") return ["career", "health"];
+      return ["long_term_values"];
+    };
     setScenarioContexts((prev) => ({
       a: { event: intakeA.event, event_label: intakeA.eventLabel, domain: intakeA.domain, answers: prev.a?.answers || {} },
       b: { event: intakeB.event, event_label: intakeB.eventLabel, domain: intakeB.domain, answers: prev.b?.answers || {} },
     }));
     setScenarioDomains((prev) => ({
-      a: prev.a?.length ? prev.a : ["long_term_values"],
-      b: prev.b?.length ? prev.b : ["long_term_values"],
+      a: prev.a?.length ? prev.a : fallback(choices.a),
+      b: prev.b?.length ? prev.b : fallback(choices.b),
     }));
     navigate("/simulate");
   }
@@ -186,8 +193,8 @@ export default function InputScreen() {
         <section className="mt-4 rounded-[22px] border border-cyan/30 bg-[#0B1729]/90 p-4">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <div className="text-[13px] font-bold text-ink">이직 결과를 더 정확히 비교하려면</div>
-              <div className="mt-1 text-[11px] leading-relaxed text-muted">이직 시뮬레이션을 선택했을 때만 한 번 입력해요. 입력값은 다음 비교에도 다시 사용할 수 있어요.</div>
+              <div className="text-[13px] font-bold text-ink">일과 관련된 비교를 더 정확히 하려면</div>
+              <div className="mt-1 text-[11px] leading-relaxed text-muted">이직·쉬어가기처럼 일이 걸린 시뮬레이션에서 쓰는 값이라 한 번만 입력하면 돼요. 다음 비교에도 다시 사용할 수 있어요.</div>
               <p className="mt-1 text-[11px] leading-relaxed text-mut">유사 조건 비교에 사용하며, 선택 결과를 확정하는 정보는 아니에요.</p>
             </div>
             <span className="shrink-0 rounded-full bg-cyan/15 px-2 py-1 text-[9px] font-bold text-cyan">선택 입력</span>

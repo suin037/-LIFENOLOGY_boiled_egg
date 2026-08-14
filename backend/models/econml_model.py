@@ -6,6 +6,8 @@ v5: **treatment 축을 추가**했다. 기존엔 '이직' 하나뿐이라 함수
 
     · move    (이직) — 청년 econml_yp.pkl / 그 외 econml_klips.pkl / 폴백 econml.pkl
     · startup (창업) — econml_klips_startup.pkl (KLIPS 임금근로→자영 전이)
+    · break   (쉬어가기) — econml_klips_break.pkl (자발 퇴직 후 2개월 이상 공백)
+              **복귀한 사람만** 결과가 관측된다 → L4 복귀기간과 함께 읽을 것.
     · enroll  (진학) — **artifact 없음**. 학력상승 전이가 학습 최소표본에 못 미쳐
                        모델을 만들지 않았다(근거는 artifacts/treatment_report.json).
 
@@ -30,6 +32,7 @@ TREATMENT_FILES: dict[str, dict[str, str]] = {
     "move": {"yp": "econml_yp.pkl", "klips": "econml_klips.pkl",
              "goms": "econml.pkl"},
     "startup": {"klips": "econml_klips_startup.pkl"},
+    "break": {"klips": "econml_klips_break.pkl"},
     # "enroll" 은 의도적으로 비어 있다 — 표본 부족으로 학습하지 않음
 }
 

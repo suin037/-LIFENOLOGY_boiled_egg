@@ -2,13 +2,20 @@ import { Card, Caption } from "../ui.jsx";
 import PeopleView from "./PeopleView.jsx";
 import CausalView from "./CausalView.jsx";
 import RiskView from "./RiskView.jsx";
+import ReturnView from "./ReturnView.jsx";
 import { KowepsDetailView } from "./KowepsEvidenceView.jsx";
 
 export default function EvidenceView({ a, b, dataMode }) {
   const hasPeople = [a, b].some((s) => s.neighbors?.length);
   const hasCausal = [a, b].some((s) => s.causal_effect != null);
   const hasRisk = [a, b].some((s) => Object.keys(s.risk_timeline || {}).length);
+  const hasReturn = [a, b].some((s) => Object.keys(s.return_timeline || {}).length);
   const hasKoweps = [a, b].some((s) => s.koweps_evidence?.available);
+  // 쉬어가기에서 소득 효과는 '복귀한 사람만' 보고 잰 값이라 단독으로 읽으면 안 된다.
+  // 접는 제목에서부터 그 짝을 붙여 둔다.
+  const causalTitle = hasReturn
+    ? "쉬어갈 때의 소득 효과 보기 (복귀한 사람 기준)"
+    : "이직의 소득 효과 추정 보기";
   return (
     <div>
       <h2 className="mb-1 text-base font-semibold">분석 상세</h2>
@@ -16,10 +23,13 @@ export default function EvidenceView({ a, b, dataMode }) {
       {dataMode === "demo" && <Card className="border-danger/40"><p className="text-[12px] font-semibold text-danger">현재 숫자와 그래프는 데모 데이터입니다.</p><Caption>로컬 예측모델 파일이 연결되기 전에는 실제 개인 예측으로 해석하면 안 됩니다.</Caption></Card>}
       <DomainStats a={a} b={b} />
       {hasKoweps && <KowepsDetailView a={a} b={b} />}
+      {/* 복귀 곡선은 접지 않는다 — 쉬어갈지 판단할 때 먼저 봐야 하는 수치다.
+          "얼마나 쉬게 되나" 를 모른 채 소득 효과부터 보면 순서가 뒤집힌다. */}
+      {hasReturn && <ReturnView a={a} b={b} />}
       {hasPeople && <Disclosure title="비슷한 사례 보기"><PeopleView a={a} b={b} /></Disclosure>}
-      {hasCausal && <Disclosure title="이직의 소득 효과 추정 보기"><CausalView a={a} b={b} /></Disclosure>}
+      {hasCausal && <Disclosure title={causalTitle}><CausalView a={a} b={b} /></Disclosure>}
       {hasRisk && <Disclosure title="지속 가능성·이탈 가능성 보기"><RiskView a={a} b={b} /></Disclosure>}
-      {!hasPeople && !hasCausal && !hasRisk && !hasKoweps && <Card><Caption>현재 추가로 보여드릴 상세 분석이 없습니다.</Caption></Card>}
+      {!hasPeople && !hasCausal && !hasRisk && !hasReturn && !hasKoweps && <Card><Caption>현재 추가로 보여드릴 상세 분석이 없습니다.</Caption></Card>}
     </div>
   );
 }

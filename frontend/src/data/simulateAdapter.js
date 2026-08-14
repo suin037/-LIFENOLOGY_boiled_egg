@@ -52,7 +52,9 @@ function buildSide(scenario, choice, detail, profile, evidence, domainCov, domai
 
   // 이직은 개인단위 모델, 창업은 artifact가 배포된 경우 개인단위 자영 이탈모델을 쓴다.
   // artifact가 없더라도 창업 risk_timeline에는 업종·규모별 기업생멸 통계가 들어온다.
-  const hasIndividual = choice === "이직" || (choice === "창업" && raw.survival_months != null);
+  // 휴식(쉬어가기)도 개인단위다 — KLIPS 직업력 공백 스펠의 L3/L4.
+  const hasIndividual = choice === "이직"
+    || (["창업", "휴식"].includes(choice) && raw.survival_months != null);
   const hasRisk = choice === "창업" || hasIndividual;
 
   return {
@@ -89,6 +91,9 @@ function buildSide(scenario, choice, detail, profile, evidence, domainCov, domai
     down_ratio: null,
     risk_timeline: hasRisk ? raw.risk_timeline || {} : {},
     risk_label: hasRisk ? scenario?.regret_summary?.label ?? null : null,
+    // 휴식 전용 — {개월: 복귀 누적확률}. risk_timeline(연차별 미복귀확률)의 반대편이다.
+    // 쉬는 기간 중앙값이 1년 미만이라 연 단위로는 3·6개월 구간이 통째로 뭉개진다.
+    return_timeline: raw.return_timeline || {},
 
     // 근거 수준(항목4) — 이 갈래가 어떤 강도의 근거인지 + 수치그래프 표시 정당성.
     evidence_level: evidence?.level || null,      // model | group_stat | rag | insufficient

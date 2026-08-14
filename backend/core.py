@@ -20,7 +20,7 @@ from schemas import PredictRequest, PredictResponse
 from choice_classifier import classify, extract_startup_context
 from models.knn_model import find_neighbors
 from models.econml_model import estimate_effect
-from models.lifelines_model import estimate_survival, risk_timeline
+from models.lifelines_model import estimate_survival, risk_timeline, return_timeline
 from models.dynamic_effect import shift_at, profile_meta
 from rulebase import (query_choice_indicators, query_life_indicators,
                       startup_closure_timeline, startup_context_meta)
@@ -30,7 +30,7 @@ from utils.claude_api import generate_narrative
 
 # 선택 유형 → 학습된 treatment 키(train_treatments.py / klips_train.py 와 동일 명명).
 # 매핑이 없으면 개인단위 인과·생존을 붙이지 않는다.
-KIND_TREATMENT = {"이직": "move", "창업": "startup"}
+KIND_TREATMENT = {"이직": "move", "창업": "startup", "휴식": "break"}
 # 만족도 분기는 인과모델이 없어도 가능하다(관측 하위집단만 있으면 됨).
 KIND_SATIS_BRANCH = {"이직": "move", "창업": "startup",
                      "진학": "enroll", "유지": "stay"}
@@ -138,6 +138,7 @@ def run_prediction(req: PredictRequest, with_narrative: bool = True,
     neighbors: list = []
     expected_wage = changed_ratio = effect = survival = None
     timeline: dict = {}
+    back_timeline: dict = {}
     effect_profile = None
     available_layers = ["생활지표(L1)"]
 
@@ -165,11 +166,22 @@ def run_prediction(req: PredictRequest, with_narrative: bool = True,
             effect = None
         try:
             survival = estimate_survival(features, treatment)
-            timeline = risk_timeline(features, treatment=treatment)
+            if treatment == "break":
+                # 이벤트가 '복귀' 라 곡선을 그대로 리스크로 부르면 뒤집힌다.
+                # · return_timeline = 개월별 **복귀** 누적확률 (좋은 쪽)
+                # · risk_timeline   = 연차별 **미복귀** 확률 (= 1 - 복귀), 후회 축에 맞는 값
+                # 개월을 따로 두는 건 쉬는 기간 중앙값이 1년 미만이라 연 단위로는
+                # 의사결정에 필요한 구간(3·6개월)이 통째로 뭉개지기 때문이다.
+                back_timeline = return_timeline(features, treatment=treatment)
+                timeline = {y: round(1 - v, 3) for y, v
+                            in risk_timeline(features, treatment=treatment).items()}
+            else:
+                timeline = risk_timeline(features, treatment=treatment)
             available_layers.append("생존(L4)")
         except (FileNotFoundError, RuntimeError):
             survival = None
             timeline = {}
+            back_timeline = {}
         effect_profile = profile_meta(treatment)
         if trajectory and effect is not None:
             scenario_trajectories = _scenario_paths(trajectory, kind, treatment, effect)
@@ -209,6 +221,7 @@ def run_prediction(req: PredictRequest, with_narrative: bool = True,
         neighbors=neighbors,
         neighbor_changed_ratio=changed_ratio,
         risk_timeline=timeline,
+        return_timeline=back_timeline,
         life_indicators=life_indicators,
         trajectory=trajectory,
         wellbeing_trajectory=wellbeing_trajectory,
@@ -250,6 +263,19 @@ def _coverage(kind: str, layers: list[str], survival, effect, wb_meta: dict,
             if su_meta.get("scale_inferred"):
                 parts.append("규모는 개인 창업으로 가정(상용 1~4인). 기업생멸통계는 "
                              "고용원 없는 1인 자영업을 아예 빼고 집계해 실제보다 낙관적")
+    elif kind == "휴식":
+        if survival is not None:
+            parts.append("L4는 '후회 리스크'가 아니라 **복귀까지 걸리는 기간** — "
+                         "KLIPS 직업력의 일자리 사이 공백 스펠(자발 퇴직·2개월 이상). "
+                         "미복귀는 우측 중도절단으로 처리(‘복귀 안 함’ 으로 세지 않음)")
+        else:
+            parts.append("L4 공백 스펠 artifact 부재 → 복귀기간 미제공")
+        if effect is not None:
+            parts.append("⚠소득 효과는 **복귀한 사람만** 보고 잰 값 — 아직 안 돌아왔으면 "
+                         "소득이 없어 표본에서 빠진다. '쉬면 이만큼 번다' 가 아니라 "
+                         "'쉬었다 돌아온 사람이 이만큼 관측된다' 로 읽을 것")
+            parts.append("⚠자발적으로 쉬는 선택엔 쉴 여유가 필요하다 — 자산·배우자소득 "
+                         "같은 미관측 여유는 통제되지 않아 효과가 낙관적일 수 있음")
     elif kind == "이직" and survival is None:
         parts.append("생존 L4는 artifact 부재로 미제공")
 

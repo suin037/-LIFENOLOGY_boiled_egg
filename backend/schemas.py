@@ -195,11 +195,19 @@ class PredictResponse(BaseModel):
         description="연차별 인과효과 프로파일 {by_year:{h:{ate,ci_low,ci_high,n_treated}}} — "
                     "효과의 시간 변화와 불확실성 근거(동적 처치효과)")
     survival_months: Optional[float] = Field(None,
-        description="상태 지속기간 중앙값(L4 lifelines). 이직=재직, 창업=자영 유지")
+        description="상태 지속기간 중앙값(L4 lifelines). 이직=재직, 창업=자영 유지, "
+                    "쉬어가기=일에서 떠나 있는 기간(복귀까지)")
     neighbors: list[NeighborCase] = []
     neighbor_changed_ratio: Optional[float] = Field(None, description="유사집단 중 실제 이직 비율(이직만)")
     risk_timeline: dict[int, float] = Field(default_factory=dict,
-        description="{연차: 누적확률} — 이직=이직확률(L4), 창업=폐업확률(생멸통계)")
+        description="{연차: 누적확률} — 이직=이직확률(L4), 창업=폐업확률(생멸통계), "
+                    "쉬어가기=**미복귀**확률(그 시점에 아직 일로 못 돌아왔을 확률). "
+                    "쉬어가기만 이벤트가 좋은 쪽(복귀)이라 여집합을 싣는다")
+    return_timeline: dict[int, float] = Field(default_factory=dict,
+        description="{개월: 복귀 누적확률} — 쉬어가기(휴식)에서만 제공. "
+                    "risk_timeline 과 곡선은 같은 방식이지만 이벤트가 '다음 일자리 시작'"
+                    "이라 좋은 쪽이다. 단위가 연이 아니라 개월인 이유는 쉬는 기간 "
+                    "중앙값이 1년 미만이기 때문")
     life_indicators: list[LifeIndicator] = Field(default_factory=list,
         description="Layer1 룰베이스 생활지표 패널(경제·삶의질·건강·창업 등) — 넓은 인생 차원")
     trajectory: list[TrajectoryPoint] = Field(default_factory=list,
