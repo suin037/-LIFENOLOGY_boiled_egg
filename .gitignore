@@ -65,3 +65,19 @@ backend/smoke_check.py
 # data/vectordb/psychology/ 는 추적 유지(팀 공유 카드 DB), 런타임 인덱스만 제외.
 data/vectordb/chroma.sqlite3
 data/vectordb/*-*-*-*-*/
+
+# ── 모델 학습 산출물 (jy-model) ──
+*.pt
+*.pth
+ckpt/
+ckpt_*/
+*.parquet
+*.zip
+*.log
+raw/
+data_backup/
+diary_eval.py
+tempCodeRunnerFile.py
+aihubshell
+python
+scp
