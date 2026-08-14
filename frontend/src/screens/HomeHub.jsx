@@ -6,6 +6,7 @@ import { Button } from "../components/ui.jsx";
 import DiaryToday from "../components/DiaryToday.jsx";
 import DailySuggest from "../components/DailySuggest.jsx";
 import ExpeditionBoard from "../components/ExpeditionBoard.jsx";
+import ApiStatus from "../components/ApiStatus.jsx";
 import { universeSummary } from "../data/myUniverse.js";
 import { jobChangeRumination } from "../data/diarySignals.js";
 
@@ -49,6 +50,9 @@ export default function HomeHub() {
       <div className="lg:mt-6 lg:grid lg:grid-cols-[minmax(0,1.45fr)_minmax(300px,.75fr)] lg:items-start lg:gap-7">
         <DiaryToday />
         <aside className="lg:sticky lg:top-0">
+
+      {/* AI 서버가 안 잡히면 조용히 사라지지 않고 알려준다 */}
+      <ApiStatus />
 
       {/* 떠나 있는 작은 탐험 — 나의 우주에서 고른 길을 잊지 않게 여기 걸어둔다 */}
       <ExpeditionBoard />

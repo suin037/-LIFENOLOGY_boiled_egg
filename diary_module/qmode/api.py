@@ -16,6 +16,7 @@ DispositionModel + report.py 를 실제로 태워 결과를 돌려준다.
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import sys
 from datetime import datetime, timezone
@@ -42,8 +43,16 @@ from qmode import crypto_at_rest as CR                   # noqa: E402
 import report_one as R1                                  # noqa: E402
 
 app = FastAPI(title="qmode disposition API")
+
+# 배포하면 이 서버가 우리 ANTHROPIC 키로 대신 호출해 준다. 아무나 부르면 그대로
+# 비용이 나가므로, 배포 환경에선 ALLOWED_ORIGINS 로 우리 프론트 주소만 허용한다.
+# (로컬 개발은 지정 안 하면 예전처럼 전부 허용.)
+_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]
 app.add_middleware(
-    CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
+    CORSMiddleware,
+    allow_origins=_ORIGINS or ["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 _MODEL = DispositionModel()
 
@@ -1144,5 +1153,10 @@ def emotion_infer(req: EmotionReq):
 
 
 if __name__ == "__main__":
+    import os
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    # 배포 환경(Render/Railway 등)은 PORT 를 주고 0.0.0.0 바인딩을 요구한다.
+    # 로컬에서는 예전처럼 127.0.0.1:8000 으로 뜬다.
+    port = int(os.getenv("PORT", "8000"))
+    host = os.getenv("HOST", "0.0.0.0" if os.getenv("PORT") else "127.0.0.1")
+    uvicorn.run(app, host=host, port=port)

@@ -5,8 +5,9 @@ import { listUniverses } from "./savedUniverses.js";
 import { doneExpeditions } from "./expeditions.js";
 import { domainAnalysis } from "./diarySignals.js";
 import { localPersonaBlock } from "./jobAnalysis.js";
+import { API_BASE } from "./apiBase.js";
 
-const BASE = import.meta.env.VITE_QMODE_BASE || "http://localhost:8000";
+const BASE = API_BASE;
 
 // 한 번 쓴 이야기는 남겨둔다 — 같은 행성·같은 햇수로 다시 들어오면 그대로 보여주고,
 // 새 기록이 쌓였을 때만 '다시 쓰기'로 갱신한다(매번 새로 부르면 느리고 말이 바뀐다).

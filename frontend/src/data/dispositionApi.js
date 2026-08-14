@@ -1,9 +1,10 @@
+import { API_BASE } from "./apiBase.js";
 // 내 성향모델 로컬 API 연결 (diary_module/qmode/api.py, uvicorn :8000).
 // 체크인(별) → 진짜 DispositionModel + report.py → 주간 리포트 서사 + 내일 할 거리.
 //
 // 주간 리포트는 '완성된 주'에만 만든다. 한 번 만들면 DB(week_reports)에 저장되고,
 // 지난 주는 재생성 없이 저장본(getSavedReport)을 즉시 불러온다.
-const BASE = import.meta.env.VITE_QMODE_BASE || "http://localhost:8000";
+const BASE = API_BASE;
 export const REPORT_UID = "me";
 
 // 저장된 주간 리포트 조회 → { found, report, actions, ... }

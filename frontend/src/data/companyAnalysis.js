@@ -1,6 +1,7 @@
+import { API_BASE } from "./apiBase.js";
 // 기업 분석 — OpenDART(공시·재무) + AI 요약. 서버가 인증키를 들고 대신 호출한다.
 // 공고 분석이 뽑아낸 회사명으로 바로 이어진다.
-const BASE = import.meta.env.VITE_QMODE_BASE || "http://localhost:8000";
+const BASE = API_BASE;
 
 /** 재무 5개년 + 최근 공시(근거 자료). 키 없으면 {ok:false, reason:"no_dart_key"}. */
 export async function fetchCompanySummary(name) {

@@ -6,8 +6,9 @@ import { buildDisposition } from "./psychQuestions.js";
 import { computeDiarySignals } from "./diarySignals.js";
 import { CARD_BY_ID } from "./valueCards.js";
 import { valueRankingLine } from "./careerNet.js";
+import { API_BASE } from "./apiBase.js";
 
-const BASE = import.meta.env.VITE_QMODE_BASE || "http://localhost:8000";
+const BASE = API_BASE;
 
 // 로컬 성향 재료 — 서버 DB에 저장된 성향이 없어도 분석이 개인화되도록 프론트에서 만든다.
 // (기록은 브라우저에 있으니 이 경로가 기본이고, 서버 저장본은 uid 로 보조한다.)

@@ -1,8 +1,9 @@
 // 오늘 해볼 만한 것 — 최근 기록을 보고 작게 권한다.
 // 기회(futureApi.scanOpportunities)가 인생 갈림길 크기라면 여기는 오늘 크기다.
 import { loadUniverse, hasRecord, todayKey } from "./myUniverse.js";
+import { API_BASE } from "./apiBase.js";
 
-const BASE = import.meta.env.VITE_QMODE_BASE || "http://localhost:8000";
+const BASE = API_BASE;
 
 // 하루에 한 번만 만든다 — 홈에 들어올 때마다 새로 부르면 느리고 말이 계속 바뀐다.
 const KEY = "pm.suggest.v1";

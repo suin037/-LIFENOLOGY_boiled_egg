@@ -1,7 +1,8 @@
+import { API_BASE } from "./apiBase.js";
 // 관계 분석 — 대화·연락 내역(텍스트·화면 캡처) × 내 성향. 특정 메신저에 매이지 않는다.
 // 서버(qmode api)가 관계 신호를 뽑고 성향과 엮어 '선택지형' 서사를 만든다.
 // 위기 신호가 감지되면 분석 대신 지원 안내를 돌려준다(blocked).
-const BASE = import.meta.env.VITE_QMODE_BASE || "http://localhost:8000";
+const BASE = API_BASE;
 
 export async function analyzeRelationship(talk, uid = "me") {
   const res = await fetch(`${BASE}/relationship/analyze`, {
