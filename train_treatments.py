@@ -44,6 +44,7 @@ from __future__ import annotations
 import argparse
 import json
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 
 import joblib
@@ -52,10 +53,20 @@ import pandas as pd
 
 KLIPS_DIR = Path("data/raw/klips")
 ARTIFACTS = Path("backend/models/artifacts")
+BREAK_PATH = KLIPS_DIR / "klips_break.pkl"   # preprocess_klips_jobhist.py 산출물
 
 AGE_MIN, AGE_MAX = 20, 45      # klips_train.py 와 동일 — 이직 모델과 같은 모집단
 MIN_TREATED = 200              # 이 미만이면 인과모델을 만들지 않는다
 MAX_HORIZON = 5                # 동적 효과 상대시간 (KLIPS 10년이지만 t+5 넘으면 표본 급감)
+
+WAVE_YEAR_OFFSET = 1997        # 1차 = 1998 (preprocess_klips.py 와 동일)
+
+# '쉬어감' 으로 셀 최소 공백. 공백 1개월은 3월 퇴사 → 4월 입사인 **끊김 없는 이직**이고
+# 자발·복귀 표본의 32% 를 차지한다. 이걸 처치에 넣으면 '쉬는 결정' 이 아니라
+# 이직을 섞어서 추정하게 된다.
+# (통계청 '쉬었음' 은 기간이 아니라 지난주 활동상태 분류라 임계값을 주지 못한다 —
+#  그래서 기준은 그 개념이 아니라 이 데이터에서 나온다.)
+MIN_BREAK_MONTHS = 2
 
 # L4 업종 공변량 — 이 스펠 수 미만인 대분류는 '기타' 로 합친다.
 SECTION_MIN_SPELLS = 40
@@ -97,7 +108,7 @@ def transition_frame(b: pd.DataFrame, horizon: int) -> pd.DataFrame:
     out_wave = g["wave"].shift(-horizon)
 
     d = pd.DataFrame({
-        "pid": b["pid"],
+        "pid": b["pid"], "wave": b["wave"],
         "age": b["나이"], "sex": b["성별"], "edu": b["학력"],
         "occ": b["직종"], "firm_size": b["종업원규모"], "tenure": b["근속기간"],
         "income_now": b["월소득_실질"],
@@ -117,6 +128,29 @@ def transition_frame(b: pd.DataFrame, horizon: int) -> pd.DataFrame:
     return d
 
 
+@lru_cache(maxsize=1)
+def load_break_years() -> pd.DataFrame:
+    """(pid, year) → 그 해에 일자리를 그만뒀는가 / 그게 '쉬어감' 이었는가.
+
+    직업력 파일에서 만든 공백 스펠(`klips_break.pkl`)을 패널 연도에 붙인다.
+    퇴직 월이 있으므로 **그 해에 그만둔 것**으로 연도를 잡는다. 조사 시점보다 앞서
+    그만둔 사람은 그 해 소득이 결측이라 `transition_frame` 에서 이미 빠진다
+    — 그래서 남는 처치군은 '조사 시점엔 재직 중이었고 그 해 안에 그만둔 사람' 이다.
+    """
+    if not BREAK_PATH.exists():
+        raise FileNotFoundError(
+            f"{BREAK_PATH} 없음 — preprocess/preprocess_klips_jobhist.py 를 먼저 실행할 것. "
+            "'쉬어가기' 처치는 개인파일이 아니라 직업력 파일(klips**w.sav)에서 나온다."
+        )
+    b = pd.read_pickle(BREAK_PATH)
+    b = b[b["is_break"]].copy()
+    b["year"] = (b["end_ym"] // 100).astype(int)
+    b["vol_long"] = ((b["voluntary"] == True)                      # noqa: E712
+                     & (b["break_months"] >= MIN_BREAK_MONTHS))
+    return (b.groupby(["pid", "year"], as_index=False)["vol_long"].max()
+              .rename(columns={"vol_long": "break_vol_long"}))
+
+
 def apply_treatment(d: pd.DataFrame, key: str) -> pd.DataFrame:
     """treatment 별로 (처치군 + 유효 대조군) 만 남기고 T 컬럼을 붙인다.
 
@@ -134,6 +168,21 @@ def apply_treatment(d: pd.DataFrame, key: str) -> pd.DataFrame:
     elif key == "enroll":
         t = d["edu_next"] > d["edu"]
         elig = d["edu_next"].notna()
+    elif key == "break":
+        # 처치 = 자발적으로 그만두고 MIN_BREAK_MONTHS 이상 비운 사람
+        # 대조 = 계속 재직 (그 해에 **어떤 이유로도** 그만둔 적 없는 임금근로자)
+        #
+        # 비자발(해고·폐업)과 1개월 이하 공백은 처치도 대조도 아니다. 대조에 넣으면
+        # '계속 다닌 사람' 이 아니게 되고, 처치에 넣으면 '쉬기로 한 선택' 이 아니게 된다.
+        m = d.merge(load_break_years(), how="left",
+                    left_on=["pid", d["wave"] + WAVE_YEAR_OFFSET],
+                    right_on=["pid", "year"])
+        vol = m["break_vol_long"].fillna(False).to_numpy(dtype=bool)
+        quit_any = m["break_vol_long"].notna().to_numpy()   # 그 해 그만둔 기록이 있음
+        t = pd.Series(vol, index=d.index) & wage_work
+        control = (pd.Series(~quit_any, index=d.index) & wage_work
+                   & d["status_next"].isin([1, 2, 3]))
+        elig = t | control
     else:
         raise ValueError(f"알 수 없는 treatment: {key}")
     out = d[elig].copy()
@@ -201,6 +250,16 @@ CAVEATS = {
         "'창업으로 전환한 사람의 신고 소득이 임금 대비 이만큼 높게 관측된다'로 읽어야 "
         "한다. 또한 폐업해 소득이 끊긴 사람은 결과 관측에서 빠져 생존편의가 남는다 "
         "(→ L4 자영 이탈확률과 반드시 함께 볼 것)."
+    ),
+    "break": (
+        "**복귀한 사람만 보고 잰 소득효과다.** 결과변수는 t+h 의 월소득인데, 아직 "
+        "일로 돌아오지 않았으면 소득이 없어 표본에서 빠진다. 그래서 이 값은 "
+        "'쉬면 소득이 이만큼 된다' 가 아니라 '쉬었다가 **돌아온 사람의** 소득이 "
+        "계속 다닌 사람 대비 이만큼 관측된다' 로 읽어야 한다 "
+        "(→ L4 복귀까지 걸리는 기간과 반드시 함께 볼 것). "
+        "또한 자발적으로 쉬는 선택은 쉴 여유가 있어야 가능하다. DML 은 관측된 "
+        "공변량(나이·성별·학력·소득·근속·직종·규모)만 통제하므로 자산·배우자소득 "
+        "같은 미관측 여유는 남는다 — 효과가 실제보다 낙관적일 수 있다."
     ),
 }
 
@@ -375,8 +434,76 @@ def train_selfemp_survival(sp: pd.DataFrame) -> dict:
                                "test_std": round(cv[2], 3), "gap": round(cv[3], 3)}}
 
 
+# ---------------------------------------------------------------- L4 (쉬어가기 스펠)
+def build_break_spells(b: pd.DataFrame) -> pd.DataFrame:
+    """'쉬어가기' 공백 스펠 + 그만둘 당시의 공변량.
+
+    창업 스펠(`build_selfemp_spells`)과 달리 파동에서 재구성하지 않는다. 직업력
+    파일에 퇴직·재취업 시점이 **월 단위**로 있으므로 그대로 쓴다. 파동으로 재면
+    조사 시점에 걸친 긴 공백만 잡혀 쉬는 기간이 길게 추정된다(length bias).
+
+    event=1 은 '다음 일자리 시작을 관측' 이다. 마지막 일자리 뒤로 관측이 없으면
+    event=0 (우측 중도절단) — 아직 쉬는 중일 수도, 조사에서 빠졌을 수도 있다.
+    이걸 '복귀 안 함' 으로 세면 안 된다.
+    """
+    r = pd.read_pickle(BREAK_PATH)
+    r = r[r["is_break"] & (r["voluntary"] == True)                 # noqa: E712
+          & (r["break_months"] >= MIN_BREAK_MONTHS)].copy()
+    r["year"] = (r["end_ym"] // 100).astype(int)
+
+    cov = (b[["pid", "year", "나이", "성별", "학력"]]
+           .rename(columns={"나이": "age", "성별": "sex", "학력": "edu"}))
+    sp = r.merge(cov, on=["pid", "year"], how="inner").dropna(subset=["age", "sex", "edu"])
+    sp = sp[sp["age"].between(AGE_MIN, AGE_MAX)].copy()
+    # 0 개월은 위에서 이미 걸렀지만 Cox 가 duration>0 을 요구하므로 하한을 둔다
+    sp["duration_months"] = sp["break_months"].astype(float).clip(lower=0.5)
+    return sp.reset_index(drop=True)
+
+
+def train_break_survival(sp: pd.DataFrame) -> dict:
+    """쉬어가기 스펠 Cox — '쉬면 얼마나 쉬게 되는가'.
+
+    창업 L4 와 달리 업종 축을 넣지 않는다. 여기서 재는 건 '그만둔 일자리의 업종'
+    이지 '쉬는 상태의 업종' 이 아니라서 해석이 서지 않는다.
+    """
+    from lifelines import KaplanMeierFitter, CoxPHFitter
+
+    print(f"[L4 쉬어가기] 공백 스펠 {len(sp):,}개 "
+          f"(복귀 관측 {int(sp['event'].sum()):,}건, {sp['event'].mean():.1%})")
+    km = KaplanMeierFitter().fit(sp["duration_months"], event_observed=sp["event"],
+                                 label="break")
+    cov_cols = ["age", "sex", "edu"]
+    cv = _cv_concordance(sp, cov_cols)
+    cox = CoxPHFitter().fit(sp[["duration_months", "event"] + cov_cols],
+                            duration_col="duration_months", event_col="event")
+    print(f"[L4 쉬어가기/CV] 5-fold C-index 학습 {cv[0]:.3f} / "
+          f"테스트 {cv[1]:.3f}±{cv[2]:.3f} | 갭 {cv[3]:.3f} "
+          f"{'✓안정' if cv[3] < SECTION_MAX_OVERFIT_GAP else '⚠과적합 의심'}")
+
+    surv = km.survival_function_
+    idx = np.asarray(surv.index, dtype=float)
+    for mo in (3, 6, 12, 24):
+        p = 1 - float(surv.iloc[int(np.abs(idx - mo).argmin())].iloc[0])
+        print(f"           {mo:>2}개월 이내 복귀 누적확률(전체) = {p:.1%}")
+
+    return {"km": km, "cox": cox, "cov_cols": cov_cols,
+            "medians": {c: float(sp[c].median()) for c in cov_cols},
+            "source": "KLIPS 직업력 공백 스펠", "n": int(len(sp)),
+            "n_features": len(cov_cols), "treatment": "break",
+            "max_horizon_years": 5,
+            "event_label": "다음 일자리 시작(복귀) — 미관측은 우측 중도절단",
+            "min_break_months": MIN_BREAK_MONTHS,
+            # 업종 축은 쓰지 않는다. 서빙(_industry_row)이 키를 찾으므로 비워 둔다.
+            "industry_cols": [], "industry_reference": None, "industry_means": {},
+            "industry_kept_sections": [], "industry_spells": {},
+            "industry_used": False, "industry_cv_gain": 0.0,
+            "cv_concordance": {"train": round(cv[0], 3), "test": round(cv[1], 3),
+                               "test_std": round(cv[2], 3), "gap": round(cv[3], 3)}}
+
+
 # ---------------------------------------------------------------- main
-TREATMENTS = [("move", "이직"), ("startup", "창업"), ("enroll", "진학")]
+TREATMENTS = [("move", "이직"), ("startup", "창업"), ("enroll", "진학"),
+              ("break", "쉬어가기")]
 
 
 def main() -> None:
@@ -416,8 +543,29 @@ def main() -> None:
             dynamic[key] = {"source": PANEL_LABEL, "label": label,
                             "caveat": CAVEATS.get(key), "horizons": prof}
 
+        if key == "break":
+            art = train_causal(d, key, label)
+            joblib.dump(art, ARTIFACTS / "econml_klips_break.pkl")
+            sp = build_break_spells(b)
+            surv = train_break_survival(sp)
+            joblib.dump(surv, ARTIFACTS / "lifelines_klips_break.pkl")
+            entry.update(trained=True, artifacts=["econml_klips_break.pkl",
+                                                  "lifelines_klips_break.pkl"],
+                         ate=round(art["ate"], 2),
+                         linear_ate=round(art["linear_ate"], 2),
+                         linear_ci=[round(v, 2) for v in art["linear_ci"]],
+                         n_spells=int(len(sp)),
+                         n_returned=int(sp["event"].sum()),
+                         min_break_months=MIN_BREAK_MONTHS,
+                         caveat=CAVEATS.get(key),
+                         l4_break={
+                             "median_months_km": float(
+                                 surv["km"].median_survival_time_),
+                             "cv_concordance": surv["cv_concordance"],
+                             "event_label": surv["event_label"],
+                         })
         # 창업만 신규 artifact 생성(이직은 klips_train.py 산출물이 이미 서빙 중)
-        if key == "startup":
+        elif key == "startup":
             art = train_causal(d, key, label)
             joblib.dump(art, ARTIFACTS / "econml_klips_startup.pkl")
             sp = build_selfemp_spells(b)
