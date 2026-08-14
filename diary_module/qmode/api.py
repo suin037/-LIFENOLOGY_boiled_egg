@@ -979,6 +979,7 @@ class FutureReq(BaseModel):
     records: list[dict] = []          # [{date, text, mood, emotion}]
     analysis: Optional[dict] = None   # {n, moodAvg, topEmotions, trend}
     sims: list[dict] = []             # [{savedAt, choiceA, choiceB, headline, decision, reflection, doneActions}]
+    trips: list[dict] = []            # 다녀온 작은 탐험 [{title, step, note, doneAt}]
     speech: Optional[str] = None
 
 
@@ -988,7 +989,8 @@ def future_scenario(req: FutureReq):
     from qmode import future as FU
     years = max(1, min(30, int(req.years or 5)))
     return FU.scenario(req.label or "이 영역", years, req.records,
-                       analysis=req.analysis, sims=req.sims, speech=req.speech)
+                       analysis=req.analysis, sims=req.sims, trips=req.trips,
+                       speech=req.speech)
 
 
 class MediaReq(BaseModel):
@@ -1025,6 +1027,7 @@ class OpportunityReq(BaseModel):
     records: list[dict] = []
     analysis: Optional[dict] = None
     sims: list[dict] = []
+    trips: list[dict] = []            # 다녀온 작은 탐험 — 같은 길을 또 권하지 않게 넘긴다
     speech: Optional[str] = None
 
 
@@ -1033,7 +1036,8 @@ def opportunity_scan(req: OpportunityReq):
     """일기를 읽고 아직 저울에 올려본 적 없는 갈림길 2~4개 — 그대로 시뮬레이션 입력이 된다."""
     from qmode import opportunity as OP
     return OP.scan(req.label or "이 영역", req.records,
-                   analysis=req.analysis, sims=req.sims, speech=req.speech)
+                   analysis=req.analysis, sims=req.sims, trips=req.trips,
+                   speech=req.speech)
 
 
 class ComfortReq(BaseModel):

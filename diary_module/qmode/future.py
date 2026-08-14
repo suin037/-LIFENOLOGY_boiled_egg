@@ -61,7 +61,8 @@ _SYSTEM = (
     "규칙\n"
     "1) 기록에 없는 사건(승진·이사·결혼 등)을 지어내지 마라. 기록에 있는 흐름을 늘려라.\n"
     "2) 점치지 마라. '~할 것이다' 대신 '이대로라면 ~쯤에 있을 것 같다'처럼 쓴다.\n"
-    "3) 회고가 있으면 반드시 반영해라 — 골랐던 선택이 그 뒤 어땠는지가 가장 무거운 재료다.\n"
+    "3) 다녀온 탐험과 회고가 있으면 반드시 반영해라 — 실제로 해보고 알게 된 것이\n"
+    "   가장 무거운 재료다. 상상한 갈림길보다 겪고 온 한 줄이 앞선다.\n"
     "4) 좋게만 쓰지 마라. 기록이 무거우면 무거운 대로, 나아지는 중이면 그대로 쓴다.\n"
     "5) 성격 진단·병명·수치 예측 금지. 조언을 늘어놓지 말고 장면으로 보여줘라.\n"
     "6) 한국어로만 쓴다.\n"
@@ -107,6 +108,21 @@ def _sims_block(sims):
     return "\n".join(out)
 
 
+def _trips_block(trips):
+    """다녀온 작은 탐험. 상상이 아니라 실제로 겪고 온 것이라 가장 무거운 재료다."""
+    out = []
+    for t in (trips or [])[:8]:
+        note = (t.get("note") or "").strip()
+        if not note:
+            continue
+        line = f"- {t.get('doneAt') or '?'} · {t.get('title') or '탐험'}"
+        if t.get("step"):
+            line += f" (해본 것: {str(t['step'])[:60]})"
+        line += f"\n    알게 된 것: {note[:180]}"
+        out.append(line)
+    return "\n".join(out)
+
+
 def _analysis_block(a):
     if not a:
         return ""
@@ -131,7 +147,7 @@ def _analysis_block(a):
 _FALLBACK_NOTE = "서버가 꺼져 있어 이야기를 쓰지 못했어요. 잠시 뒤 다시 시도해 주세요."
 
 
-def scenario(domain_label, years, records, analysis=None, sims=None,
+def scenario(domain_label, years, records, analysis=None, sims=None, trips=None,
              speech="polite", model=None, max_tokens=1400):
     """그 영역의 'N년 뒤' 서사 → {now, future, hinge, basis[]}."""
     sp = "casual" if speech == "casual" else "polite"
@@ -148,10 +164,13 @@ def scenario(domain_label, years, records, analysis=None, sims=None,
     if stat:
         parts.append(f"[이 영역 요약] {stat}")
     parts.append("[이 영역의 일기]\n" + rec_block)
+    trips_block = _trips_block(trips)
+    if trips_block:
+        parts.append("[실제로 다녀온 작은 탐험 — 겪고 온 것이라 가장 무겁게 다뤄라]\n" + trips_block)
     sims_block = _sims_block(sims)
     if sims_block:
         parts.append("[이 영역에서 돌린 시뮬레이션과 그 뒤 회고]\n" + sims_block)
-    else:
+    elif not trips_block:
         parts.append("[시뮬레이션] 아직 이 영역에서 돌린 갈림길이 없다. "
                      "일기의 흐름만으로 쓰되, hinge 는 기록에서 이미 흔들리는 지점으로 잡아라.")
     parts.append(f"위 기록을 읽고 {years}년 뒤의 이 영역을 써줘.")

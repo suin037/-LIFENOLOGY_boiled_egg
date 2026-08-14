@@ -106,7 +106,7 @@ def _tried_block(sims):
 _NO_KEY = "서버가 꺼져 있어 기회를 찾지 못했어요. 잠시 뒤 다시 시도해 주세요."
 
 
-def scan(domain_label, records, analysis=None, sims=None, speech="polite",
+def scan(domain_label, records, analysis=None, sims=None, trips=None, speech="polite",
          model=None, max_tokens=1600):
     """그 영역의 '아직 안 가본 길' → {ok, items:[{title, why, choiceA, choiceB, effort, first}]}."""
     sp = "casual" if speech == "casual" else "polite"

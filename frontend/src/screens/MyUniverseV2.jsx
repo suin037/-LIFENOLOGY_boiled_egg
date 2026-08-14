@@ -8,6 +8,7 @@ import { adaptiveGroups, hasRecord, loadUniverse, resetUniverse, scenariosByPlan
 import { seedDemoEunwoo, seedDemoYear } from "../data/demoYear.js";
 import { domainAnalysis, domainMonths, domainReport } from "../data/diarySignals.js";
 import { futureMaterials, getCachedFuture, writeFuture, getCachedOpportunities, scanOpportunities } from "../data/futureApi.js";
+import { expeditionsFor, startExpedition } from "../data/expeditions.js";
 import { useResult } from "../data/ResultContext.jsx";
 import { clearSavedReports, REPORT_UID, loadSpeech } from "../data/dispositionApi.js";
 import { planetSkin } from "../data/planetShop.js";
@@ -236,6 +237,19 @@ function Opportunities({ planet, state, onPick }) {
   const mat = useMemo(() => futureMaterials(planet.key, state), [planet.key, state]);
   const [found, setFound] = useState(() => getCachedOpportunities(planet.key));
   const [busy, setBusy] = useState(false);
+  const [mine, setMine] = useState(() => expeditionsFor(planet.key));
+  useEffect(() => {
+    const refresh = () => setMine(expeditionsFor(planet.key));
+    window.addEventListener("pm:expedition", refresh);
+    return () => window.removeEventListener("pm:expedition", refresh);
+  }, [planet.key]);
+
+  // 이미 떠난 길인지 — 같은 제목을 또 권하면 카드가 지저분해진다.
+  const stateOf = (title) => {
+    const e = mine.find((x) => x.title === title);
+    if (!e) return null;
+    return e.doneAt ? "done" : e.gaveUpAt ? "dropped" : "going";
+  };
 
   async function scan() {
     setBusy(true);
@@ -266,35 +280,61 @@ function Opportunities({ planet, state, onPick }) {
         <>
           {found?.ok && (
             <div className="mt-3 space-y-2">
-              {found.items.map((it, i) => (
-                <button
-                  key={i}
-                  onClick={() => onPick(it)}
-                  className="tap w-full rounded-xl border border-white/[.07] bg-black/25 p-3 text-left hover:border-[#5DCAA5]/40"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-[11px] font-semibold text-ink">{it.title}</p>
-                    {it.effort && (
-                      <span
-                        className="shrink-0 rounded-full px-2 py-0.5 text-[8.5px]"
-                        style={{
-                          color: EFFORT_COLOR[it.effort] || "#9FB0CE",
-                          background: `${EFFORT_COLOR[it.effort] || "#9FB0CE"}1A`,
-                        }}
-                      >
-                        {it.effort}
-                      </span>
+              {found.items.map((it, i) => {
+                const st = stateOf(it.title);
+                return (
+                  <div key={i} className="rounded-xl border border-white/[.07] bg-black/25 p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-[11px] font-semibold text-ink">{it.title}</p>
+                      {it.effort && (
+                        <span
+                          className="shrink-0 rounded-full px-2 py-0.5 text-[8.5px]"
+                          style={{
+                            color: EFFORT_COLOR[it.effort] || "#9FB0CE",
+                            background: `${EFFORT_COLOR[it.effort] || "#9FB0CE"}1A`,
+                          }}
+                        >
+                          {it.effort}
+                        </span>
+                      )}
+                    </div>
+                    {it.why && <p className="mt-1 text-[10px] leading-relaxed text-sub">{it.why}</p>}
+                    {it.first && (
+                      <p className="mt-1.5 text-[9.5px] leading-relaxed text-mut">첫 걸음 · {it.first}</p>
                     )}
+                    {/* 두 갈래로 나간다 — 아직 모르겠으면 작게 다녀오고(탐험),
+                        저울에 올릴 준비가 됐으면 바로 비교한다. */}
+                    <div className="mt-2 flex gap-1.5">
+                      {st === "done" ? (
+                        <span className="flex-1 rounded-lg bg-[#5DCAA5]/15 py-1.5 text-center text-[10px] text-[#7FD9BB]">
+                          다녀온 길 ✓
+                        </span>
+                      ) : st === "going" ? (
+                        <span className="flex-1 rounded-lg bg-white/[.06] py-1.5 text-center text-[10px] text-mut">
+                          탐험 중…
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => startExpedition({
+                            planet: planet.key, planetLabel: planet.label, title: it.title,
+                            step: it.first, why: it.why, choiceA: it.choiceA, choiceB: it.choiceB,
+                          })}
+                          className="tap flex-1 rounded-lg bg-[#3E9C7F] py-1.5 text-[10px] font-bold text-white"
+                        >
+                          작은 탐험으로 다녀오기
+                        </button>
+                      )}
+                      <button
+                        onClick={() => onPick(it)}
+                        className="tap rounded-lg border border-white/[.09] px-2.5 py-1.5 text-[10px] text-sub"
+                        title={`${it.choiceA} vs ${it.choiceB}`}
+                      >
+                        비교하기
+                      </button>
+                    </div>
                   </div>
-                  {it.why && <p className="mt-1 text-[10px] leading-relaxed text-sub">{it.why}</p>}
-                  <p className="mt-1.5 text-[9.5px] text-[#7FD9BB]">
-                    {it.choiceA} <span className="text-mut">vs</span> {it.choiceB}
-                  </p>
-                  {it.first && (
-                    <p className="mt-1 text-[9px] leading-relaxed text-mut">첫 걸음 · {it.first}</p>
-                  )}
-                </button>
-              ))}
+                );
+              })}
             </div>
           )}
           {found && !found.ok && found.reason && (
@@ -326,21 +366,29 @@ function Opportunities({ planet, state, onPick }) {
 
 // 관측 거리 — 멀리 보려면 더 개척해야 한다. 쌓인 게 늘수록 먼 해가 열린다.
 // 기록이 곧 망원경이고, 회고(선택하고 돌아와 적은 것)가 가장 멀리 보게 해준다.
+// 멀리 보려면 더 개척해야 한다. 다만 '겪은 것'을 만드는 길이 시뮬레이션 하나뿐이면
+// 5년·10년은 사실상 안 열린다. 작은 탐험을 다녀온 것도 같은 무게로 센다 —
+// 오히려 상상한 갈림길보다 실제로 가서 알아온 쪽이 단단한 근거다.
 const YEAR_TIERS = [
-  { years: 1, need: { records: 3 }, how: "일기 3개" },
-  { years: 3, need: { records: 10 }, how: "일기 10개" },
-  { years: 5, need: { records: 10, sims: 1 }, how: "일기 10개 + 시뮬레이션 1번" },
-  { years: 10, need: { records: 10, sims: 1, reflections: 1 }, how: "거기에 회고 1개" },
+  { years: 1, need: { records: 3 } },
+  { years: 3, need: { records: 10 } },
+  { years: 5, need: { records: 10, probes: 1 } },
+  { years: 10, need: { records: 10, probes: 1, deep: 1 } },
 ];
 
 function tierState(tier, mat) {
-  const have = { records: mat.total, sims: mat.sims.length, reflections: mat.reflections };
+  const trips = mat.trips?.length || 0;
+  const have = {
+    records: mat.total,
+    probes: mat.sims.length + trips,          // 저울에 올렸거나 직접 다녀온 것
+    deep: mat.reflections + trips,            // 그래서 알게 된 것을 적어둔 것
+  };
   const missing = [];
   if (have.records < (tier.need.records || 0)) {
     missing.push(`일기 ${tier.need.records - have.records}개`);
   }
-  if (have.sims < (tier.need.sims || 0)) missing.push("시뮬레이션 1번");
-  if (have.reflections < (tier.need.reflections || 0)) missing.push("회고 1개");
+  if (have.probes < (tier.need.probes || 0)) missing.push("작은 탐험 1번(또는 시뮬레이션)");
+  if (have.deep < (tier.need.deep || 0)) missing.push("탐험 기록 1개(또는 회고)");
   return { open: missing.length === 0, missing };
 }
 
@@ -380,7 +428,7 @@ function FutureYears({ planet, state }) {
         <p className="text-[11px] font-bold">이 영역의 N년 뒤</p>
         <span className="text-[9.5px] text-[#8FB4F0]">
           일기 {mat.total}개{mat.sims.length ? ` · 시뮬 ${mat.sims.length}개` : ""}
-          {mat.reflections ? ` · 회고 ${mat.reflections}개` : ""}
+          {mat.trips?.length ? ` · 탐험 ${mat.trips.length}개` : ""}{mat.reflections ? ` · 회고 ${mat.reflections}개` : ""}
         </span>
       </div>
 

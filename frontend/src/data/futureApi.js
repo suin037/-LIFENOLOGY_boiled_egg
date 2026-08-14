@@ -2,6 +2,7 @@
 // 서사를 받아온다. 예측 수치가 아니라 '내 기록에서 끌어온 이야기'다.
 import { loadUniverse, hasRecord } from "./myUniverse.js";
 import { listUniverses } from "./savedUniverses.js";
+import { doneExpeditions } from "./expeditions.js";
 import { domainAnalysis } from "./diarySignals.js";
 
 const BASE = import.meta.env.VITE_QMODE_BASE || "http://localhost:8000";
@@ -75,12 +76,20 @@ function domainSims(planetKey) {
 export function futureMaterials(planetKey, s = loadUniverse()) {
   const records = domainRecords(planetKey, s);
   const sims = domainSims(planetKey);
+  // 다녀온 탐험 — 상상이 아니라 실제로 겪고 온 것이라 회고와 같은 무게로 센다.
+  const trips = doneExpeditions(planetKey)
+    .filter((e) => (e.note || "").trim())
+    .map((e) => ({
+      title: e.title, step: e.step || "", note: e.note,
+      startedAt: e.startedAt, doneAt: e.doneAt,
+    }));
   // total 은 상한 없는 실제 기록 수 — 24개를 넘겨도 "새 기록이 늘었다"를 알아채야 한다.
   const total = domainRecordsAll(planetKey, s).length;
   return {
     records,
     total,
     sims,
+    trips,
     reflections: sims.filter((x) => (x.reflection || "").trim()).length,
     ready: total >= 3,
   };
@@ -104,7 +113,7 @@ function putCachedOpportunities(planetKey, value) {
 
 export async function scanOpportunities(planet, { speech = "polite", state } = {}) {
   const s = state || loadUniverse();
-  const { records, sims, total } = futureMaterials(planet.key, s);
+  const { records, sims, trips, total } = futureMaterials(planet.key, s);
   const a = domainAnalysis(planet.key, s);
   try {
     const res = await fetch(`${BASE}/opportunity/scan`, {
@@ -116,6 +125,7 @@ export async function scanOpportunities(planet, { speech = "polite", state } = {
         records,
         analysis: a?.ok ? { n: a.n, moodAvg: a.moodAvg, topEmotions: a.topEmotions } : null,
         sims,
+        trips,
         speech,
       }),
     });
@@ -134,7 +144,7 @@ export async function scanOpportunities(planet, { speech = "polite", state } = {
 
 export async function writeFuture(planet, years, { speech = "polite", state } = {}) {
   const s = state || loadUniverse();
-  const { records, sims, total } = futureMaterials(planet.key, s);
+  const { records, sims, trips, total } = futureMaterials(planet.key, s);
   const a = domainAnalysis(planet.key, s);
   try {
     const res = await fetch(`${BASE}/future/scenario`, {
@@ -149,6 +159,7 @@ export async function writeFuture(planet, years, { speech = "polite", state } = 
           ? { n: a.n, moodAvg: a.moodAvg, topEmotions: a.topEmotions, trend: a.trend }
           : null,
         sims,
+        trips,
         speech,
       }),
     });
