@@ -63,6 +63,11 @@ def make_event(data: pd.DataFrame, spec: dict) -> pd.Series:
         if spec.get("exclude_waves"):
             result = result.mask(data["wv"].isin(spec["exclude_waves"]))
         return result
+    if spec["mode"] == "positive_entry":
+        known = consecutive & current.notna() & previous.notna()
+        event = current.gt(0) & previous.le(0)
+        stayed = current.le(0) & previous.le(0)
+        return event.where(known & (event | stayed)).astype("float64")
     if spec["mode"] in {"increase", "decrease"}:
         known = consecutive & current.notna() & previous.notna()
         event = current.gt(previous) if spec["mode"] == "increase" else current.lt(previous)

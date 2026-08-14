@@ -63,6 +63,7 @@ EQ5D_CANDIDATES = {
     "pain":       ["LQ_4EQL"],       # 통증/불편
     "anxiety":    ["LQ_5EQL"],       # 불안/우울
 }
+BEHAVIOR_VARS = ["pa_aerobic", "sm_presnt", "BD1_11", "HE_BMI"]
 
 
 # ─────────────────────────────────────────────
@@ -109,6 +110,10 @@ def diagnose_availability(df: pd.DataFrame) -> dict:
 
     report["stress"] = years_present(STRESS_VARS)
     report["phq"]    = years_present(PHQ_VARS)
+    report["aerobic"] = years_present(["pa_aerobic"])
+    report["smoking"] = years_present(["sm_presnt"])
+    report["alcohol"] = years_present(["BD1_11"])
+    report["bmi"] = years_present(["HE_BMI"])
 
     # 수면: 연도별로 형식이 달라 별도 판정
     #  - 직접응답형(BP16_1) 또는 시각계산형(BP16_11~14) 중 하나라도 있으면 조사된 것으로 간주
@@ -136,7 +141,7 @@ def diagnose_availability(df: pd.DataFrame) -> dict:
         report["eq5d"] = {y: False for y in FILES}
 
     print("\n[순환문항 진단]")
-    for k in ["stress", "phq", "sleep", "eq5d"]:
+    for k in ["stress", "phq", "sleep", "eq5d", "aerobic", "smoking", "alcohol", "bmi"]:
         print(f"  {k:8s}: {report[k]}")
     print(f"  eq5d 변수 매핑: {report['eq5d_vars']}")
     return report
@@ -230,6 +235,22 @@ def derive_eq5d(df, eq5d_vars):
     return df
 
 
+def derive_health_behaviors(df):
+    """공식 공개 파생변수와 음주빈도 문항을 분석용 공통 스키마로 정리."""
+    df["aerobic_guideline"] = df["pa_aerobic"].where(df["pa_aerobic"].isin([0, 1]))
+    df["current_smoking"] = df["sm_presnt"].where(df["sm_presnt"].isin([0, 1]))
+    # BD1_11: 1=최근 1년 전혀 안 마심, 2=월 1회 미만, 3~6=월 1회 이상,
+    # 8=비해당, 9=모름/무응답. 단면적 음주 빈도이며 절주의 효과가 아니다.
+    alcohol = df["BD1_11"]
+    df["monthly_drinking"] = np.where(
+        alcohol.isin([1, 2, 3, 4, 5, 6]), alcohol.isin([3, 4, 5, 6]).astype(float), np.nan
+    )
+    df["bmi"] = pd.to_numeric(df["HE_BMI"], errors="coerce").where(
+        pd.to_numeric(df["HE_BMI"], errors="coerce").between(10, 70)
+    )
+    return df
+
+
 # ─────────────────────────────────────────────
 # 4. 지표별 통합가중치 생성
 # ─────────────────────────────────────────────
@@ -258,6 +279,10 @@ def make_pooled_weights(df, avail):
     pooled("phq",    "wt_pool_phq")
     pooled("sleep",  "wt_pool_sleep")
     pooled("eq5d",   "wt_pool_eq5d")
+    pooled("aerobic", "wt_pool_aerobic")
+    pooled("smoking", "wt_pool_smoking")
+    pooled("alcohol", "wt_pool_alcohol")
+    pooled("bmi", "wt_pool_bmi")
     return df
 
 
@@ -357,6 +382,10 @@ def build_reference_table(df, avail):
         ("주중평균수면시간", "Total_slp_wk","wt_pool_sleep",  "sleep"),
         ("EQ5D_불안우울문제","eq5d_anxiety_problem","wt_pool_eq5d","eq5d"),
         ("EQ5D_통증문제",    "eq5d_pain_problem",   "wt_pool_eq5d","eq5d"),
+        ("유산소신체활동실천율", "aerobic_guideline", "wt_pool_aerobic", "aerobic"),
+        ("현재흡연율", "current_smoking", "wt_pool_smoking", "smoking"),
+        ("월간음주율", "monthly_drinking", "wt_pool_alcohol", "alcohol"),
+        ("평균BMI", "bmi", "wt_pool_bmi", "bmi"),
     ]
     rows = []
     for label, ycol, wcol, key in specs:
@@ -387,11 +416,14 @@ def build_reference_table(df, avail):
     table = pd.concat(rows, ignore_index=True, sort=False)
     # 값 단위: 유병/인지/문제 지표는 %로 환산 (수면은 시간 그대로)
     def to_display(r):
-        if "수면" in r["지표명"]:
+        if "수면" in r["지표명"] or "BMI" in r["지표명"]:
             return round(r["estimate"], 2)          # 시간
         return round(r["estimate"] * 100, 1)         # %
     table["값"] = table.apply(to_display, axis=1)
-    table["단위"] = np.where(table["지표명"].str.contains("수면"), "시간", "%")
+    table["단위"] = np.select(
+        [table["지표명"].str.contains("수면"), table["지표명"].str.contains("BMI")],
+        ["시간", "kg/㎡"], default="%"
+    )
     return table
 
 
@@ -406,14 +438,17 @@ def main():
     df = derive_phq(df)
     df = derive_sleep(df)
     df = derive_eq5d(df, avail["eq5d_vars"])
+    df = derive_health_behaviors(df)
     df = make_pooled_weights(df, avail)
     df = add_agegroup(df)
 
     # 정제된 개인단위 데이터 저장 (검증·재현용)
     keep = (DESIGN_VARS + ["year", "agegroup",
             "mh_stress", "mh_PHQ_S10", "Total_slp_wk"] +
+            ["aerobic_guideline", "current_smoking", "monthly_drinking", "bmi"] +
             [f"eq5d_{d}_problem" for d in EQ5D_CANDIDATES] +
-            ["wt_pool_stress", "wt_pool_phq", "wt_pool_sleep", "wt_pool_eq5d"])
+            ["wt_pool_stress", "wt_pool_phq", "wt_pool_sleep", "wt_pool_eq5d",
+             "wt_pool_aerobic", "wt_pool_smoking", "wt_pool_alcohol", "wt_pool_bmi"])
     keep = [c for c in keep if c in df.columns]
     PERSON_OUT.parent.mkdir(parents=True, exist_ok=True)
     df[keep].to_csv(PERSON_OUT, index=False, encoding="utf-8-sig")
