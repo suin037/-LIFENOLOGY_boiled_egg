@@ -214,7 +214,7 @@ export async function runSimulate(args) {
   return mapSimulateToResult(await runSimulateRaw(args));
 }
 
-export async function generateSceneImages({ avatarBlob, choiceA, choiceB, narrative, timeoutMs = 60000 }) {
+export async function generateSceneImages({ avatarBlob, avatarSpec, choiceA, choiceB, narrative, timeoutMs = 60000 }) {
   const storyText = (story) => {
     if (typeof story === "string") return story;
     const detail = story?.detail || {};
@@ -224,6 +224,7 @@ export async function generateSceneImages({ avatarBlob, choiceA, choiceB, narrat
   };
   const form = new FormData();
   form.append("avatar", avatarBlob, "avatar.png");
+  form.append("avatar_spec", JSON.stringify(avatarSpec || {}));
   form.append("choice_a", choiceA);
   form.append("choice_b", choiceB);
   form.append("narrative_a", storyText(narrative.a));

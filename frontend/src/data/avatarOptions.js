@@ -65,3 +65,23 @@ export function normalizeAvatar(config) {
   }
   return { ...DEFAULT_AVATAR, ...config };
 }
+
+// 이미지 생성 모델은 참고 PNG만 보고 머리·성별 표현을 임의로 다시 해석할 수 있다.
+// 선택한 조합을 텍스트 제약으로도 함께 보내 A/B 장면에서 같은 캐릭터를 유지한다.
+export function avatarGenerationSpec(config) {
+  const c = normalizeAvatar(config);
+  return {
+    characterType: "gender-neutral illustrated avatar",
+    hairStyle: c.hairStyle,
+    hairColor: c.hairColor,
+    skinTone: c.faceColor,
+    eyeStyle: c.eyeStyle,
+    eyebrowStyle: c.eyeBrowStyle,
+    mouthStyle: c.mouthStyle,
+    glassesStyle: c.glassesStyle,
+    hatStyle: c.hatStyle,
+    hatColor: c.hatColor,
+    outfitStyle: c.shirtStyle,
+    outfitColor: c.shirtColor,
+  };
+}

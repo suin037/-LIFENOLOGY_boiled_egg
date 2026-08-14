@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import time
 import requests
 
 from config import settings
@@ -11,20 +12,29 @@ def configured() -> bool:
     return bool(settings.cloudflare_account_id and settings.cloudflare_api_token)
 
 
-def build_visual_prompt(choice: str, narrative: str, visual_scene: dict | None = None) -> str:
+def build_visual_prompt(choice: str, narrative: str, visual_scene: dict | None = None,
+                        avatar_spec: dict | None = None) -> str:
     scene = json.dumps(visual_scene or {}, ensure_ascii=False, indent=2)
+    identity = json.dumps(avatar_spec or {}, ensure_ascii=False, indent=2)
     return f"""
 Create a rich, polished 2D editorial story illustration. Use the exact same single
-main character shown in input image 0. Input image 0 is the character identity
+gender-neutral avatar character shown in input image 0. Input image 0 is the character identity
 reference, not merely a loose inspiration. Preserve the character's recognizable
 face shape, eyes, eyebrows, nose, mouth, skin tone, hairstyle, hair color, glasses,
 and head accessories if present. The person in the output must be immediately
 recognizable as the character in input image 0.
+Do not infer, assign, or change the character's gender. Do not add gender-coded facial
+features, body shape, makeup, facial hair, or a different haircut. Treat the reference
+as a stylized avatar, not as a generic man or woman. These identity constraints are
+mandatory and override any conflicting implication in the story or scene direction.
+
+Exact avatar attributes to preserve:
+{identity}
 Do NOT copy the reference image's pose, clothes, shoulders, circular frame, background,
 camera angle, composition, or art style. Do not recreate a centered avatar portrait.
 
 Future choice: {choice}
-Story to visualize: {narrative}
+Story to visualize: {narrative[:1200]}
 Scene direction:
 {scene}
 
@@ -41,25 +51,38 @@ no charts, no logos, no split screen, no collage.
 """.strip()
 
 
-def _generate_one(avatar_png, choice, narrative, visual_scene, seed):
+def _generate_one(avatar_png, choice, narrative, visual_scene, avatar_spec, seed):
     model = settings.cloudflare_reference_model
     url = (
         "https://api.cloudflare.com/client/v4/accounts/"
         f"{settings.cloudflare_account_id}/ai/run/{model}"
     )
-    response = requests.post(
-        url,
-        headers={"Authorization": f"Bearer {settings.cloudflare_api_token}"},
-        data={
-            "prompt": build_visual_prompt(choice, narrative, visual_scene),
-            "width": str(settings.cloudflare_image_width),
-            "height": str(settings.cloudflare_image_height),
-            "seed": str(seed),
-        },
-        files={"input_image_0": ("avatar.png", avatar_png, "image/png")},
-        timeout=(30, 240),
-    )
-    response.raise_for_status()
+    response = None
+    for attempt in range(3):
+        response = requests.post(
+            url,
+            headers={"Authorization": f"Bearer {settings.cloudflare_api_token}"},
+            data={
+                "prompt": build_visual_prompt(choice, narrative, visual_scene, avatar_spec),
+                "width": str(settings.cloudflare_image_width),
+                "height": str(settings.cloudflare_image_height),
+                "seed": str(seed),
+            },
+            files={"input_image_0": ("avatar.png", avatar_png, "image/png")},
+            timeout=(30, 240),
+        )
+        if response.status_code < 500 or attempt == 2:
+            break
+        # Workers AI의 일시적인 5xx/동시 처리 실패는 짧게 기다렸다 재시도한다.
+        time.sleep(1.5 * (attempt + 1))
+    if not response.ok:
+        try:
+            detail = response.json()
+            errors = detail.get("errors") or detail
+            message = json.dumps(errors, ensure_ascii=False)[:500]
+        except Exception:
+            message = response.text[:500] or response.reason
+        raise RuntimeError(f"Cloudflare image API {response.status_code}: {message}")
     payload = response.json()
     if not payload.get("success"):
         errors = "; ".join(e.get("message", "") for e in payload.get("errors", []))
@@ -72,7 +95,7 @@ def _generate_one(avatar_png, choice, narrative, visual_scene, seed):
 
 async def generate_pair(
     avatar_png, choice_a, choice_b, narrative_a, narrative_b,
-    visual_a=None, visual_b=None,
+    visual_a=None, visual_b=None, avatar_spec=None,
 ):
     if not configured():
         raise RuntimeError("Cloudflare Workers AI is not configured")
@@ -85,10 +108,10 @@ async def generate_pair(
     identity_seed = 427
     image_a, image_b = await asyncio.gather(
         asyncio.to_thread(
-            _generate_one, avatar_png, choice_a, narrative_a, visual_a, identity_seed
+            _generate_one, avatar_png, choice_a, narrative_a, visual_a, avatar_spec, identity_seed
         ),
         asyncio.to_thread(
-            _generate_one, avatar_png, choice_b, narrative_b, visual_b, identity_seed
+            _generate_one, avatar_png, choice_b, narrative_b, visual_b, avatar_spec, identity_seed
         ),
     )
     return {"a": image_a, "b": image_b}

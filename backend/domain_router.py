@@ -125,12 +125,17 @@ def _education(profile) -> list[dict]:
 
 
 def _business(profile) -> list[dict]:
+    """창업 생존율 — 업종·규모는 자유입력(profile['choice'])에서 뽑는다.
+
+    필터를 여기서 직접 쓰지 않고 `rulebase.bizsurv_rows` 를 부른다. 예전엔 이 함수와
+    rulebase 가 각자 '전체·계' 를 하드코딩하고 있었는데, 한쪽만 업종축을 열면 같은
+    창업에 대해 화면마다 다른 생존율이 나온다.
+    """
     try:
-        df = _csv("dgroup/kosis_기업생멸행정통계/lookup_bizsurvival_survival_v1.csv")
+        sub, ctx = bizsurv_rows(profile or {})
     except Exception:
         return []
-    sub = df[(df["industry"].astype(str) == "전체") & (df["firm_size"].astype(str) == "계")]
-    if sub.empty:
+    if sub is None or sub.empty:
         return []
     out = []
     for h in (1, 3, 5):
@@ -138,7 +143,8 @@ def _business(profile) -> list[dict]:
         if not row.empty:
             r = row.sort_values("ref_year").iloc[-1]
             out.append(_ind(f"창업 {h}년 생존율", r["survival_rate"], "%",
-                            source="KOSIS 기업생멸행정통계"))
+                            source="KOSIS 기업생멸행정통계",
+                            note=f"{ctx.label()} 기준"))
     return out
 
 
