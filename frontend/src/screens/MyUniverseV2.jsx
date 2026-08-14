@@ -9,6 +9,8 @@ import { seedDemoEunwoo, seedDemoYear } from "../data/demoYear.js";
 import { domainAnalysis, domainMonths, domainReport } from "../data/diarySignals.js";
 import { futureMaterials, getCachedFuture, writeFuture, getCachedOpportunities, scanOpportunities } from "../data/futureApi.js";
 import { expeditionsFor, startExpedition } from "../data/expeditions.js";
+import { shapeOf, MIN_RECORDS_TO_NAME, HONESTY_NOTE } from "../data/constellationRules.js";
+import { topAxes } from "../data/valueCards.js";
 import { useResult } from "../data/ResultContext.jsx";
 import { clearSavedReports, REPORT_UID, loadSpeech } from "../data/dispositionApi.js";
 import { planetSkin } from "../data/planetShop.js";
@@ -41,6 +43,8 @@ export default function MyUniverseV2() {
   const { profile, setChoices, setScenarioTexts, setScenarioDomains } = useResult();
   const [state, setState] = useState(loadUniverse);
   const [planet, setPlanet] = useState(null);
+  // 3D 에서 별자리를 누르면 그 별자리 하나를 펼쳐 본다(모양·상태·그 안의 기록).
+  const [cluster, setCluster] = useState(null);
   const [skin,setSkin]=useState(planetSkin);
   useEffect(() => { const refresh = () => setState(loadUniverse()); window.addEventListener("pm:universe", refresh); return () => window.removeEventListener("pm:universe", refresh); }, []);
   useEffect(()=>{const refresh=()=>setSkin(planetSkin());window.addEventListener("pm:planet-shop",refresh);return()=>window.removeEventListener("pm:planet-shop",refresh);},[]);
@@ -70,10 +74,10 @@ export default function MyUniverseV2() {
   const planetScenarios = useMemo(
     () => (planet ? scenariosByPlanet(planet.key, state) : []), [planet, state]);
 
-  function openPlanet(key) { setPlanet(PLANETS.find((item) => item.key === key)); }
+  function openPlanet(key) { setPlanet(PLANETS.find((item) => item.key === key)); setCluster(null); }
   function runDemo(kind) {
     clearSavedReports(REPORT_UID);
-    setPlanet(null);
+    setPlanet(null); setCluster(null);
     if (kind === "clear") resetUniverse();
     else if (kind === "6w") { resetUniverse(); seedDemoCheckins(); }
     else if (kind === "1y") seedDemoYear();
@@ -92,9 +96,10 @@ export default function MyUniverseV2() {
         <button type="button" onClick={() => navigate("/archive")} className="tap flex items-center gap-2 rounded-full border border-white/10 bg-black/25 px-3 text-[10px] text-sub backdrop-blur"><Archive size={13} /> 보관함</button>
       </div>
       <div className={`transition-[margin] duration-300 ease-out ${planet?"md:mr-[450px]":""}`}>
-        <UniverseMap planets={PLANETS} groups={orbitGroups} skin={skin} scenarios={state.scenarios || []} selectedKey={planet?.key} onPlanetSelect={(key)=>key ? openPlanet(key) : setPlanet(null)} onConstellationOpen={(group,key)=>{
-          // 기록 별자리를 누르면 그 영역 전체(기록·기회·N년 뒤)를 연다.
-          if (key) openPlanet(key);
+        <UniverseMap planets={PLANETS} groups={orbitGroups} skin={skin} scenarios={state.scenarios || []} selectedKey={planet?.key} onPlanetSelect={(key)=>key ? openPlanet(key) : (setPlanet(null),setCluster(null))} onConstellationOpen={(group,key)=>{
+          // 기록 별자리를 누르면 그 별자리를 펼친다(행성 전체는 패널 안에서 열 수 있다).
+          if (key) setPlanet(PLANETS.find((item) => item.key === key));
+          setCluster(group);
         }} onScenarioOpen={(scenario)=>openPlanet(scenario.domain)} />
       </div>
       <p className="pointer-events-none absolute bottom-5 left-1/2 z-20 -translate-x-1/2 text-[10px] text-white/40">행성을 클릭해 영역별 미래를 비교해보세요 · 드래그 회전 · 휠/핀치 확대</p>
@@ -103,8 +108,83 @@ export default function MyUniverseV2() {
           예전 FutureScenarioPanel 은 시점 문구가 전부 고정 텍스트였고 br(세부 예측)이
           비어 있어 "세부 예측 결과가 아직 저장되지 않았습니다"만 뜨는 빈 화면이었다.
           행성 모달이 그 영역의 기록·기회·N년 뒤를 실제 데이터로 다 보여준다. */}
-      {planet && <PlanetModal planet={planet} state={state} groups={orbitGroups} scenarios={planetScenarios} onClose={() => setPlanet(null)} onSimulate={() => navigate("/input")} onArchive={() => navigate("/archive")} onOpportunity={pickOpportunity} onOpenScenario={() => {}} profile={profile} />}
+      {cluster && <ClusterPanel group={cluster} planet={planet} profile={profile} onClose={()=>setCluster(null)} onWhole={()=>setCluster(null)} />}
+      {planet && !cluster && <PlanetModal planet={planet} state={state} groups={orbitGroups} scenarios={planetScenarios} onClose={() => setPlanet(null)} onSimulate={() => navigate("/input")} onArchive={() => navigate("/archive")} onOpportunity={pickOpportunity} onOpenScenario={() => {}} profile={profile} />}
     </div>
+  );
+}
+
+// ── 별자리 하나 펼쳐보기 ──────────────────────────────────────
+// 3D 에서 별자리를 누르면 그 모양과 상태를 여기서 본다.
+//
+// 이름은 두 축이다 — 모양(그 묶음 기분의 평균×진폭)과 주제(사용자의 가치 1순위).
+// 다만 이 묶음은 달력 한 주가 아니라 '그 영역 기록 7개'라, 문구를 '7일'이 아니라
+// '기록 N개'로 쓴다. 성격 진단으로 읽히지 않게 개수를 항상 앞에 둔다.
+function ClusterPanel({ group, planet, profile, onClose, onWhole }) {
+  const stars = group?.stars || [];
+  const values = stars.map((s) => s.valence).filter((v) => v != null);
+  const theme = topAxes(profile?.value_ranking, 1)[0] || "성장";
+  const named = values.length >= MIN_RECORDS_TO_NAME;
+  const shape = named ? shapeOf(values) : null;
+  const withText = stars.filter((s) => (s.text || s.note || "").trim());
+  const moods = stars.map((s) => s.mood).filter((m) => m != null);
+  const avg = moods.length ? (moods.reduce((a, b) => a + b, 0) / moods.length).toFixed(1) : null;
+
+  return (
+    <aside className="absolute inset-y-5 right-5 z-[60] w-[min(430px,calc(100%-40px))] overflow-y-auto rounded-[24px] border border-white/10 bg-[#09111F]/95 p-5 shadow-[0_30px_90px_rgba(0,0,0,.62)] backdrop-blur-xl">
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-[9px] tracking-[.15em] text-[#A88BE8]">RECORD CONSTELLATION</p>
+          <h2 className="mt-1 text-[20px] font-bold">
+            {named ? `${shape.adj}형 ${theme} 별자리` : "아직 이름 없는 별자리"}
+          </h2>
+          <p className="mt-1 text-[10px] text-mut">
+            {planet?.label} · {group?.label || `별 ${stars.length}개`}
+          </p>
+        </div>
+        <Close onClick={onClose} />
+      </div>
+
+      {/* 모양 — 그 묶음의 별을 그대로 그린다. */}
+      <div className="mt-4 rounded-[20px] border border-white/[.07] bg-[#070D19] p-3">
+        <Constellation size={250} stars={stars} todayDate={todayKey()} />
+      </div>
+
+      {/* 상태 */}
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        <Mini label="별" value={stars.length} />
+        <Mini label="평균 기분" value={avg ?? "—"} />
+        <Mini label="진폭" value={shape ? shape.sd.toFixed(2) : "—"} />
+      </div>
+
+      <p className="mt-3 text-[11.5px] leading-relaxed text-sub">
+        {named
+          ? `이 기록 ${values.length}개는 ${shape.line}`
+          : `기록이 ${values.length}개라 아직 모양을 부르지 않았어요. ${MIN_RECORDS_TO_NAME}개부터 이름이 붙어요.`}
+      </p>
+
+      {withText.length > 0 && (
+        <div className="mt-3 border-t border-white/[.06] pt-3">
+          <p className="text-[9.5px] text-mut">이 별자리에 담긴 기록</p>
+          <div className="mt-1.5 space-y-1">
+            {withText.slice(0, 5).map((s) => (
+              <p key={s.date} className="truncate text-[10.5px] text-sub">
+                <span className="mr-1.5 text-mut">{dateLabel(s.date)}</span>
+                {s.text || s.note}
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <button
+        onClick={onWhole}
+        className="tap mt-4 w-full rounded-xl border border-[#8B6CCF]/40 bg-[#8B6CCF]/10 text-[12px] font-bold text-[#C7B5F2]"
+      >
+        {planet?.label} 전체 보기
+      </button>
+      <p className="mt-3 text-[9px] leading-relaxed text-mut">{HONESTY_NOTE}</p>
+    </aside>
   );
 }
 

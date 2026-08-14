@@ -4,8 +4,12 @@ import Constellation from "./Constellation.jsx";
 import JyConstellationArchive from "./JyConstellationArchive.jsx";
 import { constellationGroups, loadUniverse, todayKey } from "../data/myUniverse.js";
 import { zodiacOf } from "../data/zodiac.js";
+import { classifyConstellation, badgeLabel, HONESTY_NOTE } from "../data/constellationRules.js";
+import { useResult } from "../data/ResultContext.jsx";
 
 export default function HomeCalendar() {
+  // 가치 순위로 별자리 주제(성장/안정/관계…)를 정한다 — 이름의 뒷말이 된다.
+  const { profile } = useResult();
   const state = loadUniverse();
   const entries = useMemo(() => (state.checkins || []).filter((entry) => !entry.empty && entry.date), [state]);
   const years = useMemo(() => [...new Set(entries.map((entry) => Number(entry.date.slice(0, 4))))].sort((a,b)=>b-a), [entries]);
@@ -98,7 +102,7 @@ export default function HomeCalendar() {
           </button>;
         })}
       </div>}
-      {week&&<div className="mt-3 rounded-[18px] border border-white/[.07] bg-black/15 p-4"><div className="flex items-center justify-between"><div><p className="text-[9px] text-[#A88BE8]">WEEK CONSTELLATION</p><b className="text-[12px]">별을 눌러 그날의 기록 보기</b></div><button onClick={()=>setReport(week)} className="tap rounded-full bg-[#8B6CCF] px-3 py-1.5 text-[10px] font-bold">주간 리포트</button></div><div className="mx-auto mt-2 max-w-[330px]"><Constellation size={230} stars={week.stars} todayDate={todayKey()} selectedDate={star?.date} onSelect={setStar}/></div>{star&&<div className="mt-3 rounded-xl bg-white/[.035] p-3"><div className="flex justify-between text-[10px]"><b>{star.date}</b><span className="text-[#BBA4ED]">기분 {star.mood || "-"}/5</span></div><p className="mt-2 text-[11px] leading-relaxed text-sub">{star.text||star.note||"간단한 체크인만 남긴 날입니다."}</p></div>}</div>}
+      {week&&<div className="mt-3 rounded-[18px] border border-white/[.07] bg-black/15 p-4"><div className="flex items-center justify-between"><div><p className="text-[9px] text-[#A88BE8]">WEEK CONSTELLATION</p><b className="text-[12px]">{badgeLabel(classifyConstellation(week, profile?.value_ranking))}</b><p className="mt-0.5 text-[10px] text-sub">{classifyConstellation(week, profile?.value_ranking).caption}</p></div><button onClick={()=>setReport(week)} className="tap rounded-full bg-[#8B6CCF] px-3 py-1.5 text-[10px] font-bold">주간 리포트</button></div><div className="mx-auto mt-2 max-w-[330px]"><Constellation size={230} stars={week.stars} todayDate={todayKey()} selectedDate={star?.date} onSelect={setStar}/></div>{star&&<div className="mt-3 rounded-xl bg-white/[.035] p-3"><div className="flex justify-between text-[10px]"><b>{star.date}</b><span className="text-[#BBA4ED]">기분 {star.mood || "-"}/5</span></div><p className="mt-2 text-[11px] leading-relaxed text-sub">{star.text||star.note||"간단한 체크인만 남긴 날입니다."}</p></div>}</div>}
     </>}
     {report&&<WeeklyReport group={report} onClose={()=>setReport(null)}/>} 
   </section>;
@@ -114,6 +118,8 @@ const DAY_KO=["월","화","수","목","금","토","일"];
 
 // 주간 리포트 — 숫자 나열 대신 '그 주가 어떻게 흘렀는지'가 한눈에 보이게.
 function WeeklyReport({group,onClose}) {
+  const { profile } = useResult();
+  const cls=classifyConstellation(group, profile?.value_ranking);
   const filled=group.stars.filter((item)=>!item.empty);
   const moods=filled.map((item)=>item.mood).filter(Boolean);
   const avg=moods.length?(moods.reduce((a,b)=>a+b,0)/moods.length):null;
@@ -134,6 +140,8 @@ function WeeklyReport({group,onClose}) {
           <div>
             <p className="text-[10px] tracking-[.14em] text-[#A88BE8]">WEEKLY REPORT</p>
             <h3 className="mt-1 text-[19px] font-bold leading-tight">{shortDate(group.weekStart)} ~ {shortDate(group.weekEnd)}</h3>
+            <p className="mt-1 text-[12px] font-semibold text-[#BBA4ED]">{cls.name}</p>
+            <p className="mt-0.5 text-[11px] text-sub">{cls.caption}</p>
             {trendTxt&&<p className="mt-1 text-[11px] text-[#C7B5F2]">{trendTxt}</p>}
           </div>
           <button onClick={onClose} className="tap flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[.07] text-sub"><X size={17}/></button>
@@ -192,9 +200,8 @@ function WeeklyReport({group,onClose}) {
         </div>
 
         {filled.length===0&&<p className="mt-4 text-center text-[12px] text-mut">이 주에는 기록이 없습니다.</p>}
-        <p className="mt-4 text-[9px] leading-relaxed text-mut">
-          기록한 날들의 기분을 정리한 것이며, 성격 진단이나 미래 예측이 아닙니다.
-        </p>
+        {/* 이름을 붙이는 순간 '당신은 ○○형' 으로 읽힐 수 있어 고지를 함께 둔다. */}
+        <p className="mt-4 text-[9px] leading-relaxed text-mut">{HONESTY_NOTE}</p>
       </div>
     </div>
   );
