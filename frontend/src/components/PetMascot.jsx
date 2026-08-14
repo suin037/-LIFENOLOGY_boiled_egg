@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import Mascot from "./Mascot.jsx";
 import PetCreature from "./PetCreature.jsx";
+import { loadShop, equippedItem } from "../data/petShop.js";
 import { loadPet, claimDaily, petMascot, feedMascot, setWhich, moodOf, canPatToday } from "../data/petCare.js";
 import { hasCheckedInToday } from "../data/myUniverse.js";
-import { petItem } from "../data/planetShop.js";
 
 // 🧸 마스코트 육성(가벼운 버전) — 쓰다듬기(말랑 튕김) + 간식으로 친밀도 키우기.
 // 3D 느낌은 CSS 소프트 그라디언트·그림자·squash/stretch로 '말랑말랑'하게.
@@ -15,13 +15,15 @@ const GUIDES = [
 
 export default function PetMascot({ rumination, onCompare }) {
   const [pet, setPet] = useState(() => claimDaily(loadPet()));
-  // 상점에서 산 꾸미기 — 구매·장착 즉시 반영되게 이벤트를 듣는다.
-  const [gear, setGear] = useState(petItem);
+  // 상점에서 산 배경·소품 — 사거나 장착하면 바로 반영되게 이벤트를 듣는다.
+  const [shop, setShop] = useState(loadShop);
   useEffect(() => {
-    const refresh = () => setGear(petItem());
-    window.addEventListener("pm:planet-shop", refresh);
-    return () => window.removeEventListener("pm:planet-shop", refresh);
+    const refresh = () => setShop(loadShop());
+    window.addEventListener("pm:pet-shop", refresh);
+    return () => window.removeEventListener("pm:pet-shop", refresh);
   }, []);
+  const bgItem = equippedItem("background", shop);
+  const accItem = equippedItem("accessory", shop);
   const [squish, setSquish] = useState(0); // 탭할 때마다 +1 → 애니 리트리거
   const [hearts, setHearts] = useState([]);
   const [eating, setEating] = useState(false);
@@ -173,6 +175,8 @@ export default function PetMascot({ rumination, onCompare }) {
 
       {/* 무대 — 말랑한 마스코트 */}
       <div className="relative mx-auto mt-2 flex h-[118px] w-full max-w-[220px] items-end justify-center">
+        {/* 상점 배경 — 후광보다 뒤에 깔린다 */}
+        {bgItem && <div className="pointer-events-none absolute inset-0 rounded-[18px]" style={{ background: bgItem.render }} />}
         {/* 배경 후광 */}
         <div className="pointer-events-none absolute inset-0" style={{ background: `radial-gradient(circle at 50% 44%, ${guide.glow}, transparent 62%)` }} />
         {/* 바닥 그림자 */}
@@ -197,8 +201,23 @@ export default function PetMascot({ rumination, onCompare }) {
           <div key={squish} style={{ animation: "pm-squish .5s cubic-bezier(.34,1.56,.64,1)", transformOrigin: "50% 100%" }}>
             {/* 젤리 광택 */}
             <div className="relative">
-              <PetCreature size={98} variant={guide.key} mood={mood} expr={expr} accessory={gear} />
+              <PetCreature size={98} variant={guide.key} mood={mood} expr={expr} />
               <div className="pointer-events-none absolute left-[24%] top-[24%] h-8 w-8 rounded-full bg-white/45 blur-[7px]" />
+              {/* 장착 소품 — 원본 좌표는 size 124 기준이라 우리 크기(98)에 맞춰 비율로 줄인다 */}
+              {accItem && (
+                <span
+                  className="pointer-events-none absolute"
+                  style={{
+                    top: `${(accItem.pos?.top ?? 2) * (98 / 124)}px`,
+                    left: accItem.pos?.left ?? "50%",
+                    transform: `translateX(-50%)${accItem.pos?.rotate ? ` rotate(${accItem.pos.rotate}deg)` : ""}`,
+                    fontSize: `${(accItem.pos?.size ?? 24) * (98 / 124)}px`,
+                    lineHeight: 1,
+                  }}
+                >
+                  {accItem.render}
+                </span>
+              )}
               {/* 입가로 날아와 와구와구 사라지는 쿠키 */}
               {eating && (
                 <span

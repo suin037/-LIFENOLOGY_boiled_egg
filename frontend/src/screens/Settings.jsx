@@ -14,7 +14,7 @@ import PrivacyVault from "../components/PrivacyVault.jsx";
 import { LEVEL_TITLES, XP_RULES, universeSummary } from "../data/myUniverse.js";
 import { LEVEL_REWARDS } from "../data/unlocks.js";
 import PetMascot from "../components/PetMascot.jsx";
-import PlanetShop from "../components/PlanetShop.jsx";
+import PetShop from "../components/PetShop.jsx";
 import { jobChangeRumination } from "../data/diarySignals.js";
 
 const OCCUPATIONS = [
@@ -198,7 +198,7 @@ export default function Settings() {
       <PetMascot rumination={rumination} onCompare={startJobCompare} />
 
       <Card>
-        <div className="flex items-center justify-between gap-4"><div><div className="text-xs font-semibold text-mut">꾸미기 상점</div><p className="mt-1 text-[10px] leading-relaxed text-sub">행성의 질감·광택·고리, 생활 관리 친구의 모자·목도리 같은 것을 바꿉니다.</p></div><button type="button" onClick={()=>setPlanetShopOpen(true)} className="tap shrink-0 rounded-xl bg-[#8B6CCF] px-4 text-[11px] font-bold">상점 열기</button></div>
+        <div className="flex items-center justify-between gap-4"><div><div className="text-xs font-semibold text-mut">꾸미기 상점</div><p className="mt-1 text-[10px] leading-relaxed text-sub">배경·소품·간식·행성 스킨을 코인으로 사서 꾸며요.</p></div><button type="button" onClick={()=>setPlanetShopOpen(true)} className="tap shrink-0 rounded-xl bg-[#8B6CCF] px-4 text-[11px] font-bold">상점 열기</button></div>
       </Card>
 
       {/* 개인정보 암호화 */}
@@ -437,7 +437,7 @@ export default function Settings() {
         처음 화면으로 (로그아웃)
       </button>
       </div>
-      {planetShopOpen&&<PlanetShop onClose={()=>setPlanetShopOpen(false)}/>} 
+      {planetShopOpen&&<PetShop onClose={()=>setPlanetShopOpen(false)}/>} 
     </div>
   );
 }

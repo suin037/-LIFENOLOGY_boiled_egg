@@ -12,7 +12,7 @@ import { expeditionsFor, startExpedition } from "../data/expeditions.js";
 import { shapeOf, shapeLineFor, DOMAIN_THEME, MIN_RECORDS_TO_NAME, HONESTY_NOTE } from "../data/constellationRules.js";
 import { useResult } from "../data/ResultContext.jsx";
 import { clearSavedReports, REPORT_UID, loadSpeech } from "../data/dispositionApi.js";
-import { planetSkin } from "../data/planetShop.js";
+import { planetSkin } from "../data/petShop.js";
 
 const DESCRIPTIONS = {
   career: "나의 진로와 커리어에 대한 고민, 선택, 방향성을 기록해요.",
@@ -46,7 +46,7 @@ export default function MyUniverseV2() {
   const [cluster, setCluster] = useState(null);
   const [skin,setSkin]=useState(planetSkin);
   useEffect(() => { const refresh = () => setState(loadUniverse()); window.addEventListener("pm:universe", refresh); return () => window.removeEventListener("pm:universe", refresh); }, []);
-  useEffect(()=>{const refresh=()=>setSkin(planetSkin());window.addEventListener("pm:planet-shop",refresh);return()=>window.removeEventListener("pm:planet-shop",refresh);},[]);
+  useEffect(()=>{const refresh=()=>setSkin(planetSkin());window.addEventListener("pm:pet-shop",refresh);return()=>window.removeEventListener("pm:pet-shop",refresh);},[]);
 
   // 기회 카드를 누르면 그 갈림길이 채워진 채로 시뮬레이션이 열린다 —
   // 다시 타이핑하게 하면 '길을 내밀었다'는 의미가 없다. 영역도 그 행성으로 넘겨
