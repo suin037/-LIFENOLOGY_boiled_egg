@@ -376,6 +376,46 @@ def scenario(req: ScenarioReq):
         return {"narrative": f"(서사 생성 오류: {e})", "persona_used": bool(pb)}
 
 
+# ── 마스코트 대화 — 가이드별 역할(노바:일상 되묻기 / 코스모:힘든점·위로 / 루미:건강) ──
+class ChatReq(BaseModel):
+    messages: list = []                  # [{role:"user"|"bot", text}]
+    persona: str = "lumi"                # nova / cosmo / lumi
+    context: Optional[dict] = None       # {recent:[{date,emotion,text}], hardStreak:int}
+
+
+_CHAT_ROLE = {
+    "nova": "너는 '노바', 일상을 함께 돌아보는 다정한 친구야. 사용자의 최근 기록에서 있었던 사건 하나를 골라 '그거 그 뒤로 어떻게 됐어요?'처럼 자연스럽게 되물어. 가볍고 따뜻하게.",
+    "cosmo": "너는 '코스모', 마음을 살피는 차분한 친구야. 요즘 힘들었던 점이 있었는지 부드럽게 물어. 최근에 힘든 기록이 연달아 있으면, 질문보다 먼저 진심으로 공감하고 위로부터 건네.",
+    "lumi": "너는 '루미', 몸 상태를 챙기는 친구야. 수면·활동·컨디션을 가볍게 물어봐.",
+}
+
+
+@app.post("/chat")
+def chat(req: ChatReq):
+    """가이드 페르소나 + 기억(context)으로 한 턴 대화.
+
+    실제 대화는 qmode.chatbot 이 맡는다 — 기억 주입(최근 기록·힘든 연속),
+    단계 전략(열기→구체화→정리), 질문 유형 회전, 무거운 말엔 질문 중단.
+    키 없으면 reply=None (프론트가 고정 질문으로 폴백).
+    """
+    import os
+    R1._load_dotenv()
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        return {"reply": None, "reason": "no_api_key"}
+    from qmode import chatbot as CB
+    hard = int((req.context or {}).get("hardStreak") or 0)
+    try:
+        reply = CB.chat(
+            req.messages, persona=req.persona, context=req.context,
+            role=_CHAT_ROLE.get(req.persona, _CHAT_ROLE["lumi"]),
+        )
+    except Exception as e:      # noqa: BLE001
+        return {"reply": None, "reason": f"error: {e}"}
+    info = CB.stage_info(req.messages)
+    kind = "comfort" if (req.persona == "cosmo" and hard >= 2) else "followup"
+    return {"reply": reply or None, "kind": kind, **info}
+
+
 # ── 제3의 제안 — A/B 외에 성향·일기신호에 근거한 '생각 못한 제3의 길' ──────
 class ThirdPathReq(BaseModel):
     choice_a: str = "이직"
@@ -458,37 +498,40 @@ def tag_domain(req: TagReq):
     return DT.tag(req.text)
 
 
-# ── 마스코트 대화형 일기 ────────────────────────────────────────────────
-class ChatMsg(BaseModel):
-    role: str            # "user" | "bot"
-    text: str
-
-
-class ChatReq(BaseModel):
-    messages: list[ChatMsg] = []
-    persona: Optional[str] = "lumi"   # lumi(공감)/cosmo(분석)/nova(재미)
-
-
-@app.post("/chat")
-def chat_turn(req: ChatReq):
-    """대화 한 턴 → 마스코트 답변."""
-    from qmode import chatbot as CB
-    msgs = [m.model_dump() for m in req.messages]
-    return {"reply": CB.chat(msgs, persona=req.persona or "lumi")}
-
-
+# ── 대화 → 일기 정리 ────────────────────────────────────────────────────
+# 대화 자체는 위쪽 /chat 하나가 맡는다(중복 정의 제거 — 예전엔 여기 두 번째 /chat 이
+# 있었지만 FastAPI 는 먼저 등록된 라우트를 쓰므로 죽은 코드였다).
 @app.post("/diary/compose")
 def diary_compose(req: ChatReq):
     """대화 전체 → 1인칭 일기 + 기분 + 감정 + 영역(domains). 체크인 저장용."""
     from qmode import chatbot as CB
-    msgs = [m.model_dump() for m in req.messages]
-    return CB.compose(msgs)
+    return CB.compose(req.messages)
 
 
-@app.get("/chat/opener")
-def chat_opener(persona: str = "lumi"):
+@app.post("/chat/opener")
+def chat_opener(req: ChatReq):
+    """첫 인사 — 기억(context)이 있으면 지난 기록을 잇는 인사."""
     from qmode import chatbot as CB
-    return {"opener": CB.opener(persona), "persona": persona}
+    return {"opener": CB.opener(req.persona or "lumi", context=req.context),
+            "persona": req.persona or "lumi"}
+
+
+@app.post("/chat/closing")
+def chat_closing(req: ChatReq):
+    """대화 마무리 인사 — 질문 없는 위로·인정 한마디.
+
+    위로를 대화 중간에 넣으면 사용자가 답할 말이 없어 흐름이 끊긴다. 그래서
+    상담(코스모=고민과 선택)이 끝난 이 자리에서 건넨다. 키 없으면 담백한 고정 인사.
+    """
+    from qmode import chatbot as CB
+    hard = int((req.context or {}).get("hardStreak") or 0)
+    try:
+        reply = CB.closing(req.messages, persona=req.persona or "lumi",
+                           context=req.context,
+                           role=_CHAT_ROLE.get(req.persona, _CHAT_ROLE["lumi"]))
+    except Exception as e:      # noqa: BLE001
+        return {"reply": None, "reason": f"error: {e}"}
+    return {"reply": reply, "kind": "comfort" if hard >= 2 else "closing"}
 
 
 # ── 감정 모델(로컬 파인튜닝 klue/roberta) — 감정 미선택 시 일기에서 추론 ──

@@ -49,10 +49,13 @@ export function ResultProvider({ children }) {
     const choiceB = opts.choiceB || choices.b;
     const currentDiary = opts.diary ?? diary;
     noteSimulationRun();
-    // 그 날 그 영역(현재 행성)에서 시나리오를 만들었음을 기록 → 지구본에 ◆ 로 표시.
+    // 시뮬레이션을 그 영역의 '추가 별'로 기록 → 행성 궤도의 ◆. 도메인은 선택지에서
+    // 감지된 영역 우선, 없으면 현재 행성(전체면 진로).
     try {
+      const detected = (opts.choiceADomains ?? scenarioDomains.a) || [];
+      const cur = loadUniverse().planet;
       recordScenario({
-        domain: loadUniverse().planet,
+        domain: detected[0] || (cur && cur !== "all" ? cur : "career"),
         title: choiceB ? `${choiceA} vs ${choiceB}` : `${choiceA} 시나리오`,
       });
     } catch {

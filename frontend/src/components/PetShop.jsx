@@ -44,9 +44,9 @@ export default function PetShop({ onClose, onChange, onFeed }) {
   const root = typeof document !== "undefined" && document.getElementById("pm-overlay-root");
 
   const overlay = (
-    <div className="absolute inset-0 z-50 flex items-end justify-center bg-black/60 p-0 backdrop-blur-[2px]" onClick={onClose}>
+    <div className="absolute inset-0 z-50 flex items-end justify-center bg-black/60 p-0 backdrop-blur-[2px] lg:items-center lg:p-6" onClick={onClose}>
       <div
-        className="flex max-h-[88%] w-full flex-col overflow-hidden rounded-t-[24px] border-t border-white/10 bg-[#0F1826]"
+        className="flex max-h-[88%] w-full flex-col overflow-hidden rounded-t-[24px] border-t border-white/10 bg-[#0F1826] lg:max-h-[84%] lg:w-[460px] lg:rounded-[24px] lg:border"
         onClick={(e) => e.stopPropagation()}
       >
         {/* 헤더 */}

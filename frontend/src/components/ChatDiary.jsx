@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { Card, Caption } from "./ui.jsx";
 import { addCheckin, setDomains, todayKey } from "../data/myUniverse.js";
-import { composeDiary } from "../data/dispositionApi.js";
+import { composeDiary, chatTurn, chatClosing } from "../data/dispositionApi.js";
+import { buildChatContext, needsComfort, markEventsAsked, closeEvents } from "../data/chatContext.js";
 import { todayQuestions } from "../data/questions.js";
 import { useResult } from "../data/ResultContext.jsx";
 import Mascot from "./Mascot.jsx";
@@ -14,6 +15,8 @@ const AREAS = [
   { key: "disposition", name: "성향", mascot: "cosmo" },
   { key: "health", name: "건강", mascot: "lumi" },
 ];
+// LLM 대화형 영역 → 가이드 역할. 노바=일상 되묻기 / 코스모=힘든점·위로. 건강은 고정 문진.
+const LLM_PERSONA = { daily: "nova", disposition: "cosmo" };
 // 질문 = { text, options? }. options 있으면 선택창(칩)으로, 없으면 자유서술.
 // 일상 = 구체적 하루 활동 로그. 성향(todayQuestions=가치·성찰 질문)과 겹치지 않게 '한 일/사람/먹은 것'.
 const DAILY_Q = [
@@ -80,7 +83,9 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
   const [saved, setSaved] = useState(null);
   const [editIdx, setEditIdx] = useState(null); // 수정 중인 답변 인덱스
   const [editText, setEditText] = useState("");
+  const [typing, setTyping] = useState(false); // 봇 응답 대기(타이핑 인디케이터)
   const threadRef = useRef(null);
+  const askedRef = useRef([]); // 직전 턴에 되물은 '열린 고리' — 사용자가 답하면 닫는다
 
   const mascot = AREAS.find((a) => a.key === area)?.mascot || "nova";
   const hasUser = msgs.some((m) => m.role === "user");
@@ -90,7 +95,7 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
     if (threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight;
     onMessagesChange?.(msgs);
     saveDraftArea(area, msgs, qi); // 하루 단위 드래프트로 저장(닫아도 유지)
-  }, [msgs, qi, area]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [msgs, qi, area, typing]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function switchArea(key) {
     const list = areaQuestions(key);
@@ -116,9 +121,9 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
     setEditText("");
   }
 
-  function answer(raw) {
+  async function answer(raw) {
     const v = (raw ?? input).trim();
-    if (!v) return;
+    if (!v || typing) return;
     // 성향 질문(D2/D1/D4 등 id 있는 것)에 답하면 프로필 psych_answers에 저장
     // → buildDisposition → 모든 시뮬 시나리오 개인화에 반영.
     const cur = qs[qi];
@@ -126,12 +131,64 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
       setProfile((p) => ({ ...p, psych_answers: { ...(p.psych_answers || {}), [cur.id]: v } }));
     }
     const next = qi + 1;
-    const add = [{ role: "user", text: v }];
-    if (next < qs.length) add.push({ role: "bot", text: qs[next].text });
-    else add.push({ role: "bot", text: "다 답해줘서 고마워! 아래 ‘기록 저장’을 누르면 오늘 일기로 정리할게." });
-    setMsgs((m) => [...m, ...add]);
+    const userMsg = { role: "user", text: v };
+    const base = [...msgs, userMsg];
+    setMsgs(base);
     setQi(next);
     setInput("");
+
+    const persona = LLM_PERSONA[area];
+
+    // 다 답함 → 마무리. 위로는 대화 중간이 아니라 여기서 한다(중간에 하면 답할 말이 없어 끊긴다).
+    // 단, 매번은 아니고 힘든 날이 이어지거나 같은 고민이 쌓였을 때만 LLM 위로를 부른다.
+    if (next >= qs.length) {
+      const ctx = buildChatContext();
+      if (persona && needsComfort(ctx)) {
+        setTyping(true);
+        let bye = null;
+        try {
+          bye = await chatClosing(base, persona, ctx);
+        } catch {
+          bye = null;
+        }
+        setTyping(false);
+        setMsgs((m) => [
+          ...m,
+          { role: "bot", text: bye || "다 답해줘서 고마워! 오늘 얘기 잘 담아둘게." },
+          { role: "bot", text: "아래 ‘기록 저장’을 누르면 오늘 일기로 정리할게." },
+        ]);
+      } else {
+        setMsgs((m) => [...m, { role: "bot", text: "다 답해줘서 고마워! 아래 ‘기록 저장’을 누르면 오늘 일기로 정리할게." }]);
+      }
+      return;
+    }
+
+    if (persona) {
+      // 노바(일상 되묻기) / 코스모(마음 살피기): 기억 + 열린 고리로 LLM 응답. 실패 시 고정질문 폴백.
+      const ctx = buildChatContext();
+      // 사용자가 답을 했으니, 직전에 되물었던 사건은 '얘기된' 것으로 닫는다.
+      if (askedRef.current.length) {
+        closeEvents(askedRef.current);
+        askedRef.current = [];
+      }
+      setTyping(true);
+      let reply = null;
+      try {
+        reply = await chatTurn(base, persona, ctx);
+      } catch {
+        reply = null;
+      }
+      setTyping(false);
+      // 이번 턴에 열린 고리를 넘겼다면 '물어봤다'로 적어둔다(2번까지만 묻게).
+      if (reply && ctx.openEvents?.length) {
+        markEventsAsked(ctx.openEvents);
+        askedRef.current = ctx.openEvents;
+      }
+      setMsgs((m) => [...m, { role: "bot", text: reply || qs[next].text }]);
+    } else {
+      // 건강 = 고정 문진(수면·활동 수치)
+      setMsgs((m) => [...m, { role: "bot", text: qs[next].text }]);
+    }
   }
 
   // 단독 모드 전용 저장(임베드 때는 부모의 '기록 저장'이 대신한다).
@@ -204,6 +261,14 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
             </div>
           ),
         )}
+        {typing && (
+          <div className="flex items-start gap-2 self-start">
+            <Mascot which={mascot} size={26} />
+            <span className="rounded-2xl border border-line bg-[#141b2e] px-3 py-2 text-[13px] text-mut">
+              <span className="animate-pulse">· · ·</span>
+            </span>
+          </div>
+        )}
       </div>
 
       {!done &&
@@ -260,7 +325,7 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
               placeholder="답변을 적어줘"
               className="flex-1 rounded-xl border border-line bg-[#0E1424] px-3 py-2 text-sm text-ink outline-none focus:border-cyan"
             />
-            <button onClick={() => answer()} disabled={!input.trim()} className="tap rounded-xl border border-line px-3 text-[13px] text-sub">
+            <button onClick={() => answer()} disabled={!input.trim() || typing} className="tap rounded-xl border border-line px-3 text-[13px] text-sub disabled:opacity-40">
               답변
             </button>
             {qs[qi]?.skip && (

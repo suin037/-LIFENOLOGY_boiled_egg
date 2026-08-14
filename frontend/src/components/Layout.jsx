@@ -5,6 +5,7 @@ import TabBar from "./TabBar.jsx";
 const NO_TABBAR = ["/", "/onboarding", "/simulate"];
 // 프로필(설정) 아이콘을 숨기는 경로
 const NO_PROFILE = ["/simulate", "/settings"];
+const WIDE_DESKTOP = ["/home", "/input", "/result", "/my", "/archive"];
 
 export default function Layout() {
   const { pathname } = useLocation();
@@ -12,10 +13,11 @@ export default function Layout() {
 
   const showTabBar = !NO_TABBAR.includes(pathname);
   const showProfile = !NO_PROFILE.includes(pathname);
+  const useWideDesktop = WIDE_DESKTOP.includes(pathname);
 
   return (
     <div
-      className="flex min-h-screen items-center justify-center bg-[#111827] p-0 sm:p-6"
+      className="flex min-h-screen items-center justify-center bg-[#111827] p-0 sm:p-6 lg:p-8"
       style={{
         backgroundImage:
           "radial-gradient(circle at 50% 12%, rgba(73,112,171,.22), transparent 36%), linear-gradient(145deg, #172033 0%, #0D1422 48%, #182235 100%)",
@@ -24,13 +26,14 @@ export default function Layout() {
       <div
         className="relative flex h-screen w-full max-w-phone flex-col overflow-hidden bg-bg
                    sm:h-[1180px] sm:max-h-[94vh] sm:rounded-[28px] sm:border sm:border-[#52627B]
+                   lg:h-[calc(100vh-64px)] lg:max-h-none lg:max-w-[1240px] lg:rounded-[32px]
                    sm:ring-1 sm:ring-white/10
                    sm:shadow-[0_30px_90px_rgba(0,0,0,.65),0_0_45px_rgba(65,118,190,.18)]"
         style={{ backgroundImage: "radial-gradient(circle at 85% 8%, rgba(47,111,232,.12), transparent 32%), linear-gradient(180deg, #0B1423 0%, #08101D 100%)" }}
       >
         {/* 서비스 헤더 */}
-        <header className="z-20 flex h-14 shrink-0 items-center justify-between px-5">
-          <button onClick={() => navigate("/home")} className="text-[17px] font-bold tracking-[-.035em] text-ink">
+        <header className="z-20 flex h-14 shrink-0 items-center justify-between border-b border-transparent px-5 lg:h-[72px] lg:border-line/70 lg:px-9">
+          <button onClick={() => navigate("/home")} className="text-[17px] font-bold tracking-[-.035em] text-ink lg:text-[21px]">
             Parallel Me
           </button>
           <div>
@@ -52,7 +55,9 @@ export default function Layout() {
         {/* 화면 본문 (스크롤) */}
         <main
           key={pathname}
-          className="no-scrollbar relative z-10 flex-1 overflow-y-auto px-5 pb-7 pt-1"
+          className={`no-scrollbar relative z-10 flex-1 overflow-y-auto px-5 pb-7 pt-1 lg:px-9 lg:pb-8 lg:pt-6 [&>*]:mx-auto [&>*]:w-full ${
+            useWideDesktop ? "[&>*]:max-w-[1120px]" : "[&>*]:max-w-phone"
+          }`}
         >
           <Outlet />
         </main>

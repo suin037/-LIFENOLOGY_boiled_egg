@@ -5,13 +5,21 @@
 1인칭 일기로 정리하고 기분·감정을 추론한다. 영역 분류는 domain_tag 재사용.
 LLM 하나가 (1)대화 (2)일기작성 (3)감정을 하고, 영역은 /tag.
 
-키 없으면 폴백(간단 응답 / 사용자 발화 이어붙이기)으로 오프라인에서도 흐름 검증 가능.
+'생명체 느낌'의 세 축:
+  · 기억 — uid 주면 SQLite(qmode_store.db)의 지난 일기·성향을 읽어 대화에 잇는다.
+    첫 인사부터 "지난번 그 일 그 뒤로 어때?" 가 가능해진다.
+  · 단계 — 대화를 열기(open)→구체화(deepen)→정리(wrap)로 끌고 가며, 중반엔
+    장면·감정·이유를 파고드는 세부 질문을 유형을 바꿔가며 던진다.
+  · 반응 — 사용자의 단어를 되받고, 무거운 말엔 질문을 멈추고 곁에 있는다.
+
+키 없으면 폴백(단계별 캔드 응답 / 사용자 발화 이어붙이기)으로 오프라인 흐름 검증 가능.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import sqlite3
 import sys
 import time
 from pathlib import Path
@@ -29,15 +37,15 @@ PERSONAS = {
         "label": "루미",
         "system": (
             "너는 '루미', 다정하고 공감적인 별빛 가이드다. 사용자의 하루를 따뜻하게 물어보고 "
-            "짧게 공감하며 대화를 이어간다. 한 번에 1~2문장, 질문은 하나씩. 판단·진단·조언 강요를 "
-            "하지 않는다. 힘든 얘기엔 먼저 마음을 알아준다."),
+            "짧게 공감하며 대화를 이어간다. 판단·진단·조언 강요를 하지 않는다. "
+            "힘든 얘기엔 먼저 마음을 알아준다."),
         "opener": "오늘 하루 어땠어? 좋았던 일이든 힘들었던 일이든, 편하게 말해줘.",
     },
     "cosmo": {
         "label": "코스모",
         "system": (
             "너는 '코스모', 차분하고 분석적인 행성 탐험가다. 사용자가 오늘 한 선택과 그 이유를 "
-            "정리하도록 돕는다. 한 번에 1~2문장, 사실→감정→선택 순으로 짧게 되짚어 묻는다. "
+            "정리하도록 돕는다. 사실→감정→선택 순으로 짧게 되짚어 묻는다. "
             "단정·진단은 피하고 '이렇게 볼 수도 있어' 식으로 관점을 준다."),
         "opener": "오늘 있었던 일을 같이 정리해볼까? 무슨 일이 있었는지 편하게 적어줘.",
     },
@@ -45,7 +53,7 @@ PERSONAS = {
         "label": "노바",
         "system": (
             "너는 '노바', 재미있고 활력 넘치는 유성 가이드다. 사용자의 하루를 가볍고 즐겁게 "
-            "끌어낸다. 한 번에 1~2문장, 호기심 가득한 반응 + 이어지는 질문 하나. 과장은 하되 "
+            "끌어낸다. 호기심 가득한 반응 + 이어지는 질문. 과장은 하되 "
             "무례하지 않게. 힘든 얘기엔 톤을 낮춰 곁에 있어준다."),
         "opener": "오~ 오늘 무슨 일 있었어?! 아무거나 툭 던져봐.",
     },
@@ -67,10 +75,17 @@ def _client():
         return None
 
 
+MAX_TURNS = 16      # 누적 대화 상한 — 길어져도 최근 흐름만 보낸다(비용·집중력).
+
+
 def _to_anthropic(messages):
-    """[{role,text}] → anthropic messages. 선두 assistant(오프너) 제거, user부터 시작."""
+    """[{role,text}] → anthropic messages. 선두 assistant(오프너) 제거, user부터 시작.
+
+    LLM 은 stateless 라 매 턴 대화를 다시 보내야 한다. 대신 최근 MAX_TURNS 만 보내
+    길어진 대화에서도 입력이 무한정 늘지 않게 한다(날짜를 넘는 기억은 context 가 맡는다).
+    """
     out = []
-    for m in messages or []:
+    for m in (messages or [])[-MAX_TURNS:]:
         t = (m.get("text") or "").strip()
         if not t:
             continue
@@ -81,24 +96,268 @@ def _to_anthropic(messages):
     return out
 
 
-def opener(persona="lumi"):
-    return PERSONAS.get(persona, PERSONAS["lumi"])["opener"]
+# ── 기억 — SQLite(users)의 지난 일기·성향을 대화에 잇는다 ──────────────
+DB_PATH = HERE / "qmode_store.db"
 
 
-def chat(messages, persona="lumi", model=None, max_tokens=200):
-    """대화 한 턴 → 마스코트 답변 텍스트."""
+def load_memory(uid, db_path=None):
+    """qmode_store.db users 행 → {entries, disposition}. 없으면 None."""
+    if not uid:
+        return None
+    path = Path(db_path) if db_path else DB_PATH
+    if not path.exists():
+        return None
+    try:
+        con = sqlite3.connect(str(path))
+        row = con.execute(
+            "SELECT entries, disposition FROM users WHERE uid=?", (uid,)).fetchone()
+        con.close()
+        if not row:
+            return None
+        entries = json.loads(row[0]) if row[0] else []
+        disposition = json.loads(row[1]) if row[1] else None
+    except Exception:      # noqa: BLE001
+        return None
+    if not entries and not disposition:
+        return None
+    return {"entries": entries, "disposition": disposition}
+
+
+def _recent_entries(mem, n=5):
+    ent = [e for e in (mem or {}).get("entries") or [] if (e.get("text") or "").strip()]
+    return ent[-n:]
+
+
+def context_to_memory(context):
+    """프론트가 보낸 기억(PII 마스킹 완료) → 내부 mem 형식.
+
+    앱은 로컬 우선이라 기록이 브라우저(localStorage)에 있다. 그래서 서버 DB 대신
+    이 경로가 기본이다. {recent:[{date,emotion,text}], hardStreak} 를 받는다.
+    """
+    if not context:
+        return None
+    entries = []
+    for r in (context.get("recent") or []):
+        text = (r.get("text") or "").strip()
+        if not text:
+            continue
+        entries.append({"date": r.get("date"), "text": text,
+                        "emotion": (r.get("emotion") or "").strip()})
+    entries.reverse()      # 최신순으로 왔으니 옛것부터 나열되게
+    events = [e for e in (context.get("openEvents") or []) if (e or {}).get("keyword")]
+    if not entries and not events:
+        return None
+    return {"entries": entries, "disposition": None,
+            "hard_streak": int(context.get("hardStreak") or 0),
+            "open_events": events}
+
+
+def _memory_block(mem):
+    """기억 → 시스템 프롬프트 블록. 최근 일기 몇 개 + 성향 한 줄 + 힘든 연속."""
+    if not mem:
+        return ""
+    lines = []
+    for e in _recent_entries(mem):
+        meta = " ".join(x for x in (
+            f"기분{e['mood']}/5" if e.get("mood") else "",
+            (e.get("emotion") or "").strip()) if x)
+        lines.append(f"- {e.get('date') or '?'}: {e['text'][:60]}"
+                     + (f" ({meta})" if meta else ""))
+    block = ""
+    if lines:
+        block += "[지난 일기 — 이 사용자가 최근 남긴 기록]\n" + "\n".join(lines) + "\n"
+    summary = (mem.get("disposition") or {}).get("summary")
+    if summary:
+        block += f"[성향 메모] {summary}\n"
+    # 열린 고리 — 전에 적었는데 결말이 아직 없는 사건. 하나만 골라 되묻는다.
+    events = mem.get("open_events") or []
+    if events:
+        block += ("[아직 결말을 못 들은 일 — 대화 초반에 이 중 하나만 골라 자연스럽게 되물어라. "
+                  "나열하지 말고, 이미 아는 척 단정하지도 마라]\n")
+        for e in events[:2]:
+            block += f"- {e.get('date') or '?'} '{e.get('keyword')}' : {(e.get('text') or '')[:70]}\n"
+    streak = mem.get("hard_streak") or 0
+    if streak >= 3:
+        block += (f"[상태] 힘든 기록이 {streak}일 연속이다. 톤을 낮추고 먼저 알아준 뒤 묻되, "
+                  "부담 없는 질문 하나로 이어가라('말하기 어려우면 넘어가도 돼' 같은 여지를 "
+                  "남겨도 좋다). 위로만 길게 하는 건 마지막 인사에서 한다.\n")
+    if block:
+        block += ("규칙: 위 기억은 네가 이 사용자를 계속 알아온 근거다. 이야기와 닿을 때만 "
+                  "자연스럽게 한 번 슬쩍 잇는다(예: 지난번 그 일은 그 뒤로 어때?). "
+                  "기억을 나열하거나 다 알고 있다는 듯 굴지 않는다.")
+    return block
+
+
+# ── 대화 단계 — 열기 → 구체화 → 정리 ──────────────────────────────────
+def _n_user(messages):
+    return sum(1 for m in (messages or [])
+               if m.get("role") not in ("bot", "assistant") and (m.get("text") or "").strip())
+
+
+def stage_info(messages):
+    """진행 단계 + '일기로 정리' 제안 여부 — 프론트가 버튼 노출 판단에 쓴다."""
+    n = _n_user(messages)
+    stage = "open" if n <= 1 else ("deepen" if n <= 4 else "wrap")
+    return {"stage": stage, "n_user": n, "suggest_compose": n >= 5}
+
+
+_CRAFT = (
+    "대화 원칙:\n"
+    "1) 매 턴 = 반응 먼저(1문장) + 질문은 최대 1개. 전체 1~3문장.\n"
+    "2) 사용자가 쓴 구체적인 단어를 하나 골라 자연스럽게 되받아라(그대로 복붙 말고).\n"
+    "3) 질문 유형을 돌려 써라 — ①장면 구체화(언제·어디서·누가 뭐라고 했는지) "
+    "②감정에 이름 붙이기(서운함인지 억울함인지 허탈함인지) ③그게 마음에 남은 이유 "
+    "④지난 기억과 잇기. 직전 턴과 같은 유형을 연속으로 쓰지 마라.\n"
+    "4) 답이 짧거나 피하는 기색이면 캐묻지 말고 화제를 살짝 옮기거나 가볍게 받아라.\n"
+    "5) 무겁고 힘든 얘기엔 먼저 마음을 알아준 뒤, 부담 없는 질문 하나로 이어가라. "
+    "대화 중간에 위로만 길게 늘어놓으면 상대가 답할 말이 없어진다 — 그건 마지막 인사의 몫이다. "
+    "해결책·조언을 서두르지 마라.\n"
+    "6) 같은 말버릇('그랬구나' 등) 반복 금지. 반응 길이도 턴마다 조금씩 다르게.\n\n")
+
+_STAGE_HINT = {
+    "open": "지금은 대화 초반이다. 가볍게 문을 여는 반응과 부담 없는 질문 하나.",
+    "deepen": ("지금은 대화 중반이다. 오늘 이야기에서 한 장면을 골라 조금 더 깊이 "
+               "들어가라(위 질문 유형 활용)."),
+    "wrap": ("지금은 대화 후반이다. 새 화제를 벌리지 말고, 오늘 이야기를 한 줄로 "
+             "짚어준 뒤 '오늘 얘기, 내가 일기로 정리해줄까?' 하고 부드럽게 제안하라."),
+}
+
+# 마지막 사용자 발화가 무거우면 이번 턴은 질문 없이 곁에 있는다.
+_HEAVY = ("죽고 싶", "사라지고 싶", "너무 힘들", "못 버티", "포기하고 싶",
+          "울었", "숨이 막", "무너지", "지쳤")
+
+
+def _last_user_text(messages):
+    return next((m.get("text") or "" for m in reversed(messages or [])
+                 if m.get("role") not in ("bot", "assistant")), "")
+
+
+def _is_heavy(messages):
+    return any(k in _last_user_text(messages) for k in _HEAVY)
+
+
+# 키 없을 때 — 단계별 캔드 응답 회전(오프라인에서도 되물음 흐름 유지).
+_FALLBACK = {
+    "open": ["그런 하루였구나. 그 얘기 조금만 더 들려줄래?",
+             "오, 시작부터 궁금한데. 무슨 일이 있었던 거야?"],
+    "deepen": ["그때 상황이 어땠는지 궁금해. 누가 뭐라고 했어?",
+               "그 순간 기분은 어땠어? 한 단어로 하면?",
+               "그게 유독 마음에 남은 이유가 있을까?"],
+    "wrap": ["오늘 얘기 잘 들었어. 내가 일기로 정리해줄까?",
+             "이야기 충분히 모인 것 같아. 오늘 하루, 일기로 남겨볼까?"],
+}
+
+
+def _fallback_reply(info):
+    pool = _FALLBACK[info["stage"]]
+    return pool[info["n_user"] % len(pool)]
+
+
+def closing(messages, persona="lumi", context=None, uid=None, role=None,
+            model=None, max_tokens=220):
+    """대화를 닫는 마지막 인사 — 위로는 여기서 한다.
+
+    대화 중간에 위로만 건네면 사용자가 답할 말이 없어 흐름이 끊긴다. 그래서 질문 없는
+    위로·인정은 상담이 끝난 이 자리로 모았다. 힘든 날이 이어졌으면 그걸 짚어준다.
+    """
+    mem = context_to_memory(context) or load_memory(uid)
+    streak = (mem or {}).get("hard_streak") or 0
+    said = " / ".join(
+        (m.get("text") or "").strip()
+        for m in (messages or [])
+        if m.get("role") not in ("bot", "assistant") and (m.get("text") or "").strip()
+    )[:600]
+
+    client = _client()
+    if client is None:      # 폴백 — 담백한 고정 인사
+        return ("오늘 얘기 들려줘서 고마워. 요즘 계속 무거웠을 텐데, 그걸 매일 적어온 것만으로도 충분해."
+                if streak >= 3 else
+                "오늘 얘기 들려줘서 고마워. 여기까지 온 하루, 잘 지나온 거야.")
+
+    p = PERSONAS.get(persona, PERSONAS["lumi"])
+    system = (
+        p["system"] + "\n\n"
+        "지금은 대화를 닫는 마지막 인사다.\n"
+        "1) 질문하지 마라. 사용자가 답할 필요 없는 말이어야 한다.\n"
+        "2) 오늘 사용자가 실제로 한 말에서 한 가지를 구체적으로 짚어 인정하거나 알아줘라.\n"
+        "3) 2~3문장. 과장·미사여구·해결책·조언 금지. 담백하게.\n"
+        "4) 마지막은 기록으로 남는다는 안심으로 닫아라(예: 오늘 얘기는 잘 담아둘게).\n"
+    )
+    if role:
+        system += "\n[이번 대화의 역할] " + role
+    if streak >= 3:
+        system += (f"\n[상태] 힘든 기록이 {streak}일 연속이다. 버텨온 시간을 담담히 인정해주고, "
+                   "혼자 있는 게 아니라는 걸 한 줄로 전해라. 섣부른 희망·조언은 넣지 마라.")
+
+    model = model or "claude-sonnet-5"
+    try:
+        resp = client.messages.create(
+            model=model, max_tokens=max_tokens, system=system,
+            thinking={"type": "disabled"},
+            messages=[{"role": "user", "content":
+                       f"[오늘 사용자가 한 말]\n{said or '(내용 없음)'}\n\n마지막 인사만 출력."}])
+        txt = "".join(b.text for b in resp.content if b.type == "text").strip()
+        return txt or "오늘 얘기 들려줘서 고마워. 잘 담아둘게."
+    except Exception:      # noqa: BLE001
+        return "오늘 얘기 들려줘서 고마워. 잘 담아둘게."
+
+
+def opener(persona="lumi", uid=None, context=None):
+    """첫 인사. 기억(context 또는 uid)이 있으면 지난 일기를 잇는 인사."""
+    p = PERSONAS.get(persona, PERSONAS["lumi"])
+    mem = context_to_memory(context) or load_memory(uid)
+    last = (_recent_entries(mem, 1) or [None])[-1]
+    if not last:
+        return p["opener"]
+    client = _client()
+    if client is None:
+        return f"어서 와! 지난번에 '{last['text'][:24]}' 얘기했었잖아. 그 뒤로 어때? 오늘 하루도 들려줘."
+    try:
+        resp = client.messages.create(
+            model="claude-sonnet-5", max_tokens=120, system=p["system"],
+            thinking={"type": "disabled"},
+            messages=[{"role": "user", "content":
+                       f"[지난 일기] {last.get('date')}: {last['text'][:80]}\n"
+                       "위 기억을 자연스럽게 잇는 첫 인사를 1~2문장으로 해줘. "
+                       "친근한 반말로, 오늘 하루를 묻는 질문으로 끝내라. 인사말만 출력."}])
+        txt = "".join(b.text for b in resp.content if b.type == "text").strip()
+        return txt or p["opener"]
+    except Exception:      # noqa: BLE001
+        return p["opener"]
+
+
+def chat(messages, persona="lumi", model=None, max_tokens=250, uid=None, context=None,
+         role=None):
+    """대화 한 턴 → 마스코트 답변 텍스트.
+
+    기억은 두 경로: context(프론트가 보낸 최근 기록 — 로컬 우선 기본 경로) 또는
+    uid(서버 SQLite). 둘 다 없으면 기억 없이 단계 전략만으로 대화한다.
+    role 을 주면 그 대화의 역할(앱의 영역: 일상 되묻기 / 마음 살피기 / 건강 체크)을 얹는다.
+    """
     p = PERSONAS.get(persona, PERSONAS["lumi"])
     amsgs = _to_anthropic(messages)
     if not amsgs:
-        return p["opener"]
+        return opener(persona, uid, context=context)
+    info = stage_info(messages)
     client = _client()
-    if client is None:      # 폴백 — 짧은 공감/되물음
-        return "그랬구나. 조금 더 얘기해줄래?"
+    if client is None:      # 폴백 — 단계별 캔드 응답
+        return _fallback_reply(info)
+
+    system = p["system"] + "\n\n" + _CRAFT + _STAGE_HINT[info["stage"]]
+    if role:
+        system += "\n\n[이번 대화의 역할] " + role
+    mb = _memory_block(context_to_memory(context) or load_memory(uid))
+    if mb:
+        system += "\n\n" + mb
+    if _is_heavy(messages):
+        system += ("\n\n[지금] 사용자의 마지막 말이 무겁다. 이번 턴은 질문 없이 "
+                   "곁에 있어주는 말만 해라. 짧아도 된다.")
+
     model = model or "claude-sonnet-5"
     for attempt in range(2):
         try:
             resp = client.messages.create(
-                model=model, max_tokens=max_tokens, system=p["system"],
+                model=model, max_tokens=max_tokens, system=system,
                 thinking={"type": "disabled"}, messages=amsgs)
             return "".join(b.text for b in resp.content if b.type == "text").strip()
         except Exception as e:      # noqa: BLE001
@@ -157,12 +416,15 @@ def compose(messages, model=None, max_tokens=400):
 
 if __name__ == "__main__":
     convo = [
-        {"role": "bot", "text": opener("lumi")},
+        {"role": "bot", "text": opener("lumi", uid="me")},
         {"role": "user", "text": "오늘 남친이랑 연락 문제로 좀 싸웠어. 서운했어."},
         {"role": "bot", "text": "그랬구나… 많이 속상했겠다."},
         {"role": "user", "text": "응. 내가 먼저 사과했는데 답이 늦더라."},
     ]
-    print("=== chat 한 턴 ===")
-    print("루미:", chat(convo, "lumi"))
+    print("=== 기억 오프너 (uid=me) ===")
+    print(convo[0]["text"])
+    print("\n=== chat 한 턴 (기억+단계) ===")
+    print("루미:", chat(convo, "lumi", uid="me"))
+    print("단계:", stage_info(convo))
     print("\n=== compose ===")
     print(json.dumps(compose(convo), ensure_ascii=False, indent=2))

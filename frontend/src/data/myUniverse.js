@@ -116,7 +116,16 @@ export function addCheckin(entry = {}) {
     ),
   };
   return patch((s) => {
+    const prev = s.checkins.find((c) => c.date === date);
     const rest = s.checkins.filter((c) => c.date !== date);
+    // 하루에 서로 다른 기록이 또 남으면 별이 '분화'한다(쌍성) — 이전 내용을 품고 개수를 센다.
+    const prevBody = (prev?.text || prev?.note || "").trim();
+    const newBody = (star.text || star.note || "").trim();
+    if (prev && prev.hasDiary && star.hasDiary && prevBody && newBody && prevBody !== newBody) {
+      star.splits = (prev.splits || 1) + 1;
+      star.priorTexts = [...(prev.priorTexts || []), prevBody].slice(-3);
+      star.domains = [...new Set([...(prev.domains || []), ...(star.domains || [])])];
+    }
     s.checkins = [...rest, star].sort((a, b) => a.date.localeCompare(b.date));
     return s;
   });

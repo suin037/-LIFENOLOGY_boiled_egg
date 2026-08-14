@@ -267,7 +267,7 @@ export default function DiaryToday() {
 function GuideCarousel({ onOpen }) {
   const [index, setIndex] = useState(1);
   const trackRef = useRef(null);
-  const dragRef = useRef({ active: false, x: 0, left: 0 });
+  const dragRef = useRef({ active: false, x: 0, left: 0, moved: false });
   const guide = GUIDES[index];
 
   function centerItem(nextIndex, smooth = true) {
@@ -344,12 +344,19 @@ function GuideCarousel({ onOpen }) {
         ref={trackRef}
         onScroll={updateOrbit}
         onPointerDown={(event) => {
-          dragRef.current = { active: true, x: event.clientX, left: event.currentTarget.scrollLeft };
+          dragRef.current = {
+            active: true,
+            x: event.clientX,
+            left: event.currentTarget.scrollLeft,
+            moved: false,
+          };
           event.currentTarget.setPointerCapture?.(event.pointerId);
         }}
         onPointerMove={(event) => {
           if (!dragRef.current.active) return;
-          event.currentTarget.scrollLeft = dragRef.current.left - (event.clientX - dragRef.current.x);
+          const distance = event.clientX - dragRef.current.x;
+          if (Math.abs(distance) > 6) dragRef.current.moved = true;
+          event.currentTarget.scrollLeft = dragRef.current.left - distance;
           updateOrbit();
         }}
         onPointerUp={finishDrag}
@@ -357,13 +364,19 @@ function GuideCarousel({ onOpen }) {
         className="no-scrollbar relative z-10 flex cursor-grab overflow-x-auto px-[20%] pb-3 pt-2 active:cursor-grabbing"
         style={{ touchAction: "pan-y" }}
       >
-        {GUIDES.map((item, itemIndex) => {
-          const active = itemIndex === index;
+        {GUIDES.map((item) => {
           return (
             <button
               type="button"
               key={item.key}
-              onClick={() => active ? onOpen(item) : centerItem(itemIndex)}
+              onClick={() => {
+                if (dragRef.current.moved) {
+                  dragRef.current.moved = false;
+                  return;
+                }
+                onOpen(item);
+              }}
+              aria-label={`${item.name}와 대화하기`}
               className="tap flex w-[60%] shrink-0 flex-col items-center justify-center py-3 will-change-transform"
             >
               <span
