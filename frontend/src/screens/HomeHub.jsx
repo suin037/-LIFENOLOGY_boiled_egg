@@ -66,7 +66,7 @@ export default function HomeHub() {
       </Button>
 
       {/* 왼쪽: 오늘의 기록 → 나의 우주 요약 / 오른쪽: 서버 상태·탐험·오늘의 제안 */}
-      <div className="lg:mt-6 lg:grid lg:grid-cols-[minmax(0,1.45fr)_minmax(300px,.75fr)] lg:items-start lg:gap-7">
+      <div className="lg:mt-6 lg:grid lg:grid-cols-[minmax(0,1.45fr)_minmax(300px,.75fr)] lg:items-start lg:gap-7 xl:grid-cols-[minmax(0,1.5fr)_minmax(340px,.82fr)] xl:gap-9">
         <div>
           <DiaryToday />
 
