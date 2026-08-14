@@ -145,6 +145,7 @@ export function getPrediction({ profile, choice = "이직", detail = "" } = {}) 
     expected_wage: null, causal_effect: null, descriptive_effect: null, survival_months: null,
     neighbors: [], neighbor_changed_ratio: null, down_ratio: null,
     risk_timeline: {}, risk_label: null,
+    return_timeline: {},   // 쉬어가기 전용 — {개월: 복귀 누적확률}
   };
 
   if (choice === "이직") {
@@ -186,6 +187,19 @@ export function getPrediction({ profile, choice = "이직", detail = "" } = {}) 
       ],
     };
   }
+  if (choice === "휴식") {
+    // 데모 수치는 지어내지 않고 실제 학습 결과(KLIPS 직업력 공백 스펠 5,209건)의
+    // 전체 KM 곡선을 그대로 쓴다. 실서버가 붙으면 개인 조건으로 갈릴 뿐 결이 같다.
+    return {
+      ...common,
+      coverage: "쉬어가기: 인과(L3)·복귀생존(L4) + 생활지표 / L4는 '후회'가 아니라 복귀까지 걸리는 기간",
+      causal_effect: 18.0,
+      survival_months: 15.0,
+      return_timeline: { 3: 0.202, 6: 0.335, 12: 0.489, 24: 0.679 },
+      risk_timeline: { 1: 0.511, 3: 0.29, 5: 0.198 },
+      risk_label: "미복귀확률",
+    };
+  }
   // 유지 (기준선)
   return {
     ...common,
@@ -215,6 +229,10 @@ const KW = {
   이직: ["이직", "옮기", "옮길", "전직", "갈아타", "이직할", "회사 옮", "다른 회사로"],
   진학: ["진학", "대학원", "유학", "석사", "박사", "학위", "로스쿨", "편입", "공부하러"],
   창업: ["창업", "사업", "자영", "개업", "장사", "내 사업", "법인", "대표", "차릴", "차리", "스타트업 차"],
+  // '퇴사'는 여기 둔다. 갈 곳이 정해졌으면 보통 '이직·입사'를 같이 쓰고,
+  // 그 경우 위의 이직 검사가 먼저 잡는다(행동어 최우선).
+  휴식: ["휴직", "쉬어가", "쉬고 싶", "쉬려", "잠시 쉬", "좀 쉬", "퇴사", "그만두", "그만둘",
+        "번아웃", "공백기", "갭이어", "안식년", "재충전"],
   유지: ["유지", "그대로", "현직", "잔류", "남을", "남기", "계속 다니", "계속 있", "안 옮", "지금 회사"],
 };
 export function classifyChoice(text) {
@@ -222,6 +240,7 @@ export function classifyChoice(text) {
   if (KW.이직.some((k) => text.includes(k))) return "이직"; // 행동어 최우선
   if (KW.진학.some((k) => text.includes(k))) return "진학";
   if (KW.창업.some((k) => text.includes(k))) return "창업";
+  if (KW.휴식.some((k) => text.includes(k))) return "휴식";
   if (KW.유지.some((k) => text.includes(k))) return "유지";
   return null; // 판단 근거가 없으면 자동으로 이직을 만들지 않는다.
 }
