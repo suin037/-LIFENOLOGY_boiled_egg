@@ -35,6 +35,16 @@ export default function HomeHub() {
         비춰볼까요?
       </h1>
 
+      {/* 새 시뮬 CTA — 이 앱이 하는 일이 제목 바로 아래 오게 한다.
+          좁은 화면·넓은 화면 모두에서 첫 화면에 보이도록 그리드 위에 둔다. */}
+      <Button
+        className="mt-4 flex items-center justify-center gap-1.5 lg:mt-5 lg:max-w-[420px] lg:py-4"
+        onClick={() => navigate("/input")}
+      >
+        <Sparkles size={18} strokeWidth={2.2} className="text-violet-200" />
+        새 시뮬레이션 시작
+      </Button>
+
       {/* 가이드 캐러셀 + 이번 주 기록 + 오늘 체크인 */}
       <div className="lg:mt-6 lg:grid lg:grid-cols-[minmax(0,1.45fr)_minmax(300px,.75fr)] lg:items-start lg:gap-7">
         <DiaryToday />
@@ -64,12 +74,6 @@ export default function HomeHub() {
           <ChevronRight size={18} className="text-violet-400" />
         </button>
       )}
-
-      {/* 새 시뮬 CTA */}
-      <Button className="mt-4 flex items-center justify-center gap-1.5 lg:mt-0 lg:py-4" onClick={() => navigate("/input")}>
-        <Sparkles size={18} strokeWidth={2.2} className="text-violet-200" />
-        새 시뮬레이션 시작
-      </Button>
 
       {/* 나의 우주 요약 */}
       <div className="mb-2 mt-7 flex items-center justify-between px-1 lg:mt-6">
