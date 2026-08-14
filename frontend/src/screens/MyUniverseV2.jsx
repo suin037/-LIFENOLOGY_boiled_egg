@@ -9,8 +9,7 @@ import { seedDemoEunwoo, seedDemoYear } from "../data/demoYear.js";
 import { domainAnalysis, domainMonths, domainReport } from "../data/diarySignals.js";
 import { futureMaterials, getCachedFuture, writeFuture, getCachedOpportunities, scanOpportunities } from "../data/futureApi.js";
 import { expeditionsFor, startExpedition } from "../data/expeditions.js";
-import { shapeOf, MIN_RECORDS_TO_NAME, HONESTY_NOTE } from "../data/constellationRules.js";
-import { topAxes } from "../data/valueCards.js";
+import { shapeOf, shapeLineFor, DOMAIN_THEME, MIN_RECORDS_TO_NAME, HONESTY_NOTE } from "../data/constellationRules.js";
 import { useResult } from "../data/ResultContext.jsx";
 import { clearSavedReports, REPORT_UID, loadSpeech } from "../data/dispositionApi.js";
 import { planetSkin } from "../data/planetShop.js";
@@ -95,7 +94,7 @@ export default function MyUniverseV2() {
         {[['6w','6주'],['1y','1년'],['eunwoo','은우'],['clear','비우기']].map(([key,label])=><button key={key} type="button" onClick={()=>runDemo(key)} className="tap rounded-full border border-white/10 bg-black/25 px-3 py-1.5 text-[9px] font-semibold text-white/60 backdrop-blur hover:border-[#8B6CCF]/50 hover:text-[#C7B5F2]">{label}</button>)}
         <button type="button" onClick={() => navigate("/archive")} className="tap flex items-center gap-2 rounded-full border border-white/10 bg-black/25 px-3 text-[10px] text-sub backdrop-blur"><Archive size={13} /> 보관함</button>
       </div>
-      <div className={`transition-[margin] duration-300 ease-out ${planet?"md:mr-[450px]":""}`}>
+      <div className={`transition-[margin] duration-300 ease-out ${planet?"md:mr-[540px]":""}`}>
         <UniverseMap planets={PLANETS} groups={orbitGroups} skin={skin} scenarios={state.scenarios || []} selectedKey={planet?.key} onPlanetSelect={(key)=>key ? openPlanet(key) : (setPlanet(null),setCluster(null))} onConstellationOpen={(group,key)=>{
           // 기록 별자리를 누르면 그 별자리를 펼친다(행성 전체는 패널 안에서 열 수 있다).
           if (key) setPlanet(PLANETS.find((item) => item.key === key));
@@ -108,8 +107,8 @@ export default function MyUniverseV2() {
           예전 FutureScenarioPanel 은 시점 문구가 전부 고정 텍스트였고 br(세부 예측)이
           비어 있어 "세부 예측 결과가 아직 저장되지 않았습니다"만 뜨는 빈 화면이었다.
           행성 모달이 그 영역의 기록·기회·N년 뒤를 실제 데이터로 다 보여준다. */}
-      {cluster && <ClusterPanel group={cluster} planet={planet} profile={profile} onClose={()=>setCluster(null)} onWhole={()=>setCluster(null)} />}
-      {planet && !cluster && <PlanetModal planet={planet} state={state} groups={orbitGroups} scenarios={planetScenarios} onClose={() => setPlanet(null)} onSimulate={() => navigate("/input")} onArchive={() => navigate("/archive")} onOpportunity={pickOpportunity} onOpenScenario={() => {}} profile={profile} />}
+      {cluster && <ClusterPanel group={cluster} planet={planet} onClose={()=>setCluster(null)} onWhole={()=>setCluster(null)} />}
+      {planet && !cluster && <PlanetModal planet={planet} state={state} groups={orbitGroups} scenarios={planetScenarios} onClose={() => setPlanet(null)} onSimulate={() => navigate("/input")} onArchive={() => navigate("/archive")} onOpportunity={pickOpportunity} onOpenScenario={() => {}} onOpenCluster={setCluster} profile={profile} />}
     </div>
   );
 }
@@ -117,13 +116,14 @@ export default function MyUniverseV2() {
 // ── 별자리 하나 펼쳐보기 ──────────────────────────────────────
 // 3D 에서 별자리를 누르면 그 모양과 상태를 여기서 본다.
 //
-// 이름은 두 축이다 — 모양(그 묶음 기분의 평균×진폭)과 주제(사용자의 가치 1순위).
+// 이름은 두 축이다 — 모양(그 묶음 기분의 평균×진폭)과 주제(그 별자리가 속한 영역).
+// 영역을 주제로 써야 다섯 행성이 서로 다른 이름을 갖는다.
 // 다만 이 묶음은 달력 한 주가 아니라 '그 영역 기록 7개'라, 문구를 '7일'이 아니라
 // '기록 N개'로 쓴다. 성격 진단으로 읽히지 않게 개수를 항상 앞에 둔다.
-function ClusterPanel({ group, planet, profile, onClose, onWhole }) {
+function ClusterPanel({ group, planet, onClose, onWhole }) {
   const stars = group?.stars || [];
   const values = stars.map((s) => s.valence).filter((v) => v != null);
-  const theme = topAxes(profile?.value_ranking, 1)[0] || "성장";
+  const theme = DOMAIN_THEME[planet?.key] || "기록";
   const named = values.length >= MIN_RECORDS_TO_NAME;
   const shape = named ? shapeOf(values) : null;
   const withText = stars.filter((s) => (s.text || s.note || "").trim());
@@ -131,7 +131,7 @@ function ClusterPanel({ group, planet, profile, onClose, onWhole }) {
   const avg = moods.length ? (moods.reduce((a, b) => a + b, 0) / moods.length).toFixed(1) : null;
 
   return (
-    <aside className="absolute inset-y-5 right-5 z-[60] w-[min(430px,calc(100%-40px))] overflow-y-auto rounded-[24px] border border-white/10 bg-[#09111F]/95 p-5 shadow-[0_30px_90px_rgba(0,0,0,.62)] backdrop-blur-xl">
+    <aside className="absolute inset-y-5 right-5 z-[60] w-[min(520px,calc(100%-32px))] overflow-y-auto rounded-[24px] border border-white/10 bg-[#09111F]/95 p-5 shadow-[0_30px_90px_rgba(0,0,0,.62)] backdrop-blur-xl">
       <div className="flex items-start justify-between">
         <div>
           <p className="text-[9px] tracking-[.15em] text-[#A88BE8]">RECORD CONSTELLATION</p>
@@ -159,7 +159,7 @@ function ClusterPanel({ group, planet, profile, onClose, onWhole }) {
 
       <p className="mt-3 text-[11.5px] leading-relaxed text-sub">
         {named
-          ? `이 기록 ${values.length}개는 ${shape.line}`
+          ? `이 기록 ${values.length}개는 ${shapeLineFor(planet?.key, shape.key)}`
           : `기록이 ${values.length}개라 아직 모양을 부르지 않았어요. ${MIN_RECORDS_TO_NAME}개부터 이름이 붙어요.`}
       </p>
 
@@ -599,11 +599,11 @@ function FutureYears({ planet, state, profile }) {
   );
 }
 
-function PlanetModal({ planet, state, groups, scenarios, onClose, onSimulate, onArchive, onOpportunity, onOpenScenario, profile }) {
+function PlanetModal({ planet, state, groups, scenarios, onClose, onSimulate, onArchive, onOpportunity, onOpenScenario, onOpenCluster, profile }) {
   const entries = useMemo(() => planetEntries(state, planet.key), [state, planet.key]);
   const recent = useMemo(() => entries.slice(-3).reverse(), [entries]);
   const futures = useMemo(() => [...(scenarios || [])].reverse(), [scenarios]);
-  return <div className="absolute inset-y-5 right-5 z-40 w-[min(430px,calc(100%-40px))] overflow-y-auto rounded-[24px] border border-white/10 bg-[#09111F]/94 p-5 shadow-[0_30px_90px_rgba(0,0,0,.6)] backdrop-blur-xl"><div>
+  return <div className="absolute inset-y-5 right-5 z-40 w-[min(520px,calc(100%-32px))] overflow-y-auto rounded-[24px] border border-white/10 bg-[#09111F]/94 p-5 shadow-[0_30px_90px_rgba(0,0,0,.6)] backdrop-blur-xl"><div>
     <div className="flex items-start justify-between"><div className="flex items-center gap-4"><PlanetOrb planet={planet} /><div><p className="text-[9px] tracking-[.16em] text-[#A88BE8]">FUTURE PLANET</p><h2 className="mt-1 text-[22px] font-bold">{planet.label}</h2></div></div><Close onClick={onClose}/></div>
     <p className="mt-4 text-[11px] leading-relaxed text-sub">{DESCRIPTIONS[planet.key]}</p>
     <div className="mt-5 rounded-[18px] border border-[#8B6CCF]/25 bg-[#8B6CCF]/[.07] p-4">
@@ -622,6 +622,8 @@ function PlanetModal({ planet, state, groups, scenarios, onClose, onSimulate, on
     <FutureYears planet={planet} state={state} profile={profile} />
 
     <div className="mt-4 grid grid-cols-3 gap-2">{[["저장한 결과",futures.length],["비교한 미래",futures.length*2],["관련 기록",entries.length]].map(([l,v])=><Mini key={l} label={l} value={v}/>)}</div>
+    {/* 3D 에서 작은 별자리를 정확히 누르기 어려워, 여기서도 열 수 있게 둔다. */}
+    {groups?.length>0 && <div className="mt-4"><p className="text-[10px] text-mut">이 영역의 별자리 {groups.length}개</p><div className="mt-1.5 flex flex-wrap gap-1.5">{groups.map((g,i)=><button key={g.weekStart||i} onClick={()=>onOpenCluster?.(g)} className="tap rounded-lg border border-white/[.09] px-2.5 py-1 text-[10px] text-sub hover:border-[#8B6CCF]">{g.label||`별자리 ${i+1}`}</button>)}</div></div>}
     <button onClick={onArchive} className="tap mt-4 w-full rounded-xl border border-[#8B6CCF]/40 bg-[#8B6CCF]/10 text-[12px] font-bold text-[#C7B5F2]">저장한 시뮬레이션 전체 보기</button>
     <p className="mt-4 text-[9px] leading-relaxed text-mut">이 행성에는 해당 영역의 선택지, 예측 변화와 저장한 시뮬레이션 결과가 쌓입니다.</p>
   </div></div>;

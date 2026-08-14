@@ -32,6 +32,63 @@ export const SHAPES = {
   storm: { adj: "격동", line: "힘든 날과 버틴 날이 크게 엇갈렸어요" },
 };
 
+// ── 영역별 이름 ───────────────────────────────────────────────
+// 나의 우주에서는 별자리가 어느 행성(삶의 영역)에 속하는지 분명하다. 그때는 가치
+// 순위 대신 그 영역을 주제로 쓴다 — 안 그러면 다섯 행성이 전부 같은 이름이 된다.
+// 문장도 영역마다 다르게 둔다. 같은 '인내형'이라도 진로에서 버틴 것과 관계에서
+// 버틴 것은 다른 이야기다.
+export const DOMAIN_THEME = {
+  career: "진로", relation: "관계", health: "건강", growth: "성장", life: "일상",
+};
+
+const DOMAIN_LINES = {
+  career: {
+    cruise: "일이 손에 붙어 있던 구간이에요",
+    leap: "밀어붙인 날과 흔들린 날이 함께 있었어요",
+    balance: "큰 변화 없이 자리를 지킨 구간이에요",
+    wave: "일에 대한 마음이 자주 오르내렸어요",
+    endure: "버티는 쪽으로 기울어 있던 구간이에요",
+    storm: "그만두고 싶던 날과 다시 붙잡은 날이 엇갈렸어요",
+  },
+  relation: {
+    cruise: "사람과의 거리가 편안했던 구간이에요",
+    leap: "가까워진 날도, 부딪힌 날도 있었어요",
+    balance: "관계가 잔잔하게 지나갔어요",
+    wave: "사람 때문에 마음이 자주 흔들렸어요",
+    endure: "서운함을 안고 지나온 구간이에요",
+    storm: "크게 가까워졌다 멀어졌다 했어요",
+  },
+  health: {
+    cruise: "몸과 마음이 고르게 굴러간 구간이에요",
+    leap: "무리한 날과 회복한 날이 함께 있었어요",
+    balance: "큰 탈 없이 지나갔어요",
+    wave: "컨디션이 자주 오르내렸어요",
+    endure: "지친 채로 버틴 날이 많았어요",
+    storm: "무너진 날과 겨우 챙긴 날이 크게 엇갈렸어요",
+  },
+  growth: {
+    cruise: "배우던 것이 순하게 이어진 구간이에요",
+    leap: "크게 나아간 날과 막힌 날이 함께 있었어요",
+    balance: "꾸준히 같은 속도로 지나갔어요",
+    wave: "해보다 멈추다를 반복했어요",
+    endure: "잘 안 풀려도 놓지는 않은 구간이에요",
+    storm: "확 늘었다 확 주저앉았다 했어요",
+  },
+  life: {
+    cruise: "하루하루가 대체로 편안했어요",
+    leap: "즐거운 날과 벅찬 날이 함께 있었어요",
+    balance: "잔잔하게 흘러간 구간이에요",
+    wave: "기분이 날마다 달랐어요",
+    endure: "가라앉은 채 하루를 넘긴 날이 많았어요",
+    storm: "좋았던 날과 힘들었던 날의 낙차가 컸어요",
+  },
+};
+
+/** 그 영역의 말로 바꾼 한 줄. 영역을 모르면 공통 문장을 쓴다. */
+export function shapeLineFor(domain, shapeKey) {
+  return DOMAIN_LINES[domain]?.[shapeKey] || SHAPES[shapeKey]?.line || "";
+}
+
 function mean(xs) {
   return xs.reduce((a, b) => a + b, 0) / xs.length;
 }
