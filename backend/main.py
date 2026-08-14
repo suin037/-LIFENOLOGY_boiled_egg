@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import httpx
 import json
 import logging
+import os
 import sys
 import traceback
 
@@ -105,10 +106,15 @@ try:
 except Exception:
     qmode_app = None
 
-# 프론트(Vite 기본 5173) 에서의 호출 허용
+# 프론트(Vite 기본 5173) 에서의 호출 허용.
+# 배포 환경은 CORS_ORIGIN_REGEX 로 도메인을 넘긴다 — 예: Vercel 프리뷰까지 한 번에
+#   CORS_ORIGIN_REGEX=https://.*\.vercel\.app
+# 미지정 시 로컬 개발 포트만 허용(기존 동작).
+_LOCAL_ORIGINS = r"http://(localhost|127\.0\.0\.1):\d+"
+_deploy_origins = os.getenv("CORS_ORIGIN_REGEX", "").strip()
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",  # 로컬 개발/프리뷰 포트 허용
+    allow_origin_regex=f"({_LOCAL_ORIGINS})|({_deploy_origins})" if _deploy_origins else _LOCAL_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
