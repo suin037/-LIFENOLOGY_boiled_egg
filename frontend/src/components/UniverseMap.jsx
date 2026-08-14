@@ -222,26 +222,11 @@ function Constellation3D({ group, index, anchorIndex, onOpen }) {
   return <group ref={orbit} position={root} rotation={[.18+(ord%3)*.24, ord*2.39996, .12]}>
     <group position={[orbitRadius,0,0]} onClick={(e)=>{e.stopPropagation();onOpen?.(group);}}>
       <mesh visible={false}><sphereGeometry args={[.5,10,10]}/><meshBasicMaterial transparent opacity={0}/></mesh>
-      <line geometry={geometry}><lineBasicMaterial color="#B9C7E4" transparent opacity={.55}/></line>
-      {/* 기록은 하얀 별. 시나리오(마름모)와 한눈에 갈라지도록 색을 섞지 않는다.
-          별 하나를 세 겹으로 겹쳐 그린다 — 넓은 번짐 → 가까운 무리 → 알맹이.
-          광원을 쓰지 않고도 별 주위가 밝게 퍼져 보이는 건 이 겹침이다
-          (동적 광원은 기록 수만큼 늘어나 프레임을 무너뜨린다). */}
+      <line geometry={geometry}><lineBasicMaterial color="#9FB0CE" transparent opacity={.42}/></line>
+      {/* 기록은 하얀 별. 시나리오(마름모)와 한눈에 갈라지도록 색을 섞지 않는다. */}
       <points geometry={starGeo}>
         <pointsMaterial
-          color="#9FC4FF" size={.86} sizeAttenuation transparent opacity={.26}
-          map={starSprite()} depthWrite={false} blending={THREE.AdditiveBlending}
-        />
-      </points>
-      <points geometry={starGeo}>
-        <pointsMaterial
-          color="#DCE8FF" size={.46} sizeAttenuation transparent opacity={.55}
-          map={starSprite()} depthWrite={false} blending={THREE.AdditiveBlending}
-        />
-      </points>
-      <points geometry={starGeo}>
-        <pointsMaterial
-          color="#ffffff" size={.24} sizeAttenuation transparent opacity={1}
+          color="#ffffff" size={.16} sizeAttenuation transparent opacity={.95}
           map={starSprite()} depthWrite={false} blending={THREE.AdditiveBlending}
         />
       </points>

@@ -8,7 +8,7 @@ function ZodiacArt({ month, cx, cy, size }) {
   if (!art) return null;
   const k = size / ART_VIEWBOX;
   return (
-    <g transform={`translate(${cx - size / 2} ${cy - size / 2}) scale(${k})`}
+    <g className="zart" transform={`translate(${cx - size / 2} ${cy - size / 2}) scale(${k})`}
        dangerouslySetInnerHTML={{ __html: art.inner }} />
   );
 }
@@ -64,6 +64,14 @@ export default function JyConstellationArchive({monthGroups,weeksByMonth,focusMo
   const cam=focused?`translate(${CX-ZOOM_MONTH*focused.cx}px,${CY-ZOOM_MONTH*focused.cy}px) scale(${ZOOM_MONTH})`:"translate(0px,0px) scale(1)";
   return <div className="overflow-hidden rounded-[22px] border border-white/[.05] bg-[#071121]"><svg viewBox={`0 0 ${W} ${H}`} className="block w-full select-none">
     <defs><radialGradient id="jy-core"><stop offset="0" stopColor="#8B6CCF" stopOpacity=".3"/><stop offset="1" stopColor="#071121" stopOpacity="0"/></radialGradient></defs>
+    {/* 12별자리 그림 속 별을 반짝이게 한다. 별이 318개라 전부 돌리면 무거워서
+        네 개 중 둘만, 주기를 다르게 켠다 — 띄엄띄엄 깜박여도 하늘은 살아 보인다. */}
+    <style>{`
+      @keyframes zart-tw { 0%,100% { opacity: 1 } 50% { opacity: .38 } }
+      .zart circle:nth-child(4n+1) { animation: zart-tw 2.8s ease-in-out infinite; }
+      .zart circle:nth-child(4n+3) { animation: zart-tw 4.1s ease-in-out infinite; animation-delay: 1.2s; }
+      @media (prefers-reduced-motion: reduce) { .zart circle { animation: none } }
+    `}</style>
     <rect width={W} height={H} fill="#071121"/><circle cx={CX} cy={CY} r="105" fill="url(#jy-core)"/>
     {Array.from({length:34},(_,i)=><circle key={i} cx={(i*73)%W} cy={(i*47)%H} r={i%7===0?1:.55} fill="#CAD5EA" opacity={.22+(i%4)*.1}/>) }
     <g style={{transform:cam,transformOrigin:"0 0",transition:"transform .75s cubic-bezier(.2,.85,.25,1)"}}>
@@ -74,11 +82,16 @@ export default function JyConstellationArchive({monthGroups,weeksByMonth,focusMo
             내 기록은 이 자리 위에서 하나씩 밝아진다(밑그림=별자리, 밝은 별=내 기록). */}
         {/* 그 달의 별자리 — 띠 위·아래로 번갈아 놓는다(뒤에 깔지 않는다).
             기록이 쌓일수록 그 별자리가 밝아지고 빛무리가 번진다: 기록이 별자리를 켠다. */}
+        {/* 밝기 — 기록 없는 달도 형태는 알아볼 만큼 두고(.22), 기록이 쌓이면 확실히 켜진다(1).
+            불투명도만으로는 선이 얇아 잘 안 보여서 brightness 로 선·별 자체를 밝히고,
+            빛무리(drop-shadow)도 두 겹으로 겹쳐 번지게 한다. */}
         {!active&&<g pointerEvents="none"
-           opacity={mo.count>0 ? .3+Math.min(1,mo.count/24)*.65 : .1}
-           style={{transition:"opacity .6s", filter: mo.count>0
-             ? `drop-shadow(0 0 ${(1+Math.min(1,mo.count/24)*3.4).toFixed(1)}px rgba(168,139,232,${(.2+Math.min(1,mo.count/24)*.55).toFixed(2)}))`
-             : "none"}}>
+           opacity={mo.count>0 ? Math.min(1, .55+Math.min(1,mo.count/18)*.45) : .22}
+           style={{transition:"opacity .6s, filter .6s", filter: mo.count>0
+             ? `drop-shadow(0 0 ${(2+Math.min(1,mo.count/18)*4).toFixed(1)}px rgba(180,158,246,${(.38+Math.min(1,mo.count/18)*.5).toFixed(2)}))`
+               + ` drop-shadow(0 0 ${(6+Math.min(1,mo.count/18)*8).toFixed(1)}px rgba(140,120,220,.3))`
+               + ` brightness(${(1.15+Math.min(1,mo.count/18)*.45).toFixed(2)})`
+             : "brightness(1.1)"}}>
           <ZodiacArt month={mo.num} cx={mo.cx} cy={mo.cy+(mo.labelUp?-ART_OFFSET:ART_OFFSET)} size={ZR*3}/>
         </g>}
         {!active&&mo.zLines.map((ln,li)=><line key={`z${li}`} x1={mo.cx+ln[0]} y1={mo.cy+ln[1]} x2={mo.cx+ln[2]} y2={mo.cy+ln[3]} stroke="#9FB0CE" strokeWidth=".4" strokeOpacity=".38" style={{transition:"opacity .4s"}}/>)}
