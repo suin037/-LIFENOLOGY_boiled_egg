@@ -6,7 +6,9 @@ import { labelOf } from "../data/prediction.js";
 import { detectLifeDomains } from "../data/choices.js";
 import { redactPII, redactEntries } from "../data/piiRedact.js";
 import { saveMe, getScenario, getThirdPath } from "../data/api.js";
-import { Eyebrow, Button } from "../components/ui.jsx";
+import { listUniverses, saveUniverse, universeFromResult } from "../data/savedUniverses.js";
+import { Eyebrow } from "../components/ui.jsx";
+import { Bookmark, Check, ChevronRight } from "lucide-react";
 import LifeView from "../components/result/LifeView.jsx";
 import ChangeView from "../components/result/ChangeView.jsx";
 import EvidenceView from "../components/result/EvidenceView.jsx";
@@ -28,6 +30,22 @@ export default function Result() {
 
   const [tab, setTab] = useState("indicators");
   const Active = (tabs.find((t) => t.key === tab) || tabs[0]).View;
+
+  // 보관함 저장 — 화면에 보이는 A/B 그대로 담는다. 같은 비교를 같은 날 두 번 담지 않는다.
+  const title = `${a.choice} vs ${b.choice}`;
+  const today = new Date().toISOString().slice(0, 10);
+  const [saved, setSaved] = useState(() =>
+    listUniverses().some((u) => u.title === title && u.savedAt === today),
+  );
+  // 서사가 아직 오는 중이면 반쪽짜리 스냅샷이 저장된다 → 준비된 뒤에 담게 한다.
+  const savable = !saved && !result.narrativeLoading;
+
+  function saveToArchive() {
+    saveUniverse(
+      universeFromResult(result, profile, { a: a.choice, b: b.choice }, result.domains || scenarioDomains),
+    );
+    setSaved(true);
+  }
 
   return (
     <div>
@@ -86,9 +104,51 @@ export default function Result() {
         </section>
       </div>
 
-      <Button variant="ghost" className="mt-4" onClick={() => navigate("/input")}>
-        다른 갈림길로 다시 해보기
-      </Button>
+      <div className="mt-4 flex gap-2">
+        <button
+          type="button"
+          onClick={saveToArchive}
+          disabled={!savable}
+          className={`tap flex flex-1 items-center justify-center gap-1.5 rounded-2xl border px-3 py-3 text-[14px] font-semibold transition-colors ${
+            savable
+              ? "border-cyan/45 bg-cyan/[.12] text-cyan hover:bg-cyan/[.18]"
+              : "border-white/10 bg-white/[.04] text-mut"
+          }`}
+        >
+          {saved ? (
+            <>
+              <Check size={16} strokeWidth={2.4} />
+              보관함에 저장됨
+            </>
+          ) : result.narrativeLoading ? (
+            "결과 준비 중…"
+          ) : (
+            <>
+              <Bookmark size={16} strokeWidth={2.1} />
+              보관함에 저장
+            </>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => navigate("/input")}
+          className="tap flex-1 rounded-2xl bg-card px-3 py-3 text-[14px] font-semibold text-sub transition-colors hover:bg-card2"
+        >
+          다른 갈림길 비교
+        </button>
+      </div>
+
+      {/* 저장 직후에만 — 결정을 내리러 갈 다음 걸음을 열어둔다. */}
+      {saved && (
+        <button
+          type="button"
+          onClick={() => navigate("/archive")}
+          className="tap mt-2 flex w-full items-center justify-center gap-1 text-[12px] font-semibold text-cyan"
+        >
+          보관함에서 마음 정하기
+          <ChevronRight size={14} />
+        </button>
+      )}
     </div>
   );
 }

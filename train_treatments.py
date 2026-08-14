@@ -57,12 +57,27 @@ AGE_MIN, AGE_MAX = 20, 45      # klips_train.py 와 동일 — 이직 모델과 
 MIN_TREATED = 200              # 이 미만이면 인과모델을 만들지 않는다
 MAX_HORIZON = 5                # 동적 효과 상대시간 (KLIPS 10년이지만 t+5 넘으면 표본 급감)
 
+# L4 업종 공변량 — 이 스펠 수 미만인 대분류는 '기타' 로 합친다.
+SECTION_MIN_SPELLS = 40
+# 업종을 넣어 교차검증 C-index 가 이만큼 못 오르면 **넣지 않는다.**
+# 업종별로 갈리는 숫자가 보기엔 그럴듯하지만, 예측력이 안 오르면 그건 표본 잡음을
+# 업종 이름표로 포장한 것이다.
+SECTION_MIN_GAIN = 0.005
+SECTION_MAX_OVERFIT_GAP = 0.05  # 학습-테스트 C-index 갭 상한
+
 X_COLS = ["age", "sex", "edu"]                       # 이질성
 W_COLS = ["income_now", "tenure", "occ", "firm_size"]  # 혼재변수
 
 
 # ---------------------------------------------------------------- 패널 구성
+# 학습에 실제로 쓰인 차수 범위. artifact·리포트의 `source` 문구는 여기서 만든다.
+# 예전엔 "KLIPS 18-27차" 를 문자열로 박아뒀는데, --waves 를 바꿔 재빌드하면
+# 산출물이 **틀린 출처를 달고** 서빙까지 흘러간다.
+PANEL_LABEL = "KLIPS"
+
+
 def load_panel() -> pd.DataFrame:
+    global PANEL_LABEL
     b = pd.read_pickle(KLIPS_DIR / "klips_base.pkl")
     need = {"월소득_실질", "종사상지위", "자영여부"}
     if missing := need - set(b.columns):
@@ -70,6 +85,7 @@ def load_panel() -> pd.DataFrame:
             f"klips_base.pkl 에 {sorted(missing)} 없음 — "
             "preprocess/preprocess_klips.py 를 다시 실행할 것(자영 소득 컬럼 추가본)."
         )
+    PANEL_LABEL = f"KLIPS {int(b['wave'].min())}-{int(b['wave'].max())}차"
     return b.sort_values(["pid", "wave"]).reset_index(drop=True)
 
 
@@ -170,7 +186,7 @@ def train_causal(d: pd.DataFrame, key: str, label: str) -> dict:
         "linear_ate": lin_ate, "linear_ci": (llb, lub),
         "n": int(len(d)), "n_treated": int(T.sum()),
         "treatment": key,
-        "source": f"KLIPS 18-27차 종단 ({label})",
+        "source": f"{PANEL_LABEL} 종단 ({label})",
         "prefer_linear": True,      # 처치군이 작아 CausalForest 구간은 참고용
         "caveat": CAVEATS.get(key),
     }
@@ -226,12 +242,20 @@ def build_selfemp_spells(b: pd.DataFrame) -> pd.DataFrame:
     s["run"] = brk.groupby(s["pid"]).cumsum()
     last_obs = b.groupby("pid")["wave"].max().rename("last_wave")
 
+    # 업종은 스펠 **시작 시점**의 값을 쓴다(창업할 때 고른 업종). 도중에 업종을
+    # 바꾸면 그건 이 모델에서 '이탈' 로 잡히는 사건이지 공변량 변화가 아니다.
+    if "산업대분류" not in s.columns:
+        s["산업대분류"] = np.nan
+    ksic = (s.dropna(subset=["산업대분류"]).sort_values("wave")
+             .groupby(["pid", "run"])["산업대분류"].first().rename("ksic"))
+
     sp = (s.groupby(["pid", "run"])
             .agg(w0=("wave", "min"), w1=("wave", "max"),
                  tenure_max=("근속기간", "max"),
                  age=("나이", "first"), sex=("성별", "first"), edu=("학력", "last"))
             .reset_index()
-            .join(last_obs, on="pid"))
+            .join(last_obs, on="pid")
+            .merge(ksic, on=["pid", "run"], how="left"))
     # 이 스펠의 마지막 관측 뒤에도 이 사람 관측이 있으면 → 이탈을 봤다
     sp["event"] = (sp["w1"] < sp["last_wave"]).astype(int)
     # 근속기간(자영 시작년 기준)이 있으면 그걸, 없으면 관측된 파동 수로 대체
@@ -239,6 +263,34 @@ def build_selfemp_spells(b: pd.DataFrame) -> pd.DataFrame:
     sp["duration_months"] = (sp["tenure_max"].fillna(obs_years).clip(lower=0.5) * 12)
     sp = sp.dropna(subset=["age", "sex", "edu"])
     return sp[sp["age"].between(AGE_MIN, AGE_MAX)]
+
+
+def industry_design(sp: pd.DataFrame) -> dict:
+    """업종(KSIC 대분류) → Cox 더미 설계.
+
+    18개 대분류를 그대로 넣으면 스펠 1,700여 개에 더미 17개가 붙어 표본이 얇은
+    칸에서 계수가 발산한다. 그래서 스펠 `SECTION_MIN_SPELLS` 이상인 대분류만
+    자기 더미를 갖고 나머지는 '기타' 로 합친다.
+
+    기준(reference)은 **가장 큰 대분류**로 둔다. 계수가 "도소매 대비 얼마나 더/덜
+    이탈하는가" 로 읽혀서 해석이 쉽고, 기준 칸이 커야 대비 추정이 안정적이다.
+    업종을 모르는 스펠도 '기타' 로 보낸다 — 기준 칸에 넣으면 '모름' 이 특정 업종의
+    위험을 뒤집어쓴다.
+    """
+    lab = sp["ksic"].fillna("기타")
+    counts = lab.value_counts()
+    keep = [s for s in counts.index if s != "기타" and counts[s] >= SECTION_MIN_SPELLS]
+    lab = lab.where(lab.isin(keep), "기타")
+
+    ref = lab.value_counts().idxmax()
+    cols = [f"ind_{s}" for s in sorted(lab.unique()) if s != ref]
+    dummies = pd.DataFrame(
+        {f"ind_{s}": (lab == s).astype(float) for s in sorted(lab.unique())},
+        index=sp.index)[cols]
+    return {"frame": dummies, "cols": cols, "reference": ref,
+            "kept_sections": sorted(keep),
+            "means": {c: round(float(dummies[c].mean()), 4) for c in cols},
+            "spells_by_section": {k: int(v) for k, v in lab.value_counts().items()}}
 
 
 def _cv_concordance(df, cov_cols, dur="duration_months", ev="event", k=5, seed=42):
@@ -260,30 +312,65 @@ def _cv_concordance(df, cov_cols, dur="duration_months", ev="event", k=5, seed=4
 
 
 def train_selfemp_survival(sp: pd.DataFrame) -> dict:
+    """자영 스펠 Cox. 업종 더미는 **교차검증이 이득을 보일 때만** 채택한다."""
     from lifelines import KaplanMeierFitter, CoxPHFitter
 
     print(f"[L4 창업] 자영 스펠 {len(sp):,}개 (이탈 {int(sp['event'].sum()):,}건, "
           f"{sp['event'].mean():.1%})")
     km = KaplanMeierFitter().fit(sp["duration_months"], event_observed=sp["event"],
                                  label="self_employed")
-    cov_cols = ["age", "sex", "edu"]
+
+    base_cols = ["age", "sex", "edu"]
+    ind = industry_design(sp)
+    sp = pd.concat([sp, ind["frame"]], axis=1)
+    print(f"[L4 창업/업종] 기준={ind['reference']} · 자기 더미 {len(ind['cols'])}개 "
+          f"· 스펠 분포 {ind['spells_by_section']}")
+
+    cv_base = _cv_concordance(sp, base_cols)
+    cv_ind = _cv_concordance(sp, base_cols + ind["cols"])
+    gain = cv_ind[1] - cv_base[1]
+    print(f"[L4 창업/CV] 업종 없이 테스트 C-index {cv_base[1]:.3f}±{cv_base[2]:.3f} "
+          f"(갭 {cv_base[3]:.3f})")
+    print(f"[L4 창업/CV] 업종 포함 테스트 C-index {cv_ind[1]:.3f}±{cv_ind[2]:.3f} "
+          f"(갭 {cv_ind[3]:.3f}) · 이득 {gain:+.3f}")
+
+    use_ind = gain >= SECTION_MIN_GAIN and cv_ind[3] <= SECTION_MAX_OVERFIT_GAP
+    if use_ind:
+        print(f"           → 업종 공변량 채택 (이득 {gain:+.3f} ≥ {SECTION_MIN_GAIN})")
+    else:
+        why = ("과적합 갭 초과" if cv_ind[3] > SECTION_MAX_OVERFIT_GAP
+               else f"이득 {gain:+.3f} < {SECTION_MIN_GAIN}")
+        print(f"           → 업종 공변량 **기각** ({why}) — 업종별 이탈위험은 내지 않는다")
+
+    cov_cols = base_cols + (ind["cols"] if use_ind else [])
+    cv = cv_ind if use_ind else cv_base
     cox = CoxPHFitter().fit(sp[["duration_months", "event"] + cov_cols],
                             duration_col="duration_months", event_col="event")
-    cv = _cv_concordance(sp, cov_cols)
-    print(f"[L4 창업/CV] 5-fold C-index 학습 {cv[0]:.3f} / 테스트 {cv[1]:.3f}±{cv[2]:.3f} "
-          f"| 갭 {cv[3]:.3f} {'✓안정' if cv[3] < 0.05 else '⚠과적합 의심'}")
+    print(f"[L4 창업/CV] 채택 모델 5-fold C-index 학습 {cv[0]:.3f} / "
+          f"테스트 {cv[1]:.3f}±{cv[2]:.3f} | 갭 {cv[3]:.3f} "
+          f"{'✓안정' if cv[3] < SECTION_MAX_OVERFIT_GAP else '⚠과적합 의심'}")
 
     surv = km.survival_function_
     idx = np.asarray(surv.index, dtype=float)
     for yr in (1, 3, 5, 10):
         p = 1 - float(surv.iloc[int(np.abs(idx - yr * 12).argmin())].iloc[0])
-        print(f"           {yr}년 후 자영 이탈 누적확률 = {p:.1%}")
+        print(f"           {yr}년 후 자영 이탈 누적확률(전체) = {p:.1%}")
 
     return {"km": km, "cox": cox, "cov_cols": cov_cols,
             "medians": {c: float(sp[c].median()) for c in cov_cols},
             "source": "KLIPS 자영 스펠", "n": int(len(sp)), "n_features": len(cov_cols),
             "treatment": "startup", "max_horizon_years": 10,
             "event_label": "자영(창업) 상태 이탈 — 폐업·업종전환·재취업 포함",
+            # 업종 축 메타 — 서빙이 KSIC 대분류를 더미로 옮길 때 쓴다.
+            # 업종 미상이면 `industry_means`(모집단 업종 구성)로 채운다. 0 으로 채우면
+            # '모름' 이 조용히 기준 업종(도소매 등)의 위험을 뒤집어쓴다.
+            "industry_cols": ind["cols"] if use_ind else [],
+            "industry_reference": ind["reference"] if use_ind else None,
+            "industry_means": ind["means"] if use_ind else {},
+            "industry_kept_sections": ind["kept_sections"] if use_ind else [],
+            "industry_spells": ind["spells_by_section"],
+            "industry_used": bool(use_ind),
+            "industry_cv_gain": round(gain, 4),
             "cv_concordance": {"train": round(cv[0], 3), "test": round(cv[1], 3),
                                "test_std": round(cv[2], 3), "gap": round(cv[3], 3)}}
 
@@ -305,7 +392,7 @@ def main() -> None:
     base = transition_frame(b, horizon=1)
     report: dict = {"built_at": datetime.now(timezone.utc).isoformat(),
                     "age_band": [AGE_MIN, AGE_MAX], "min_treated": MIN_TREATED,
-                    "source": "KLIPS 18-27차", "treatments": {}}
+                    "source": PANEL_LABEL, "treatments": {}}
     dynamic: dict = {}
 
     for key, label in TREATMENTS:
@@ -326,7 +413,7 @@ def main() -> None:
         # 동적 효과 프로파일은 모든 학습 가능 treatment 에 대해
         prof = dynamic_profile(b, key, label, args.max_horizon)
         if prof:
-            dynamic[key] = {"source": "KLIPS 18-27차", "label": label,
+            dynamic[key] = {"source": PANEL_LABEL, "label": label,
                             "caveat": CAVEATS.get(key), "horizons": prof}
 
         # 창업만 신규 artifact 생성(이직은 klips_train.py 산출물이 이미 서빙 중)
@@ -334,13 +421,26 @@ def main() -> None:
             art = train_causal(d, key, label)
             joblib.dump(art, ARTIFACTS / "econml_klips_startup.pkl")
             sp = build_selfemp_spells(b)
-            joblib.dump(train_selfemp_survival(sp), ARTIFACTS / "lifelines_klips_startup.pkl")
+            surv = train_selfemp_survival(sp)
+            joblib.dump(surv, ARTIFACTS / "lifelines_klips_startup.pkl")
             entry.update(trained=True, artifacts=["econml_klips_startup.pkl",
                                                   "lifelines_klips_startup.pkl"],
                          ate=round(art["ate"], 2),
                          linear_ate=round(art["linear_ate"], 2),
                          linear_ci=[round(v, 2) for v in art["linear_ci"]],
-                         n_spells=int(len(sp)), caveat=CAVEATS.get(key))
+                         n_spells=int(len(sp)), caveat=CAVEATS.get(key),
+                         # L4 업종축 — 켜졌는지/왜 켜졌는지의 근거를 리포트에 남긴다
+                         l4_industry={
+                             "used": surv["industry_used"],
+                             "reference": surv["industry_reference"],
+                             "kept_sections": surv["industry_kept_sections"],
+                             "spells_by_section": surv["industry_spells"],
+                             "cv_gain": surv["industry_cv_gain"],
+                             "cv_concordance": surv["cv_concordance"],
+                             "min_spells_per_section": SECTION_MIN_SPELLS,
+                             "note": "KSIC 10차 대분류. 교차검증 C-index 이득이 "
+                                     f"{SECTION_MIN_GAIN} 미만이면 채택하지 않는다",
+                         })
         else:
             entry.update(trained=True, artifacts=[],
                          note="기존 klips_train.py 산출물 사용(econml_klips.pkl) — "

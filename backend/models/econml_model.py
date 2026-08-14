@@ -94,7 +94,7 @@ def estimate_effect(features: dict, treatment: str = "move") -> float:
     """이 프로필에서 treatment 의 소득 인과효과(만원).
 
     처치군이 작은 artifact(`prefer_linear`)는 **개인별 이질효과를 쓰지 않는다.**
-    CausalForest 는 n_treated 414(창업)에서 개인 구간이 -450~+560 만원까지 벌어져
+    CausalForest 는 n_treated 703(창업)에서도 개인 구간이 -348~+438 만원까지 벌어져
     개인화된 숫자를 내면 정밀해 보이는 잡음을 파는 셈이 된다 → 전체 ATE 를 그대로 쓴다.
     """
     art, enc = _select(features, treatment)

@@ -61,6 +61,9 @@ backend/req*.json
 backend/resp*.json
 backend/smoke_check.py
 
+# 백엔드 at-rest 암호화 키 (DB와 분리, 절대 커밋 금지)
+diary_module/qmode/.pm_at_rest.key
+
 # ── 벡터DB 런타임 산출물 (Chroma — 재생성 가능한 바이너리) ──
 # data/vectordb/psychology/ 는 추적 유지(팀 공유 카드 DB), 런타임 인덱스만 제외.
 data/vectordb/chroma.sqlite3

@@ -354,7 +354,8 @@ export default function MyUniverse() {
     if (reportCache[wk]) return; // 이미 불러옴
 
     // 데모(예시 6주) → 미리 생성해 둔 고정 리포트 사용. API 호출 안 함.
-    if (isDemo(u.state)) {
+    // 1년 데모(demoKind="year")는 주차가 52개라 6주용 고정본과 내용이 안 맞는다 → 실제 생성.
+    if (isDemo(u.state) && u.state.demoKind !== "year") {
       const demo = DEMO_REPORTS[group.index];
       if (demo) {
         setReportCache((c) => ({ ...c, [wk]: { report: demo.report, actions: demo.actions || [] } }));
