@@ -94,7 +94,7 @@ export default function MyUniverseV2() {
         {[['6w','6주'],['1y','1년'],['eunwoo','은우'],['clear','비우기']].map(([key,label])=><button key={key} type="button" onClick={()=>runDemo(key)} className="tap rounded-full border border-white/10 bg-black/25 px-3 py-1.5 text-[9px] font-semibold text-white/60 backdrop-blur hover:border-[#8B6CCF]/50 hover:text-[#C7B5F2]">{label}</button>)}
         <button type="button" onClick={() => navigate("/archive")} className="tap flex items-center gap-2 rounded-full border border-white/10 bg-black/25 px-3 text-[10px] text-sub backdrop-blur"><Archive size={13} /> 보관함</button>
       </div>
-      <div className={`transition-[margin] duration-300 ease-out ${planet?"md:mr-[540px]":""}`}>
+      <div className={`transition-[margin] duration-300 ease-out ${planet?"md:mr-[420px] lg:mr-[520px] xl:mr-[660px]":""}`}>
         <UniverseMap planets={PLANETS} groups={orbitGroups} skin={skin} scenarios={state.scenarios || []} selectedKey={planet?.key} onPlanetSelect={(key)=>key ? openPlanet(key) : (setPlanet(null),setCluster(null))} onConstellationOpen={(group,key)=>{
           // 기록 별자리를 누르면 그 별자리를 펼친다(행성 전체는 패널 안에서 열 수 있다).
           if (key) setPlanet(PLANETS.find((item) => item.key === key));
@@ -131,7 +131,7 @@ function ClusterPanel({ group, planet, onClose, onWhole }) {
   const avg = moods.length ? (moods.reduce((a, b) => a + b, 0) / moods.length).toFixed(1) : null;
 
   return (
-    <aside className="absolute inset-y-5 right-5 z-[60] w-[min(520px,calc(100%-32px))] overflow-y-auto rounded-[24px] border border-white/10 bg-[#09111F]/95 p-5 shadow-[0_30px_90px_rgba(0,0,0,.62)] backdrop-blur-xl">
+    <aside className="absolute inset-y-5 right-5 z-[60] w-[min(420px,calc(100%-28px))] lg:w-[520px] xl:w-[640px] overflow-y-auto rounded-[24px] border border-white/10 bg-[#09111F]/95 p-5 shadow-[0_30px_90px_rgba(0,0,0,.62)] backdrop-blur-xl">
       <div className="flex items-start justify-between">
         <div>
           <p className="text-[9px] tracking-[.15em] text-[#A88BE8]">RECORD CONSTELLATION</p>
@@ -603,7 +603,7 @@ function PlanetModal({ planet, state, groups, scenarios, onClose, onSimulate, on
   const entries = useMemo(() => planetEntries(state, planet.key), [state, planet.key]);
   const recent = useMemo(() => entries.slice(-3).reverse(), [entries]);
   const futures = useMemo(() => [...(scenarios || [])].reverse(), [scenarios]);
-  return <div className="absolute inset-y-5 right-5 z-40 w-[min(520px,calc(100%-32px))] overflow-y-auto rounded-[24px] border border-white/10 bg-[#09111F]/94 p-5 shadow-[0_30px_90px_rgba(0,0,0,.6)] backdrop-blur-xl"><div>
+  return <div className="absolute inset-y-5 right-5 z-40 w-[min(420px,calc(100%-28px))] lg:w-[520px] xl:w-[640px] overflow-y-auto rounded-[24px] border border-white/10 bg-[#09111F]/94 p-5 shadow-[0_30px_90px_rgba(0,0,0,.6)] backdrop-blur-xl"><div>
     <div className="flex items-start justify-between"><div className="flex items-center gap-4"><PlanetOrb planet={planet} /><div><p className="text-[9px] tracking-[.16em] text-[#A88BE8]">FUTURE PLANET</p><h2 className="mt-1 text-[22px] font-bold">{planet.label}</h2></div></div><Close onClick={onClose}/></div>
     <p className="mt-4 text-[11px] leading-relaxed text-sub">{DESCRIPTIONS[planet.key]}</p>
     <div className="mt-5 rounded-[18px] border border-[#8B6CCF]/25 bg-[#8B6CCF]/[.07] p-4">
