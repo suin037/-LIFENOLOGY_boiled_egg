@@ -57,11 +57,14 @@ const EVIDENCE_LABEL = {
 };
 
 function EvidenceSummary({ a, b }) {
-  const keys = ["경제적안정도", "성장가능성", "삶의질"];
+  const defaultOrder = ["경제적안정도", "성장가능성", "삶의질"];
+  const preferred = a.personalization?.narrate_order || b.personalization?.narrate_order || [];
+  const keys = [...new Set([...preferred, ...defaultOrder])].filter((key) => defaultOrder.includes(key));
   return (
     <Card className="mb-4">
       <div className="text-sm font-semibold text-ink">예측 근거 상태</div>
       <Caption>현재 모델이 실제로 검증한 범위를 표시합니다.</Caption>
+      {preferred.length > 0 && <Caption>중요하게 생각하는 기준부터 A와 B의 차이를 설명해요.</Caption>}
       <div className="mt-3 space-y-2">
         {keys.map((key) => {
           const left = a.indicator_evidence?.[key];

@@ -23,3 +23,11 @@ def test_business_domain_uses_each_choice_detail():
     assert cafe["indicators"][0]["value"] != software["indicators"][0]["value"]
     assert "숙박 및 음식점업" in cafe["indicators"][0]["note"]
     assert "정보통신업" in software["indicators"][0]["note"]
+
+
+def test_health_domain_includes_knhanes_behavior_reference_by_age_and_sex():
+    health = route_domains(["health"], {"age": 29, "sex": "2"})["health"]
+    by_name = {item["name"]: item for item in health["indicators"]}
+    assert {"유산소신체활동실천율", "현재흡연율", "월간음주율", "평균BMI"} <= set(by_name)
+    assert by_name["유산소신체활동실천율"]["source"] == "KNHANES 제9기"
+    assert by_name["유산소신체활동실천율"]["sample_n"] >= 40

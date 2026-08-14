@@ -419,13 +419,13 @@ def simulate(req: SimulateRequest) -> dict:
     - indicator_scores 는 엔진에서 산출(요청에 주면 override).
     - ANTHROPIC_API_KEY 없으면 수치·지표·근거는 반환하고 서사만 건너뛴다.
     """
-    # 0) 일기모듈 — 감정신호 추출 & 개인화
+    # 0) 일기모듈 — 감정신호 추출 & 해석 개인화
+    # 일기 한 편의 정서를 만족도 입력값으로 변환해 예측 수치를 바꾸면 현재 감정과
+    # 미래 결과가 순환 정의된다. 일기는 안전 분기·관심 축·서사에만 사용하고,
+    # 수치 모델에는 사용자가 명시적으로 입력한 현재 상태만 전달한다.
     diary: dict = {"available": False}
     if getattr(req, "diary", None):
         diary = diary_bridge.analyze_diary(req.diary)
-        for k, v in diary_bridge.to_profile_signals(diary).items():
-            if getattr(req.profile, k, None) is None:
-                setattr(req.profile, k, v)
 
     # 0-1) 안전 분기(민주 safety, 정본) — 감정 + 일기 텍스트 종합
     safety_level, safety_hits = rag_safety.assess_safety(
@@ -578,6 +578,13 @@ def simulate(req: SimulateRequest) -> dict:
         "validated_predictions": {"A": validated_a, "B": validated_b},
         "koweps_evidence": koweps,
         "personalization": pz,
+        "prediction_contract": {
+            "mode": "profile_matched_prediction",
+            "numeric_inputs": "나이·성별·학력·소득·직종·고용상태 등 명시적 현재 조건",
+            "diary_role": "안전 감지·관심 지표 우선순위·심리 해석·서사만 조정하며 예측 수치는 변경하지 않음",
+            "score_definition": "0~1 지표는 동일 연령 또는 유사 조건 분포에서의 백분위 위치이며 성공확률이나 종합 우열 점수가 아님",
+            "missing_policy": "직접 결과변수가 없으면 대리지표 또는 근거 부족으로 표시하고 임의 점수를 생성하지 않음",
+        },
         "psych": {
             "A": {"focus": psych_a.get("focus_indicator"), "level": psych_a.get("level"),
                   "cards": [c["card_id"] for c in psych_a.get("cards", [])]},

@@ -135,6 +135,10 @@ export function mapSimulateToPair(sim, { choiceA, choiceB, detailA = "", detailB
   const ke = cmp.koweps_evidence || sim.koweps_evidence || null;
   const a = buildSide(A, choiceA, detailA, profile, ev.A, dc.A, ds.A, vp.A, ie.A, ke, "A");
   const b = buildSide(B, choiceB, detailB, profile, ev.B, dc.B, ds.B, vp.B, ie.B, ke, "B");
+  // 장기 가치는 별도 미래점수가 아니라 어떤 결과를 먼저 읽을지 정하는 개인화 축이다.
+  // /compare 미리보기에는 없고 /simulate 최종 응답부터 적용된다.
+  a.personalization = sim.personalization || null;
+  b.personalization = sim.personalization || null;
 
   // 실데이터가 하나라도 있으면 실수치 모드. 연차별 궤적이 비어도(관측범위 밖/표본부족)
   // 이웃·인과·기대임금·지표 같은 실측이 있으면 목업으로 되돌리지 않는다.
