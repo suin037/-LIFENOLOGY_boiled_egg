@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useResult } from "../data/ResultContext.jsx";
 import { Eyebrow, Card } from "../components/ui.jsx";
@@ -15,7 +15,8 @@ import { LEVEL_TITLES, XP_RULES, universeSummary } from "../data/myUniverse.js";
 import { LEVEL_REWARDS } from "../data/unlocks.js";
 import PetMascot from "../components/PetMascot.jsx";
 import PlanetShop from "../components/PlanetShop.jsx";
-import { jobChangeRumination } from "../data/diarySignals.js";
+import { domainRumination } from "../data/diarySignals.js";
+import { Bell, ChevronRight, LockKeyhole, Palette, UserRound, LogOut } from "lucide-react";
 
 const OCCUPATIONS = [
   "연구·공학기술",
@@ -115,6 +116,12 @@ const NOTIF_LABELS = {
   actionBridge: "오늘의 할 일 (Action Bridge)",
   weekly: "주간 리포트",
 };
+const SETTINGS_META = {
+  profile: ["프로필", "나를 표현하고 시뮬레이션 개인화에 사용할 정보를 관리합니다."],
+  security: ["개인정보 · 보안", "저장된 개인정보의 보호 상태를 확인합니다."],
+  personalize: ["개인화", "우주와 가이드, 탐험 경험을 내 취향에 맞게 설정합니다."],
+  notifications: ["알림 · 가이드", "필요한 알림과 함께할 가이드 캐릭터를 설정합니다."],
+};
 
 function LevelRule({ label, xp }) {
   return (
@@ -133,11 +140,18 @@ export default function Settings() {
   const [editingProfile, setEditingProfile] = useState(false);
   const [planetShopOpen, setPlanetShopOpen] = useState(false);
   const [profileDraft, setProfileDraft] = useState(null);
+  const [activeSection, setActiveSection] = useState("profile");
   const universe = universeSummary();
-  const rumination = useMemo(() => jobChangeRumination({ windowDays: 28, threshold: 4 }), []);
+  const [rumination, setRumination] = useState(() => domainRumination({ windowDays: 28, threshold: 4 }));
+  useEffect(() => {
+    const refresh = () => setRumination(domainRumination({ windowDays: 28, threshold: 4 }));
+    window.addEventListener("pm:universe", refresh);
+    return () => window.removeEventListener("pm:universe", refresh);
+  }, []);
 
-  function startJobCompare() {
-    setChoices({ a: "이직", b: "유지" });
+  function startSuggestedCompare() {
+    if (!rumination.compare) return;
+    setChoices({ a: rumination.compare.a, b: rumination.compare.b });
     navigate("/input");
   }
 
@@ -183,28 +197,54 @@ export default function Settings() {
   }
 
   return (
-    <div>
-      <div className="flex items-center justify-between">
+    <div className="pb-4 lg:pb-12">
+      <div className="flex items-center justify-between lg:items-end">
         <Eyebrow>SETTINGS · 설정</Eyebrow>
         <button onClick={() => navigate(-1)} className="tap text-[13px] text-sub">
           닫기
         </button>
       </div>
-      <h1 className="mb-3 text-[22px] font-bold">프로필 · 설정</h1>
+      <h1 className="mb-1 text-[22px] font-bold tracking-[-.025em] lg:text-[34px]">{SETTINGS_META[activeSection][0]}</h1>
+      <p className="mb-4 text-[11px] text-mut lg:mb-7 lg:text-[13px]">{SETTINGS_META[activeSection][1]}</p>
 
-      <div className="lg:grid lg:grid-cols-[minmax(440px,1fr)_minmax(440px,1fr)] lg:items-start lg:gap-x-6 [&>*]:min-w-0">
+      <div className="no-scrollbar -mx-1 mb-4 flex gap-2 overflow-x-auto px-1 lg:hidden">
+        <SettingsNav active={activeSection === "profile"} onClick={() => setActiveSection("profile")} icon={UserRound}>프로필</SettingsNav>
+        <SettingsNav active={activeSection === "security"} onClick={() => setActiveSection("security")} icon={LockKeyhole}>보안</SettingsNav>
+        <SettingsNav active={activeSection === "personalize"} onClick={() => setActiveSection("personalize")} icon={Palette}>개인화</SettingsNav>
+        <SettingsNav active={activeSection === "notifications"} onClick={() => setActiveSection("notifications")} icon={Bell}>알림</SettingsNav>
+        <button type="button" onClick={resetToStart} aria-label="로그아웃" title="로그아웃" className="tap flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/[.07] text-mut hover:border-danger/40 hover:bg-danger/10 hover:text-danger"><LogOut size={17}/></button>
+      </div>
+
+      <div className="lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:items-start lg:gap-8 xl:grid-cols-[260px_minmax(0,1fr)] xl:gap-12">
+        <aside className="hidden lg:sticky lg:top-[108px] lg:block">
+          <nav className="rounded-[20px] border border-white/[.07] bg-[#0D1828]/75 p-2 shadow-[0_18px_45px_rgba(0,0,0,.18)] backdrop-blur-xl">
+            <SettingsNav active={activeSection === "profile"} onClick={() => setActiveSection("profile")} icon={UserRound}>프로필</SettingsNav>
+            <SettingsNav active={activeSection === "security"} onClick={() => setActiveSection("security")} icon={LockKeyhole}>개인정보 · 보안</SettingsNav>
+            <SettingsNav active={activeSection === "personalize"} onClick={() => setActiveSection("personalize")} icon={Palette}>개인화</SettingsNav>
+            <SettingsNav active={activeSection === "notifications"} onClick={() => setActiveSection("notifications")} icon={Bell}>알림 · 가이드</SettingsNav>
+          </nav>
+          <button type="button" onClick={resetToStart} className="tap mt-3 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[12px] font-semibold text-mut transition-colors hover:bg-danger/10 hover:text-danger"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/[.04]"><LogOut size={15}/></span>로그아웃</button>
+          <p className="mt-3 px-3 text-[10px] leading-relaxed text-mut">변경한 설정은 이 기기의 사용자 환경에 바로 반영됩니다.</p>
+        </aside>
+
+        <div className="min-w-0 lg:[&_.bg-card]:rounded-[22px] lg:[&_.bg-card]:border lg:[&_.bg-card]:border-white/[.06] lg:[&_.bg-card]:bg-[#0D1828]/80 lg:[&_.bg-card]:p-5 lg:[&_.bg-card]:shadow-[0_18px_45px_rgba(0,0,0,.18)]">
 
       {/* 생활 관리 친구 — 홈을 방해하지 않도록 설정에서 관리한다. */}
-      <PetMascot rumination={rumination} onCompare={startJobCompare} />
+      {activeSection === "personalize" && <section className="animate-fade">
+      <PetMascot rumination={rumination} onCompare={startSuggestedCompare} />
 
       <Card>
         <div className="flex items-center justify-between gap-4"><div><div className="text-xs font-semibold text-mut">나의 우주 꾸미기</div><p className="mt-1 text-[10px] leading-relaxed text-sub">영역 색은 유지하고 행성의 질감·광택·고리를 변경합니다.</p></div><button type="button" onClick={()=>setPlanetShopOpen(true)} className="tap shrink-0 rounded-xl bg-[#8B6CCF] px-4 text-[11px] font-bold">상점 열기</button></div>
       </Card>
+      </section>}
 
       {/* 개인정보 암호화 */}
+      {activeSection === "security" && <section className="animate-fade">
       <PrivacyVault />
+      </section>}
 
       {/* 프로필 */}
+      {activeSection === "profile" && <section className="animate-fade">
       <Card>
         <div className="mb-3 text-xs font-semibold text-mut">내 프로필</div>
         <div className="grid grid-cols-[96px_minmax(0,1fr)] items-start gap-6">
@@ -381,8 +421,10 @@ export default function Settings() {
           />
         </Card>
       )}
+      </section>}
 
       {/* 가치 우선순위 — 성향 개인화 입력 (백엔드 personalize 로 전달) */}
+      {activeSection === "profile" && <section className="animate-fade">
       <Card>
         <div className="mb-2 text-xs font-semibold text-mut">가치 우선순위</div>
         <ValueRankingInput
@@ -401,8 +443,10 @@ export default function Settings() {
           onChange={(value) => setProfile((p) => ({ ...p, mbti: value }))}
         />
       </Card>
+      </section>}
 
       {/* 알림 설정 */}
+      {activeSection === "notifications" && <section className="animate-fade">
       <Card>
         <div className="mb-1 text-xs font-semibold text-mut">알림</div>
         {Object.keys(NOTIF_LABELS).map((key) => (
@@ -429,15 +473,15 @@ export default function Settings() {
           ))}
         </div>
       </Card>
+      </section>}
 
-      <button
-        onClick={resetToStart}
-        className="tap mt-2 w-full rounded-2xl border border-line py-3 text-[13px] text-mut lg:col-span-2"
-      >
-        처음 화면으로 (로그아웃)
-      </button>
+      </div>
       </div>
       {planetShopOpen&&<PlanetShop onClose={()=>setPlanetShopOpen(false)}/>} 
     </div>
   );
+}
+
+function SettingsNav({ active, onClick, icon: Icon, children }) {
+  return <button type="button" onClick={onClick} className={`tap group flex shrink-0 items-center gap-2 rounded-xl px-3 py-2.5 text-[12px] font-semibold transition-colors lg:w-full lg:gap-3 ${active ? "bg-violet-500/20 text-violet-200" : "text-sub hover:bg-violet-500/10 hover:text-violet-200"}`}><span className={`flex h-8 w-8 items-center justify-center rounded-lg ${active ? "bg-violet-500/20" : "bg-white/[.04] group-hover:bg-violet-500/15"}`}><Icon size={15}/></span><span className="flex-1 whitespace-nowrap text-left">{children}</span><ChevronRight size={14} className={`hidden lg:block ${active ? "opacity-80" : "opacity-30"}`} /></button>;
 }

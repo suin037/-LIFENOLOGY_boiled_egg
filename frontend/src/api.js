@@ -210,6 +210,17 @@ export async function getJobChangeFinancialImpact(profile) {
   return res.json();
 }
 
+// KOWEPS 25~35세 종단 관측 근거. 개인예측/인과효과가 아니라 사건군·비교군 분포다.
+export async function getKowepsEvidence(payload) {
+  const res = await fetch(`${API_BASE}/evidence/koweps`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`koweps evidence ${res.status}`);
+  return res.json();
+}
+
 export async function runSimulate(args) {
   return mapSimulateToResult(await runSimulateRaw(args));
 }

@@ -52,6 +52,8 @@ const EVIDENCE_LABEL = {
   insufficient_evidence: "근거 부족",
   reference_only: "참고 통계만",
   user_provided_state: "현재 상태 입력",
+  observed_group: "종단 집단 관측",
+  proxy_observation: "부분 관측 근거",
 };
 
 function EvidenceSummary({ a, b }) {

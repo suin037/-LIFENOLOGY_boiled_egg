@@ -45,6 +45,14 @@ export default {
         driftA: { "50%": { transform: "translateX(-18px)" } },
         driftB: { "50%": { transform: "translateX(18px)" } },
         twinkle: { "50%": { opacity: "0.2" } },
+        cometOrbit: {
+          from: { transform: "translate(-50%, -50%) rotate(0deg)" },
+          to: { transform: "translate(-50%, -50%) rotate(360deg)" },
+        },
+        cometGlow: {
+          "0%, 100%": { opacity: ".7", transform: "scale(.88)" },
+          "50%": { opacity: "1", transform: "scale(1.14)" },
+        },
       },
       animation: {
         fade: "fade .35s ease",
@@ -53,6 +61,8 @@ export default {
         "spin-slow": "spin 3s linear infinite",
         driftA: "driftA 3s ease-in-out infinite",
         driftB: "driftB 3s ease-in-out infinite",
+        "comet-orbit": "cometOrbit 2.4s linear infinite",
+        "comet-glow": "cometGlow 1.15s ease-in-out infinite",
       },
     },
   },

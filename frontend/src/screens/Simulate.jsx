@@ -54,14 +54,21 @@ export default function Simulate() {
         </p>
       </div>
 
-      <div className="relative mx-auto my-7 h-[126px] w-[220px]">
-        <div className="absolute left-1/2 top-1/2 h-[92px] w-[180px] -translate-x-1/2 -translate-y-1/2 rounded-[50%] border border-cyan/20" />
-        <div className="absolute left-1/2 top-1/2 h-[126px] w-[126px] -translate-x-1/2 -translate-y-1/2 animate-spin-slow rounded-full border border-dashed border-white/10" />
+      <div className="relative mx-auto my-7 h-[150px] w-[250px]" role="img" aria-label="두 선택 주위를 도는 혜성 로딩 애니메이션">
+        <i className="absolute left-[34px] top-[22px] h-1 w-1 animate-pulse rounded-full bg-white/60" />
+        <i className="absolute right-[38px] top-[28px] h-1.5 w-1.5 animate-pulse rounded-full bg-violet-300/70 [animation-delay:400ms]" />
+        <i className="absolute bottom-[22px] left-[62px] h-1 w-1 animate-pulse rounded-full bg-white/40 [animation-delay:700ms]" />
+        <div className="absolute left-1/2 top-1/2 h-[104px] w-[206px] -translate-x-1/2 -translate-y-1/2 rounded-[50%] border border-cyan/20 shadow-[inset_0_0_24px_rgba(139,108,207,.04)]" />
+        <div className="absolute left-1/2 top-1/2 h-[104px] w-[206px] animate-comet-orbit rounded-[50%]">
+          <span className="absolute right-[-5px] top-1/2 h-[11px] w-[11px] -translate-y-1/2 animate-comet-glow rounded-full bg-[#E9DEFF] shadow-[0_0_9px_3px_rgba(187,164,237,.9),0_0_24px_8px_rgba(139,108,207,.45)]" />
+          <span className="absolute right-[3px] top-1/2 h-[5px] w-[42px] origin-right -translate-y-1/2 rounded-full bg-gradient-to-l from-[#D8C8FF]/90 via-[#8B6CCF]/45 to-transparent blur-[1px]" />
+        </div>
+        <div className="absolute left-1/2 top-1/2 h-[132px] w-[132px] -translate-x-1/2 -translate-y-1/2 animate-spin-slow rounded-full border border-dashed border-white/10" />
         <div className="absolute left-1/2 top-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[#8B6CCF] shadow-[0_0_38px_rgba(139,108,207,.28)]">
           <GitCompareArrows size={25} className="text-white" strokeWidth={1.8} />
         </div>
-        <ChoiceOrb side="A" className="left-0 top-[41px]" />
-        <ChoiceOrb side="B" className="right-0 top-[41px]" />
+        <ChoiceOrb side="A" className="left-0 top-[53px]" />
+        <ChoiceOrb side="B" className="right-0 top-[53px]" />
       </div>
 
       <div className="grid grid-cols-2 gap-2">

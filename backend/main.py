@@ -42,7 +42,10 @@ from rag import safety as rag_safety
 from utils.cloudflare_images import generate_pair
 from domain_router import route_domains
 from models.job_change_candidate import financial_impact, prediction_for_choice
-from koweps_evidence import evidence_for_request as koweps_evidence_for_request
+from koweps_evidence import (
+    evidence_for_request as koweps_evidence_for_request,
+    indicator_statuses as koweps_indicator_statuses,
+)
 
 # 삶의 영역(domain) key → 라벨. 프론트 LIFE_DOMAINS 와 1:1 (행동+영역 구조화 입력).
 DOMAIN_LABELS = {
@@ -394,10 +397,16 @@ def compare(req: CompareRequest) -> dict:
         "B": _validated_prediction(cmp["scenarios"]["B"]["kind"], cmp["profile"]),
     }
     cmp["validated_predictions"] = validated_predictions
-    cmp["indicator_evidence"] = {
-        "A": indicators_mod.evidence_statuses(cmp["scenarios"]["A"]["kind"], validated_predictions["A"]),
-        "B": indicators_mod.evidence_statuses(cmp["scenarios"]["B"]["kind"], validated_predictions["B"]),
+    indicator_evidence = {
+        "A": indicators_mod.evidence_statuses(cmp["scenarios"]["A"]["kind"], validated_predictions["A"], scenario=cmp["scenarios"]["A"]),
+        "B": indicators_mod.evidence_statuses(cmp["scenarios"]["B"]["kind"], validated_predictions["B"], scenario=cmp["scenarios"]["B"]),
     }
+    koweps = koweps_evidence_for_request(req.model_dump())
+    if koweps.get("available"):
+        for side in ("A", "B"):
+            indicator_evidence[side].update(koweps_indicator_statuses(koweps, side))
+    cmp["koweps_evidence"] = koweps
+    cmp["indicator_evidence"] = indicator_evidence
     return cmp
 
 
@@ -462,8 +471,14 @@ def simulate(req: SimulateRequest) -> dict:
     ind_b = req.indicator_scores or det_b["scores"]
     validated_a = _validated_prediction(scen_a["kind"], cmp["profile"])
     validated_b = _validated_prediction(scen_b["kind"], cmp["profile"])
-    status_a = indicators_mod.evidence_statuses(scen_a["kind"], validated_a, req.indicator_scores)
-    status_b = indicators_mod.evidence_statuses(scen_b["kind"], validated_b, req.indicator_scores)
+    status_a = indicators_mod.evidence_statuses(scen_a["kind"], validated_a, req.indicator_scores, scen_a)
+    status_b = indicators_mod.evidence_statuses(scen_b["kind"], validated_b, req.indicator_scores, scen_b)
+    koweps = koweps_evidence_for_request(req.model_dump())
+    if koweps.get("available") and not req.indicator_scores:
+        for side, statuses in (("A", status_a), ("B", status_b)):
+            statuses.update(koweps_indicator_statuses(koweps, side))
+        cmp["koweps_evidence"] = koweps
+        cmp["indicator_evidence"] = {"A": status_a, "B": status_b}
 
     # 1-1) 성향 개인화(Option A): 가치가중치 → 서술순서·초점·질적강조·확신도.
     #      모델 매칭엔 관여 안 함. value_weights 없으면 focus_* = None(기존 동작 유지).
@@ -561,6 +576,7 @@ def simulate(req: SimulateRequest) -> dict:
         },
         "indicator_evidence": {"A": status_a, "B": status_b},
         "validated_predictions": {"A": validated_a, "B": validated_b},
+        "koweps_evidence": koweps,
         "personalization": pz,
         "psych": {
             "A": {"focus": psych_a.get("focus_indicator"), "level": psych_a.get("level"),

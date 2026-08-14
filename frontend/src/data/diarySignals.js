@@ -8,6 +8,7 @@
 // ─────────────────────────────────────────────────────────────
 import { loadUniverse, todayKey } from "./myUniverse.js";
 import { CARD_BY_ID } from "./valueCards.js";
+import { LIFE_DOMAINS, detectLifeDomains } from "./choices.js";
 
 // 신호별 사전. 표현이 겹칠 수 있어 '드러난 정도'로만 읽는다(정밀 분류 아님).
 const LEX = {
@@ -290,4 +291,44 @@ export function domainReport(a, label) {
 export function jobChangeRumination({ windowDays = 14, threshold = 3 } = {}, s = loadUniverse()) {
   const sig = computeDiarySignals({ windowDays }, s);
   return { ...sig, prompt: sig.jobChangeDays >= threshold, count: sig.jobChangeDays, windowDays };
+}
+
+// 시뮬레이션 자유서술 입력과 동일한 9영역 분류 정본을 사용한다.
+export const DOMAIN_COMPARE = {
+  career: { a: "현재 진로 유지", b: "진로 변경", action: "진로의 두 방향" },
+  education: { a: "현재 학습 경로 유지", b: "진학·교육 시작", action: "배움의 두 방향" },
+  business: { a: "현재 일 유지", b: "창업·사업 시작", action: "일과 사업의 두 방향" },
+  finance: { a: "현재 재무 방식 유지", b: "재무 계획 변경", action: "돈 관리의 두 방향" },
+  health: { a: "현재 생활 유지", b: "회복 방식 변경", action: "건강 회복의 두 방향" },
+  housing: { a: "현재 거주 유지", b: "이사·주거 변경", action: "주거의 두 방향" },
+  relationship: { a: "현재 관계 방식 유지", b: "관계에 변화 주기", action: "관계의 두 방향" },
+  lifestyle: { a: "현재 생활방식 유지", b: "생활방식 변경", action: "생활의 두 방향" },
+  long_term_values: { a: "현재 선택 유지", b: "가치에 맞게 방향 변경", action: "삶의 두 방향" },
+};
+
+/** 최근 기록에서 같은 삶의 영역이 서로 다른 날짜에 반복됐는지 계산한다. */
+export function domainRumination({ windowDays = 28, threshold = 4 } = {}, s = loadUniverse()) {
+  const today = todayKey();
+  const byDomain = Object.fromEntries(LIFE_DOMAINS.map((domain) => [domain.key, new Set()]));
+  let consideredDays = 0;
+  for (const checkin of s.checkins || []) {
+    if (checkin.empty) continue;
+    const distance = daysBetween(checkin.date, today);
+    if (distance < 0 || distance > windowDays) continue;
+    const text = textOf(checkin).trim();
+    if (!text) continue;
+    consideredDays += 1;
+    for (const key of detectLifeDomains(text)) byDomain[key]?.add(checkin.date);
+  }
+  const domains = LIFE_DOMAINS.map((domain) => ({
+    key: domain.key, label: domain.label, emoji: domain.emoji, count: byDomain[domain.key].size,
+  })).sort((a, b) => b.count - a.count);
+  const top = domains[0];
+  const prompt = Boolean(top && top.count >= threshold);
+  return {
+    ok: consideredDays > 0, prompt, count: top?.count || 0, windowDays, threshold,
+    consideredDays, domain: prompt ? top : null, domains,
+    compare: prompt ? DOMAIN_COMPARE[top.key] : null,
+    method: "simulation-domain-classifier",
+  };
 }
