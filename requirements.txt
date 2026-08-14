@@ -1,0 +1,3 @@
+# Railway/Nixpacks 가 루트에서 파이썬 프로젝트임을 인식하는 지점.
+# 실제 목록은 backend/requirements.txt 한 곳에서만 관리한다.
+-r backend/requirements.txt
