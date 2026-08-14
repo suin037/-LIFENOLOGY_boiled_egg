@@ -170,29 +170,84 @@ def _values(profile) -> list[dict]:
     return out
 
 
+def _qol(profile, names: list[str]) -> list[dict]:
+    """사회통합실태조사의 영역별 현재 집단 기준값."""
+    try:
+        df = _csv("dgroup/kosis_사회통합실태조사/lookup_qol_indicators_v2.csv")
+    except Exception:
+        return []
+    grp = _b_qol(int(profile.get("age") or 29))
+    out = []
+    for name in names:
+        sub = df[df["indicator_name"].astype(str) == name]
+        pick = sub[sub["group"].astype(str) == grp]
+        if pick.empty:
+            pick = sub[sub["group"].astype(str) == "전체"]
+        if pick.empty:
+            continue
+        row = pick.sort_values("year").iloc[-1]
+        out.append(_ind(name, row["value"], row["unit"], source="사회통합실태조사"))
+    return out
+
+
+def _relationship(profile) -> list[dict]:
+    return _qol(profile, ["사회적 고립도"])
+
+
+def _lifestyle(profile) -> list[dict]:
+    return _lanollab(profile, LIFESTYLE_INDS) + _qol(
+        profile, ["여가생활 만족도", "하루 평균 여가시간"]
+    )
+
+
+def _health(profile) -> list[dict]:
+    return _lanollab(profile, HEALTH_INDS) + _qol(
+        profile, ["스트레스 인지율", "주관적 건강상태 양호율"]
+    )
+
+
+def _business_for_choice(profile) -> list[dict]:
+    """자유입력에서 해석한 업종·규모 기준의 창업 생존율."""
+    rows, context = bizsurv_rows(profile)
+    if rows is None or rows.empty or context is None:
+        return []
+    year = int(rows["ref_year"].iloc[0])
+    out = []
+    for horizon in (1, 3, 5):
+        picked = rows[rows["survival_horizon_yr"] == horizon]
+        if not picked.empty:
+            out.append(_ind(
+                f"창업 {horizon}년 생존율", picked.iloc[0]["survival_rate"], "%",
+                source="KOSIS 기업생멸행정통계", note=f"{context.label()}·{year}",
+            ))
+    return out
+
+
 # domain → (근거수준, 로더). 로더 None = 정량 지표 없음(기존 파이프라인/ RAG/ 데이터부족).
 _ROUTES = {
     "career": ("model", None),
     "finance": ("group_stat", _finance),
-    "business": ("group_stat", _business),
+    "business": ("group_stat", _business_for_choice),
     "education": ("group_stat", _education),
-    "health": ("group_stat", lambda p: _lanollab(p, HEALTH_INDS)),
-    "lifestyle": ("group_stat", lambda p: _lanollab(p, LIFESTYLE_INDS)),
+    "health": ("group_stat", _health),
+    "lifestyle": ("group_stat", _lifestyle),
     "long_term_values": ("group_stat", _values),
-    "relationship": ("rag", None),
+    "relationship": ("group_stat", _relationship),
     "housing": ("insufficient", None),
 }
 
 _ROUTE_NOTE = {
     "career": "GOMS/YP 유사인물·인과·생존 모델(기존 엔진)이 담당",
-    "relationship": "정량 데이터 없음 — 심리 이론 근거(RAG)로만 설명",
+    "relationship": "사회적 고립도 집단통계 + 기록 기반 관계 해석. 선택의 인과효과는 아님",
     "housing": "현재 뒷받침 데이터 없음 — 수치 대신 신중히 안내",
 }
 
 
-def route_domains(domains, profile: dict) -> dict:
+def route_domains(domains, profile: dict, choice: str | None = None) -> dict:
     """domain 리스트 → {domain: {label, evidence, indicators[], source_note}}."""
-    prof = profile or {}
+    prof = {**(profile or {})}
+    if choice:
+        prof["choice"] = choice
     result = {}
     for d in domains or []:
         evidence, loader = _ROUTES.get(d, ("insufficient", None))
@@ -201,9 +256,23 @@ def route_domains(domains, profile: dict) -> dict:
         if loader and not inds and evidence == "group_stat":
             evidence = "insufficient"
         result[d] = {
+            "domain": d,
             "label": DOMAIN_LABELS.get(d, d),
+            "status": "available" if inds or evidence in {"model", "rag"} else "unavailable",
             "evidence": evidence,
+            "claim_type": (
+                "model_output" if evidence == "model" else
+                "population_reference_not_choice_effect" if evidence == "group_stat" else
+                "qualitative_interpretation" if evidence == "rag" else
+                "insufficient_evidence"
+            ),
             "indicators": inds,
             "source_note": _ROUTE_NOTE.get(d),
+            "limitation": (
+                "현재 조건과 유사한 집단의 참고값이며 이 선택이 만든 개인 효과가 아닙니다."
+                if evidence == "group_stat" else
+                "현재 연결된 정량 데이터가 없어 숫자를 만들지 않습니다."
+                if evidence == "insufficient" else None
+            ),
         }
     return result

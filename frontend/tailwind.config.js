@@ -11,7 +11,7 @@ export default {
         ink: "#F6F8FC",
         sub: "#B8C2D2",
         mut: "#748198",
-        cyan: { DEFAULT: "#4C91FF", deep: "#2F6FE8" }, // 선택 A / primary
+        cyan: { DEFAULT: "#8B6CCF", deep: "#8B6CCF" }, // single violet accent
         gold: { DEFAULT: "#FF9F32", deep: "#E98418" }, // 선택 B
         danger: "#FF7B7B",
       },

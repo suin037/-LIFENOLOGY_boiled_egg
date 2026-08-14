@@ -42,7 +42,7 @@ export default function AvatarComparison({ avatar, a, b, visuals, narrative, nar
 }
 
 function StoryCard({ side, result, image, story, storyLoading, avatar, open, onToggle }) {
-  const color = side === "A" ? "#7FD4FF" : "#F5C86B";
+  const color = side === "A" ? "#8B6CCF" : "#F5C86B";
   const structured = story && typeof story === "object";
   const summary = structured ? story.summary : story;
   const detail = structured ? story.detail || {} : {};

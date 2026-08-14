@@ -50,7 +50,7 @@ export default function RadarView({ result }) {
             />
             <Legend
               iconType="circle"
-              wrapperStyle={{ fontSize: 11, color: "#9FB0CE" }}
+              wrapperStyle={{ fontSize: 11, color: "#8B6CCF" }}
             />
           </RadarChart>
         </ResponsiveContainer>

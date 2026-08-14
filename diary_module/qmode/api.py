@@ -29,7 +29,7 @@ for p in (str(DIARY), str(ROOT)):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from fastapi import FastAPI                              # noqa: E402
+from fastapi import FastAPI, File, UploadFile            # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware       # noqa: E402
 from pydantic import BaseModel                           # noqa: E402
 
@@ -215,6 +215,14 @@ def _db():
         con.execute("ALTER TABLE week_reports ADD COLUMN actions TEXT")
     except sqlite3.OperationalError:
         pass  # 이미 있음
+    # 관계 스냅샷 — (uid, relation_tag) 로 스레딩, snapshot_time 으로 시계열.
+    # 같은 태그로 2개+ 쌓이면 변화 추적((나) 모드)이 자동 활성화된다.
+    con.execute(
+        "CREATE TABLE IF NOT EXISTS relationship_snapshots("
+        "uid TEXT, relation_tag TEXT, snapshot_time TEXT, label TEXT, "
+        "signals TEXT, narrative TEXT, created_at TEXT, "
+        "PRIMARY KEY(uid, relation_tag, snapshot_time))"
+    )
     return con
 
 
@@ -468,6 +476,485 @@ def third_path(req: ThirdPathReq):
         rationale = " ".join(lines[1:]).strip() if len(lines) > 1 else ""
         return {"ok": True, "title": title, "rationale": rationale,
                 "persona_used": bool(pb), "signal_used": bool(sig_block)}
+    except Exception as e:      # noqa: BLE001
+        return {"ok": False, "reason": str(e)}
+
+
+# ── 기업 분석 — OpenDART 공시·재무 + AI 요약 ───────────────────────────
+# 공고 분석이 뽑은 회사명으로 바로 이어붙는다. 예측 수치가 '비슷한 사람들'을 말한다면
+# 이건 '내가 가려는 그 회사'의 사실(공시·재무)을 말한다. 숫자는 지어내지 않는다.
+class CompanyAnalyzeReq(BaseModel):
+    name: str = ""                       # 회사명(공고에서 뽑힌 것)
+    corp_code: Optional[str] = None      # 이미 알고 있으면 바로 사용
+    persona_block: Optional[str] = None
+    uid: Optional[str] = None
+
+
+@app.get("/company/search")
+def company_search(name: str = ""):
+    """기업명 → DART 고유번호 후보. 상장사를 앞에 둔다."""
+    from qmode import dart
+    if not dart.api_key():
+        return {"ok": False, "reason": "no_dart_key"}
+    try:
+        return {"ok": True, "items": dart.find_company(name)}
+    except Exception as e:      # noqa: BLE001
+        return {"ok": False, "reason": str(e)}
+
+
+@app.get("/company/summary")
+def company_summary(name: str = "", corp_code: str = ""):
+    """재무 5개년 + 최근 공시 — 근거 자료 그대로."""
+    from qmode import dart
+    if not dart.api_key():
+        return {"ok": False, "reason": "no_dart_key"}
+    try:
+        code, matched = corp_code, name
+        if not code:
+            hits = dart.find_company(name)
+            if not hits:
+                return {"ok": False, "reason": "not_found", "name": name}
+            code, matched = hits[0]["corp_code"], hits[0]["name"]
+        return {"ok": True, "name": matched, "corp_code": code,
+                "financials": dart.financials(code),
+                "disclosures": dart.disclosures(code)}
+    except Exception as e:      # noqa: BLE001
+        return {"ok": False, "reason": str(e)}
+
+
+@app.post("/company/analyze")
+def company_analyze(req: CompanyAnalyzeReq):
+    """재무 추이 + 공시 제목 → 지원자 관점 요약(사업 흐름·최근 집중·지원동기 포인트)."""
+    import os
+    from qmode import dart
+    if not dart.api_key():
+        return {"ok": False, "reason": "no_dart_key"}
+    try:
+        code, matched = req.corp_code, req.name
+        if not code:
+            hits = dart.find_company(req.name)
+            if not hits:
+                return {"ok": False, "reason": "not_found", "name": req.name}
+            code, matched = hits[0]["corp_code"], hits[0]["name"]
+        fin = dart.financials(code)
+        disc = dart.disclosures(code)
+    except Exception as e:      # noqa: BLE001
+        return {"ok": False, "reason": str(e)}
+
+    R1._load_dotenv()
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        return {"ok": True, "name": matched, "corp_code": code,
+                "financials": fin, "disclosures": disc, "report": None}
+
+    def _won(v):
+        if v is None:
+            return "—"
+        if abs(v) >= 1_0000_0000_0000:
+            return f"{v / 1_0000_0000_0000:.1f}조원"
+        return f"{v / 1_0000_0000:.0f}억원"
+
+    fin_lines = "\n".join(
+        f"- {r['year']}년: 매출 {_won(r.get('revenue'))} / 영업이익 {_won(r.get('operating'))} / 순이익 {_won(r.get('net'))}"
+        for r in fin) or "(재무 데이터 없음)"
+    disc_lines = "\n".join(f"- {d['date']} {d['title']}" for d in disc[:8]) or "(최근 공시 없음)"
+    pb = req.persona_block or (_fetch_persona(req.uid) if req.uid else None)
+
+    prompt = (
+        f"[기업] {matched}\n[공시 재무(OpenDART)]\n{fin_lines}\n\n[최근 공시]\n{disc_lines}\n\n"
+        + (f"{pb}\n\n" if pb else "")
+        + "취업·이직을 준비하는 사람이 이 회사를 이해하도록 정리하라.\n"
+          "규칙: 위에 준 수치·공시 제목 밖의 사실(경쟁사 점유율, 조직문화, 합격률 등)은 "
+          "절대 지어내지 마라. 모르면 모른다고 하라. 주가·투자 판단은 하지 마라.\n\n"
+          '반드시 이 JSON만:\n'
+          '{"trend":"재무 흐름 2~3문장(무엇이 늘고 줄었는지, 준 숫자만 근거로)",'
+          '"focus":"최근 공시에서 읽히는 회사의 관심사 1~2문장(공시 제목 범위 안에서)",'
+          '"talking_points":["지원동기·면접에서 쓸 수 있는 관점 3개"]}\n'
+          "한국어만, 한자·설명·인사말 없이 JSON 하나만."
+    )
+    try:
+        from anthropic import Anthropic
+        resp = Anthropic().messages.create(
+            model="claude-sonnet-5", max_tokens=900, thinking={"type": "disabled"},
+            messages=[{"role": "user", "content": prompt}])
+        txt = "".join(b.text for b in resp.content if b.type == "text").strip()
+        s, e = txt.find("{"), txt.rfind("}")
+        report = json.loads(txt[s:e + 1]) if s >= 0 and e > s else None
+    except Exception:      # noqa: BLE001
+        report = None
+
+    return {"ok": True, "name": matched, "corp_code": code,
+            "financials": fin, "disclosures": disc, "report": report}
+
+
+# ── 커리어넷 직업가치관검사 — 성향을 '검증된 척도'로 한 겹 더 ──────────
+# 우리 온보딩 8카드는 자체 제작이라 타당성 근거가 약하다. 커리어넷(한국직업능력연구원)
+# 직업가치관검사(대학/일반, seq 6)는 28문항 = 8개 가치의 모든 쌍(8C2=28) 완전비교라
+# 응답만 세면 순위가 떨어진다. 진로 질문을 한 직후에 '세부 질문'으로 권한다.
+CAREERNET_TEST_SEQ = "6"
+_CN_QUESTIONS = "https://www.career.go.kr/inspct/openapi/test/questions"
+_CN_REPORT = "https://www.career.go.kr/inspct/openapi/test/report"
+
+
+def _careernet_key():
+    R1._load_dotenv()
+    import os
+    return os.getenv("CAREERNET_API_KEY")
+
+
+def _cn_get(url, params):
+    import urllib.parse, urllib.request
+    with urllib.request.urlopen(url + "?" + urllib.parse.urlencode(params), timeout=20) as r:
+        return json.loads(r.read().decode("utf-8"))
+
+
+@app.get("/career/value-test")
+def career_value_test():
+    """직업가치관검사 28문항 — 각 문항은 가치 두 개 중 하나 고르기."""
+    key = _careernet_key()
+    if not key:
+        return {"ok": False, "reason": "no_careernet_key"}
+    try:
+        data = _cn_get(_CN_QUESTIONS, {"apikey": key, "q": CAREERNET_TEST_SEQ})
+        items = [
+            {"no": q["qitemNo"],
+             "a": {"name": q["answer01"], "desc": q["answer03"], "score": q["answerScore01"]},
+             "b": {"name": q["answer02"], "desc": q["answer04"], "score": q["answerScore02"]}}
+            for q in data.get("RESULT", [])
+        ]
+        return {"ok": True, "items": items, "n": len(items)}
+    except Exception as e:      # noqa: BLE001
+        return {"ok": False, "reason": str(e)}
+
+
+class ValueAnswerReq(BaseModel):
+    answers: dict = {}          # {문항번호(str|int): "1" | "2"}
+    uid: Optional[str] = None
+
+
+@app.post("/career/value-report")
+def career_value_report(req: ValueAnswerReq):
+    """응답 → 8개 가치 순위(승수 집계) + 커리어넷 공식 리포트 링크.
+
+    28문항이 모든 쌍을 한 번씩 비교하므로, 고른 횟수가 곧 그 가치의 순위다.
+    점수는 우리가 직접 세고(즉시·오프라인), 공식 리포트는 근거 링크로 함께 준다.
+    """
+    key = _careernet_key()
+    if not key:
+        return {"ok": False, "reason": "no_careernet_key"}
+    try:
+        qs = _cn_get(_CN_QUESTIONS, {"apikey": key, "q": CAREERNET_TEST_SEQ}).get("RESULT", [])
+    except Exception as e:      # noqa: BLE001
+        return {"ok": False, "reason": str(e)}
+
+    wins, desc = {}, {}
+    for q in qs:
+        for name, d in ((q["answer01"], q["answer03"]), (q["answer02"], q["answer04"])):
+            wins.setdefault(name, 0)
+            desc.setdefault(name, d)
+        picked = str(req.answers.get(str(q["qitemNo"])) or req.answers.get(q["qitemNo"]) or "")
+        if picked == "1":
+            wins[q["answer01"]] += 1
+        elif picked == "2":
+            wins[q["answer02"]] += 1
+
+    ranking = [{"name": k, "wins": v, "desc": desc.get(k, "")}
+               for k, v in sorted(wins.items(), key=lambda kv: -kv[1])]
+    answered = sum(1 for q in qs
+                   if str(req.answers.get(str(q["qitemNo"])) or req.answers.get(q["qitemNo"]) or ""))
+
+    # 공식 리포트 링크 — 우리 집계가 아니라 커리어넷이 만든 결과를 근거로 함께 제공.
+    report_url = None
+    try:
+        import urllib.request
+        body = json.dumps({
+            "apikey": key, "qestrnSeq": CAREERNET_TEST_SEQ, "trgetSe": "100",
+            "gender": "100", "grade": "4", "startDtm": "1700000000000",
+            "answers": " ".join(f"{q['qitemNo']}={req.answers.get(str(q['qitemNo'])) or req.answers.get(q['qitemNo']) or 1}"
+                                for q in qs),
+        }).encode("utf-8")
+        rq = urllib.request.Request(_CN_REPORT, data=body,
+                                    headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(rq, timeout=20) as r:
+            report_url = (json.loads(r.read().decode("utf-8")).get("RESULT") or {}).get("url")
+    except Exception:      # noqa: BLE001
+        report_url = None
+
+    return {"ok": True, "ranking": ranking, "answered": answered,
+            "total": len(qs), "report_url": report_url}
+
+
+# ── 관계 도메인 서사 (카톡 × 성향 → 선택지형 분기) ─────────────────────
+class RelAnalyzeReq(BaseModel):
+    uid: Optional[str] = None            # 있으면 관계 스냅샷 저장·시계열 추적
+    relation_tag: Optional[str] = None   # 관계 상대 태그(연인/엄마/친구A) — 시계열 스레드 키
+    label: Optional[str] = None          # 사람이 붙인 시간 라벨("오늘 카톡", "지난주 카톡")
+    transcript: Optional[str] = None     # 텍스트 대화(이미지 없이도 가능)
+    images: Optional[list] = None        # [{"media_type","data"(base64)}] 카톡 스크린샷
+    snapshot_time: Optional[str] = None  # 시계열 정렬용(없으면 서버 시각)
+
+
+def _load_disposition(uid):
+    """저장된 성향(일기 기반) 로드 — 관계 서사 개인화 재료."""
+    if not uid:
+        return None
+    con = _db()
+    row = con.execute("SELECT disposition FROM users WHERE uid=?", (uid,)).fetchone()
+    con.close()
+    return CR.dec_json(row[0]) if row and row[0] else None
+
+
+def _rel_history(uid, relation_tag):
+    """같은 상대의 과거 스냅샷(시간순) — 있으면 (나) 변화추적 모드."""
+    con = _db()
+    rows = con.execute(
+        "SELECT snapshot_time, label, signals FROM relationship_snapshots"
+        " WHERE uid=? AND relation_tag=? ORDER BY snapshot_time",
+        (uid, relation_tag),
+    ).fetchall()
+    con.close()
+    return [{"snapshot_time": r[0], "label": r[1],
+             "signals": CR.dec_json(r[2]) if r[2] else {}} for r in rows]
+
+
+@app.post("/relationship/analyze")
+def relationship_analyze(req: RelAnalyzeReq):
+    """카톡 스크린샷/텍스트 → 관계 신호 추출 → 성향과 결합해 선택지형 서사.
+
+    (가)/(나) 자동 판별: uid+relation_tag 로 과거 스냅샷이 있으면 변화추적(나),
+    없으면 일회성(가). 저장은 uid+relation_tag 가 있을 때만.
+    """
+    from qmode import relationship as REL
+
+    # 1) 안전 게이트 — 위기 신호면 서사 대신 지원 안내
+    safe = REL.safety_check(req.transcript or "")
+    if safe["block"]:
+        return {"blocked": True, "support": safe["support"], "level": safe["level"]}
+
+    # 2) 관계 신호 추출(비전/텍스트)
+    signals, serr = REL.extract_signals(
+        images=req.images, transcript=req.transcript, relation_tag=req.relation_tag)
+    if signals is None:
+        return {"error": serr}
+
+    # 3) 성향 + 히스토리 결합
+    disposition = _load_disposition(req.uid)
+    history = _rel_history(req.uid, req.relation_tag) if (req.uid and req.relation_tag) else []
+    mode = "track" if history else "single"      # 과거 스냅샷 있으면 (나) 추적
+
+    # 4) 선택지형 분기 서사
+    narr, nerr = REL.generate_narrative(signals, disposition, history=history)
+
+    # 5) 저장 — uid+relation_tag 있을 때만 시계열로 적립
+    saved = False
+    if req.uid and req.relation_tag:
+        st = req.snapshot_time or _now()
+        con = _db()
+        con.execute(
+            "INSERT OR REPLACE INTO relationship_snapshots"
+            "(uid, relation_tag, snapshot_time, label, signals, narrative, created_at)"
+            " VALUES(?,?,?,?,?,?,?)",
+            (req.uid, req.relation_tag, st, req.label,
+             CR.enc_json(signals),                       # 대화 신호는 민감정보 — 암호화 저장
+             CR.enc_json(narr) if narr else None, _now()),
+        )
+        con.commit(); con.close()
+        saved = True
+
+    return {"mode": mode, "signals": signals, "narrative": narr,
+            "error": nerr, "saved": saved,
+            "support": safe.get("support") or None,
+            "history_count": len(history)}
+
+
+@app.get("/relationship/{uid}/{relation_tag}")
+def relationship_timeline(uid: str, relation_tag: str):
+    """한 상대의 관계 스냅샷 시계열 — 변화 추적 화면용."""
+    hist = _rel_history(uid, relation_tag)
+    if not hist:
+        return {"found": False, "count": 0, "snapshots": []}
+    con = _db()
+    rows = con.execute(
+        "SELECT snapshot_time, label, signals, narrative FROM relationship_snapshots"
+        " WHERE uid=? AND relation_tag=? ORDER BY snapshot_time",
+        (uid, relation_tag),
+    ).fetchall()
+    con.close()
+    snaps = [{"snapshot_time": r[0], "label": r[1],
+              "signals": CR.dec_json(r[2]) if r[2] else {},
+              "narrative": CR.dec_json(r[3]) if r[3] else None} for r in rows]
+    return {"found": True, "count": len(snaps), "snapshots": snaps}
+
+
+@app.delete("/relationship/{uid}/{relation_tag}")
+def clear_relationship(uid: str, relation_tag: str):
+    """한 상대의 관계 스냅샷 전체 삭제(데모 재시드·프라이버시)."""
+    con = _db()
+    n = con.execute(
+        "DELETE FROM relationship_snapshots WHERE uid=? AND relation_tag=?",
+        (uid, relation_tag),
+    ).rowcount
+    con.commit(); con.close()
+    return {"deleted": n}
+
+
+
+# ── 직무 분석 — 채용 공고 × 내 성향 ────────────────────────────────────
+# 공고에서 요구역량을 뽑는 건 누구나 한다. 우리가 더할 수 있는 건 '이 사람'의
+# 성향·가치순위와 대조해 맞는 지점과 부딪힐 지점을 짚는 것. 그래서 입력에
+# persona_block(일기에서 만든 성향 재료)을 함께 넣는다.
+class JobAnalyzeReq(BaseModel):
+    posting: str = ""                    # 공고 원문(붙여넣기)
+    uid: Optional[str] = None            # 저장된 성향 사용
+    persona_block: Optional[str] = None  # 직접 전달(우선)
+    choice: Optional[str] = None         # 이 공고가 걸린 선택지(예: "이직")
+
+
+_JOB_SCHEMA = (
+    '반드시 이 JSON만 출력:\n'
+    '{"role":"직무명(공고에서)","company":"회사명(없으면 빈 문자열)",'
+    '"requirements":["핵심 요구역량 3~5개, 공고 표현을 우리말로 정리"],'
+    '"fit":[{"point":"성향과 맞는 지점","why":"근거 한 문장"}],'
+    '"friction":[{"point":"부딪힐 수 있는 지점","why":"근거 한 문장"}],'
+    '"prep":["지원 전 준비할 것 3개, 구체적 행동으로"],'
+    '"questions":[{"q":"예상 면접 질문","angle":"이 사람 성향으로 답할 각도"}]}\n'
+    "fit·friction 은 각 2~3개. 공고에 없는 회사 사정을 지어내지 말고, 성향 재료가 "
+    "없으면 friction 을 비워라. 단정·진단 금지, 담백하게. 한국어만 쓰고 한자는 쓰지 마라. "
+    "설명·인사말 없이 JSON 하나만 출력한다."
+)
+
+
+# 공고를 붙여넣기 말고 URL·PDF 로도 받는다. 다만 채용 사이트 상당수가 JS 렌더링이라
+# URL 만으로는 제목·회사 정도만 건지는 경우가 많다 — 그럴 땐 부족하다고 알려준다.
+class JobExtractReq(BaseModel):
+    url: str = ""
+
+
+_UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36"}
+
+
+def _strip_html(html):
+    import re
+    t = re.sub(r"<script.*?</script>|<style.*?</style>", " ", html, flags=re.S)
+    t = re.sub(r"<[^>]+>", " ", t)
+    return re.sub(r"\s+", " ", t).strip()
+
+
+@app.post("/job/extract-url")
+def job_extract_url(req: JobExtractReq):
+    """공고 URL → 텍스트. JSON-LD(JobPosting)를 먼저 보고, 없으면 본문 텍스트."""
+    import re, urllib.request
+    url = (req.url or "").strip()
+    if not url.startswith("http"):
+        return {"ok": False, "reason": "bad_url"}
+    try:
+        rq = urllib.request.Request(url, headers=_UA)
+        with urllib.request.urlopen(rq, timeout=15) as r:
+            html = r.read().decode("utf-8", "ignore")
+    except Exception as e:      # noqa: BLE001
+        return {"ok": False, "reason": f"fetch_failed: {type(e).__name__}"}
+
+    title = company = ""
+    parts = []
+    for m in re.finditer(r'<script[^>]*type=["\']application/ld\+json["\'][^>]*>(.*?)</script>', html, re.S):
+        try:
+            d = json.loads(m.group(1))
+        except Exception:      # noqa: BLE001
+            continue
+        items = d if isinstance(d, list) else [d]
+        for it in items:
+            if isinstance(it, dict) and it.get("@type") == "JobPosting":
+                title = it.get("title") or title
+                company = ((it.get("hiringOrganization") or {}).get("name")) or company
+                body = _strip_html(it.get("description") or "")
+                if body:
+                    parts.append(body)
+                for k in ("responsibilities", "qualifications", "skills", "experienceRequirements"):
+                    v = it.get(k)
+                    if isinstance(v, str) and v.strip():
+                        parts.append(_strip_html(v))
+    if not title:
+        m = re.search(r'<meta[^>]+property=["\']og:title["\'][^>]+content=["\']([^"\']+)', html)
+        title = m.group(1) if m else ""
+
+    text = "\n".join(parts).strip()
+    if len(text) < 200:      # JS 렌더링이라 본문을 못 건진 경우 — 페이지 텍스트로 보완
+        page = _strip_html(html)
+        if len(page) > len(text):
+            text = page[:6000]
+    head = " ".join(x for x in (company, title) if x)
+    full = (head + "\n" + text).strip()
+    # 본문이 얇으면(내비게이션만 긁힌 경우) 사용자에게 붙여넣기를 권한다.
+    thin = len(text) < 300
+    return {"ok": True, "title": title, "company": company, "text": full[:6000],
+            "thin": thin, "chars": len(full)}
+
+
+@app.post("/job/extract-pdf")
+async def job_extract_pdf(file: UploadFile = File(...)):
+    """공고 PDF → 텍스트. 채용 페이지를 PDF로 저장해 오는 경우가 많다."""
+    try:
+        raw = await file.read()
+        import io as _io
+        from pypdf import PdfReader
+        reader = PdfReader(_io.BytesIO(raw))
+        pages = [(p.extract_text() or "") for p in reader.pages[:10]]
+        text = "\n".join(pages).strip()
+        text = " ".join(text.split())
+        if len(text) < 100:
+            return {"ok": False, "reason": "no_text",
+                    "hint": "이미지로 스캔된 PDF 같아요. 본문을 붙여넣어 주세요."}
+        return {"ok": True, "text": text[:6000], "chars": len(text),
+                "pages": len(reader.pages)}
+    except Exception as e:      # noqa: BLE001
+        return {"ok": False, "reason": str(e)}
+
+
+@app.post("/job/analyze")
+def job_analyze(req: JobAnalyzeReq):
+    """채용 공고 + 내 성향 → 요구역량·맞는 지점·부딪힐 지점·준비·예상질문."""
+    import os
+    text = (req.posting or "").strip()
+    if len(text) < 30:
+        return {"ok": False, "reason": "too_short"}
+    pb = req.persona_block or (_fetch_persona(req.uid) if req.uid else None)
+    R1._load_dotenv()
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        return {"ok": False, "reason": "no_api_key"}
+    # 과부하(529)·순간 오류는 사용자 잘못이 아니다 — 짧게 한 번 더 시도한다.
+    def _ask(client, prompt, max_tokens):
+        import time as _t
+        for attempt in range(3):
+            try:
+                resp = client.messages.create(
+                    model="claude-sonnet-5", max_tokens=max_tokens,
+                    thinking={"type": "disabled"},
+                    messages=[{"role": "user", "content": prompt}])
+                return "".join(b.text for b in resp.content if b.type == "text").strip()
+            except Exception as e:      # noqa: BLE001
+                transient = any(s in str(e).lower() for s in ("529", "overload", "rate", "500", "timeout"))
+                if attempt == 2 or not transient:
+                    raise
+                _t.sleep(1.5 * (attempt + 1))
+        return ""
+
+    prompt = (
+        "[채용 공고]\n" + text[:6000] + "\n\n"
+        + (f"{pb}\n\n" if pb else "")
+        + (f"[맥락] 사용자는 지금 '{req.choice}' 선택을 저울질하는 중이다.\n\n" if req.choice else "")
+        + "위 공고를 지원자 관점에서 분석하라. 성향 재료가 있으면 그 사람과 이 일이 "
+          "만나는 지점과 부딪히는 지점을 반드시 구체적으로 짚어라.\n\n" + _JOB_SCHEMA
+    )
+    try:
+        from anthropic import Anthropic
+        txt = _ask(Anthropic(), prompt, 1200)
+        # 코드펜스든 설명이 앞에 붙든, 첫 '{' ~ 마지막 '}' 만 취한다.
+        s, e = txt.find("{"), txt.rfind("}")
+        if s < 0 or e <= s:
+            return {"ok": False, "reason": "no_json", "raw": txt[:200]}
+        data = json.loads(txt[s:e + 1])
+        data["ok"] = True
+        data["persona_used"] = bool(pb)
+        return data
     except Exception as e:      # noqa: BLE001
         return {"ok": False, "reason": str(e)}
 

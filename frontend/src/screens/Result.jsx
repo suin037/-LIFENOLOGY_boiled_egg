@@ -15,10 +15,12 @@ import EvidenceView from "../components/result/EvidenceView.jsx";
 import ActionView from "../components/result/ActionView.jsx";
 import AvatarComparison from "../components/result/AvatarComparison.jsx";
 import DiarySignalCard from "../components/result/DiarySignalCard.jsx";
+import JobAnalysisView from "../components/result/JobAnalysisView.jsx";
+import RelationshipView from "../components/result/RelationshipView.jsx";
 
 export default function Result() {
   const navigate = useNavigate();
-  const { result, profile, scenarioDomains, retryVisuals } = useResult();
+  const { result, profile, scenarioDomains, retryVisuals, jobAnalyses, postings, relResults, talks } = useResult();
   const { a, b } = result;
 
   const tabs = [
@@ -26,6 +28,14 @@ export default function Result() {
     { key: "change", label: "변화 흐름", View: ChangeView },
     { key: "evidence", label: "분석 상세", View: EvidenceView },
     { key: "next", label: "다음 단계", View: ActionView },
+    // 입력에서 공고를 분석했을 때만 — 예측 수치 옆에서 그 공고를 다시 확인한다.
+    ...(jobAnalyses?.length || postings?.length
+      ? [{ key: "job", label: `공고 분석${(jobAnalyses?.length || postings?.length) > 1 ? ` ${jobAnalyses?.length || postings?.length}` : ""}`, View: JobAnalysisView }]
+      : []),
+    // 관계 선택지에서 대화를 담았을 때만.
+    ...(relResults?.length || talks?.length
+      ? [{ key: "rel", label: `관계 분석${(relResults?.length || talks?.length) > 1 ? ` ${relResults?.length || talks?.length}` : ""}`, View: RelationshipView }]
+      : []),
   ];
 
   const [tab, setTab] = useState("indicators");
@@ -261,7 +271,7 @@ function PersonaScenario({ a, b }) {
   }
 
   return (
-    <div className="mb-3 mt-1 rounded-2xl border border-cyan bg-[#12203a] p-3.5">
+    <div className="mb-3 mt-1 rounded-2xl border border-cyan bg-[#1D1730] p-3.5">
       <div className="flex items-center justify-between">
         <div className="text-[13px] font-bold text-cyan">🔮 내 성향이 반영된 이직 서사</div>
         <button

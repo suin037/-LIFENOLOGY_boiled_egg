@@ -457,3 +457,8 @@ export function seedDemoYear() {
     if (typeof window !== "undefined") window.dispatchEvent(new Event("pm:universe"));
   } catch { /* 무시 */ }
 }
+
+// jy 데모의 은우 페르소나는 1년 동안 워라밸과 이직 고민이 변화하는 동일한 장기 시계열을 사용한다.
+export function seedDemoEunwoo() {
+  return seedDemoYear();
+}

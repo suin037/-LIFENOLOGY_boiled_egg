@@ -121,7 +121,7 @@ export default function Onboarding() {
           [&::-webkit-slider-thumb]:h-[18px] [&::-webkit-slider-thumb]:w-[18px]
           [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full
           [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-[0_0_8px_rgba(127,212,255,.6)]"
-        style={{ background: `linear-gradient(90deg, #7FD4FF, #4A90E2 ${agePct}%, #1E2740 ${agePct}%)` }} />
+        style={{ background: `linear-gradient(90deg, #8B6CCF, #8B6CCF ${agePct}%, #1E2740 ${agePct}%)` }} />
       <div className="mt-3 flex justify-between text-[11px] text-mut"><span>18세</span><span>70세</span></div>
     </div>,
     <div key="occupation">
@@ -166,12 +166,12 @@ export default function Onboarding() {
               key={c.id}
               onClick={() => toggleRank(c.label)}
               className={`tap flex items-center gap-3 rounded-xl border px-3.5 py-2.5 text-left transition-colors ${
-                on ? "border-cyan bg-[#12203a]" : "border-line bg-[#0E1424]"
+                on ? "border-cyan bg-[#211735] shadow-[inset_0_0_20px_rgba(112,75,163,.12)]" : "border-line bg-[#0E1424]"
               }`}
             >
               <span
                 className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold transition-colors ${
-                  on ? "bg-cyan text-[#04203a]" : "bg-[#1E2740] text-mut"
+                  on ? "bg-[#8B6CCF] text-white" : "bg-[#1E2740] text-mut"
                 }`}
               >
                 {on ? rank + 1 : "+"}
@@ -187,7 +187,7 @@ export default function Onboarding() {
       </div>
       {ranked.length > 0 && (
         <button type="button" onClick={() => reveal(5)}
-          className="tap mt-2.5 w-full rounded-xl border border-cyan/60 bg-[#12203a] py-2.5 text-[12px] font-semibold text-cyan">
+          className="tap mt-2.5 w-full rounded-xl border border-cyan bg-[#1D1730] py-2.5 text-[12px] font-semibold text-cyan">
           선택 완료
         </button>
       )}
@@ -204,7 +204,7 @@ export default function Onboarding() {
                   key={letter}
                   onClick={() => pickMbti(ax.i, letter)}
                   className={`tap flex-1 rounded-xl border py-2 text-[12px] transition-colors ${
-                    on ? "border-cyan bg-[#12203a] text-cyan" : "border-line bg-[#0E1424] text-sub"
+                    on ? "border-cyan bg-[#1D1730] text-cyan" : "border-line bg-[#0E1424] text-sub"
                   }`}
                 >
                   <b className="mr-1">{letter}</b>
@@ -216,7 +216,7 @@ export default function Onboarding() {
         ))}
       </div>
       <button type="button" onClick={() => reveal(6)}
-        className="tap mt-2.5 w-full rounded-xl border border-cyan/60 bg-[#12203a] py-2.5 text-[12px] font-semibold text-cyan">
+        className="tap mt-2.5 w-full rounded-xl border border-cyan bg-[#1D1730] py-2.5 text-[12px] font-semibold text-cyan">
         다음
       </button>
     </div>,
@@ -234,7 +234,7 @@ export default function Onboarding() {
       <Eyebrow>나를 알려주세요 · {Math.min(visibleThrough + 1, steps.length)}/{steps.length}</Eyebrow>
       <div className="mb-8 flex gap-1.5">
         {steps.map((label, index) => (
-          <b key={label} className={`h-1 flex-1 rounded-full ${index <= visibleThrough ? "bg-cyan" : "bg-[#1E2740]"}`} />
+          <b key={label} className={`h-1 flex-1 rounded-full ${index <= visibleThrough ? "bg-[#8B6CCF] shadow-[0_0_8px_rgba(139,108,207,.22)]" : "bg-[#1E2740]"}`} />
         ))}
       </div>
 

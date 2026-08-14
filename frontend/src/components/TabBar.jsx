@@ -1,10 +1,28 @@
 import { NavLink } from "react-router-dom";
-import { Home, BarChart3, Clock3, Bookmark } from "lucide-react";
+import { Home, Orbit, Bookmark } from "lucide-react";
+
+function SparkleDiamond({ size = 20, strokeWidth: _strokeWidth, ...props }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+      {...props}
+    >
+      <path
+        d="M12 2.5c.7 5.35 4.15 8.8 9.5 9.5-5.35.7-8.8 4.15-9.5 9.5-.7-5.35-4.15-8.8-9.5-9.5 5.35-.7 8.8-4.15 9.5-9.5Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
 
 const TABS = [
   { to: "/home", label: "홈", Icon: Home },
-  { to: "/input", label: "시뮬레이션", Icon: BarChart3 },
-  { to: "/my", label: "나의 우주", Icon: Clock3 },
+  { to: "/input", label: "시뮬레이션", Icon: SparkleDiamond },
+  { to: "/my", label: "나의 우주", Icon: Orbit },
   { to: "/archive", label: "보관함", Icon: Bookmark },
 ];
 
@@ -19,13 +37,13 @@ export default function TabBar() {
           title={label}
           className={({ isActive }) =>
             `tap flex flex-1 flex-col items-center justify-center gap-0.5 py-1 transition-colors lg:flex-row lg:gap-2 lg:py-2 ${
-              isActive ? "text-cyan" : "text-mut"
+              isActive ? "text-violet-400" : "text-mut"
             }`
           }
         >
           {({ isActive }) => (
             <>
-              <span className={`flex h-7 w-11 items-center justify-center rounded-lg ${isActive ? "bg-cyan/15" : ""}`}>
+              <span className={`flex h-7 w-11 items-center justify-center rounded-lg ${isActive ? "bg-violet-500/15" : ""}`}>
                 <Icon size={20} strokeWidth={isActive ? 2.5 : 1.9} />
               </span>
               <span className={`text-[10px] leading-none lg:text-[12px] ${isActive ? "font-semibold" : ""}`}>{label}</span>

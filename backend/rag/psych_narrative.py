@@ -16,7 +16,7 @@ _INDICATOR_ORDER = ["경제적안정도", "성장가능성", "삶의질"]
 _NORMALIZE = {"경제적_안정도": "경제적안정도", "성장_가능성": "성장가능성", "삶의_질": "삶의질"}
 
 
-def select_focus(indicator_scores):
+def select_focus(indicator_scores, eligible_indicators=None):
     """3지표 점수 dict → (초점지표, 점수). 가장 낮은(=가장 개입 필요한) 지표 선택.
 
     indicator_scores 예: {"경제적안정도": 0.6, "성장가능성": 0.3, "삶의질": 0.18}
@@ -24,31 +24,38 @@ def select_focus(indicator_scores):
     """
     if not indicator_scores:
         return None, None
-    norm = {_NORMALIZE.get(k, k): v for k, v in indicator_scores.items()}
+    allowed = set(eligible_indicators) if eligible_indicators is not None else None
+    norm = {_NORMALIZE.get(k, k): v for k, v in indicator_scores.items()
+            if allowed is None or _NORMALIZE.get(k, k) in allowed}
+    if not norm:
+        return None, None
     focus = min(norm, key=norm.get)
     return focus, norm[focus]
 
 
 def get_psych_evidence(indicator_scores, emotions=None, decision_type=None, k=3,
-                       focus_override=None):
+                       focus_override=None, eligible_indicators=None, basis="model"):
     """레이어2 신호 → 관련 이론카드 top-k(재료). 카드가 없으면 빈 리스트.
 
     focus_override: 초점 지표를 강제 지정(성향 개인화 레이어가 '중요하며 위태로운' 축을
         고른 경우). None 이면 기존 동작(가장 낮은 지표 = 개입 필요)으로 폴백.
     """
-    if focus_override:
+    allowed = set(eligible_indicators) if eligible_indicators is not None else None
+    if focus_override and (allowed is None or focus_override in allowed):
         focus = focus_override
         score = (indicator_scores or {}).get(focus)
         if score is None:  # override 지표에 점수가 없으면 안전하게 폴백
-            focus, score = select_focus(indicator_scores)
+            focus, score = select_focus(indicator_scores, eligible_indicators)
     else:
-        focus, score = select_focus(indicator_scores)
+        focus, score = select_focus(indicator_scores, eligible_indicators)
     if focus is None or score is None:
-        return {"focus_indicator": None, "level": None, "cards": []}
+        return {"focus_indicator": None, "level": None, "cards": [], "basis": basis,
+                "reason": "심리 RAG에 사용할 수 있는 검증된 상태 점수가 없음"}
     level = bucket(score, focus)
     cards = retrieve(indicator=focus, score=score, emotions=emotions,
                      decision_type=decision_type, k=k)
-    return {"focus_indicator": focus, "score": score, "level": level, "cards": cards}
+    return {"focus_indicator": focus, "score": score, "level": level, "cards": cards,
+            "basis": basis}
 
 
 def build_psych_prompt_block(evidence):

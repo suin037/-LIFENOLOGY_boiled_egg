@@ -5,7 +5,7 @@ import TabBar from "./TabBar.jsx";
 const NO_TABBAR = ["/", "/onboarding", "/simulate"];
 // 프로필(설정) 아이콘을 숨기는 경로
 const NO_PROFILE = ["/simulate", "/settings"];
-const WIDE_DESKTOP = ["/home", "/input", "/result", "/my", "/archive"];
+const WIDE_DESKTOP = ["/home", "/input", "/result", "/my", "/archive", "/settings"];
 
 export default function Layout() {
   const { pathname } = useLocation();
@@ -14,6 +14,7 @@ export default function Layout() {
   const showTabBar = !NO_TABBAR.includes(pathname);
   const showProfile = !NO_PROFILE.includes(pathname);
   const useWideDesktop = WIDE_DESKTOP.includes(pathname);
+  const isLanding = pathname === "/";
 
   return (
     <div
@@ -24,15 +25,16 @@ export default function Layout() {
       }}
     >
       <div
-        className="relative flex h-screen w-full max-w-phone flex-col overflow-hidden bg-bg
-                   sm:h-[1180px] sm:max-h-[94vh] sm:rounded-[28px] sm:border sm:border-[#52627B]
-                   lg:h-[calc(100vh-64px)] lg:max-h-none lg:max-w-[1240px] lg:rounded-[32px]
-                   sm:ring-1 sm:ring-white/10
-                   sm:shadow-[0_30px_90px_rgba(0,0,0,.65),0_0_45px_rgba(65,118,190,.18)]"
+        className={`relative flex h-screen w-full flex-col overflow-hidden bg-bg ${
+          `max-w-phone sm:h-[900px] sm:max-h-[94vh] sm:rounded-[44px] sm:border sm:border-[#52627B]
+               md:aspect-[16/10] md:h-auto md:max-h-[calc(100vh-48px)] md:max-w-[calc((100vh-48px)*1.6)] md:rounded-[32px]
+               lg:max-w-[1240px] sm:ring-1 sm:ring-white/10
+               sm:shadow-[0_30px_90px_rgba(0,0,0,.65),0_0_45px_rgba(65,118,190,.18)]`
+        }`}
         style={{ backgroundImage: "radial-gradient(circle at 85% 8%, rgba(47,111,232,.12), transparent 32%), linear-gradient(180deg, #0B1423 0%, #08101D 100%)" }}
       >
         {/* 서비스 헤더 */}
-        <header className="z-20 flex h-14 shrink-0 items-center justify-between border-b border-transparent px-5 lg:h-[72px] lg:border-line/70 lg:px-9">
+        {!isLanding && <header className="z-20 flex h-14 shrink-0 items-center justify-between border-b border-transparent px-5 lg:h-[72px] lg:border-line/70 lg:px-9">
           <button onClick={() => navigate("/home")} className="text-[17px] font-bold tracking-[-.035em] text-ink lg:text-[21px]">
             Parallel Me
           </button>
@@ -41,7 +43,7 @@ export default function Layout() {
               <button
                 onClick={() => navigate("/settings")}
                 aria-label="프로필 · 설정"
-                className="tap flex h-10 w-10 items-center justify-center rounded-full border border-line bg-card/80 text-sub transition-colors hover:bg-card2"
+                className="tap flex h-10 w-10 items-center justify-center rounded-full border border-violet-400/25 bg-violet-500/10 text-violet-400 transition-colors hover:bg-violet-500/15"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                   <circle cx="12" cy="8" r="3.2" />
@@ -50,22 +52,19 @@ export default function Layout() {
               </button>
             )}
           </div>
-        </header>
+        </header>}
 
         {/* 화면 본문 (스크롤) */}
         <main
           key={pathname}
-          className={`no-scrollbar relative z-10 flex-1 overflow-y-auto px-5 pb-7 pt-1 lg:px-9 lg:pb-8 lg:pt-6 [&>*]:mx-auto [&>*]:w-full ${
-            useWideDesktop ? "[&>*]:max-w-[1120px]" : "[&>*]:max-w-phone"
+          className={`no-scrollbar relative z-10 flex-1 ${isLanding ? "overflow-hidden p-0 [&>*]:h-full [&>*]:w-full [&>*]:max-w-none" : "overflow-y-auto px-5 pb-7 pt-1 lg:px-9 lg:pb-8 lg:pt-6 [&>*]:mx-auto [&>*]:w-full"} ${
+            isLanding ? "" : useWideDesktop ? "[&>*]:max-w-[1120px]" : "[&>*]:max-w-phone"
           }`}
         >
           <Outlet />
         </main>
 
         {showTabBar && <TabBar />}
-
-        {/* 오버레이(상점 등) 포탈 루트 — 폰 프레임 전체를 덮는다 */}
-        <div id="pm-overlay-root" />
       </div>
     </div>
   );

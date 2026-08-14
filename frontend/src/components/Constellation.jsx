@@ -5,7 +5,7 @@ import { useState } from "react";
 
 const W = 200, H = 200, CX = 100, CY = 96;
 const R_MIN = 16, R_SPREAD = 60; // 힘든 날=중심, 좋은 날=바깥
-const COL = ["#E24B4A", "#D85A30", "#EDA100", "#5DCAA5", "#378ADD"]; // 기분 1~5 색
+const COL = ["#E24B4A", "#D85A30", "#EDA100", "#5DCAA5", "#8B6CCF"]; // 기분 1~5 색
 const MOOD_LABEL = ["매우 낮음", "낮음", "보통", "좋음", "매우 좋음"];
 
 // valence(-1~1) 또는 mood(1~5) → 기분레벨 1~5
@@ -18,9 +18,8 @@ export const starColor = (s) => COL[level(s) - 1];
 
 function shortNote(star) {
   const note = String(star.note || star.text || "").replace(/\s+/g, " ").trim();
-  const multi = (star.splits || 1) > 1 ? ` · 기록 ${star.splits}개(분화)` : "";
-  if (!note) return (star.hasDiary ? "일기를 기록했어요" : "기분을 기록했어요") + multi;
-  return (note.length > 34 ? `${note.slice(0, 34)}…` : note) + multi;
+  if (!note) return star.hasDiary ? "일기를 기록했어요" : "기분을 기록했어요";
+  return note.length > 34 ? `${note.slice(0, 34)}…` : note;
 }
 
 function dateLabel(dateKey) {
@@ -52,11 +51,11 @@ export default function Constellation({ stars = [], onSelect, selectedDate = nul
       aria-label={`이번 주 ${pts.filter((p) => p.filled).length}일의 기록으로 그린 별자리`}
       style={{ maxHeight: size, height: size, display: "block" }}>
       {/* 중심점 */}
-      <circle cx={CX} cy={CY} r={2} fill="#5A6B8C" opacity={0.5} />
+      <circle cx={CX} cy={CY} r={2} fill="#8B6CCF" opacity={0.5} />
       {/* 중심→별 살(spoke) */}
       {pts.map((p, i) => (
         <line key={`sp${i}`} x1={CX} y1={CY} x2={p.x} y2={p.y}
-          stroke="#5A6B8C" strokeWidth={0.5} strokeOpacity={0.16} />
+          stroke="#8B6CCF" strokeWidth={0.5} strokeOpacity={0.16} />
       ))}
       {/* 별끼리 잇는 별자리 선(순서대로, 마지막→처음 닫기) */}
       {pts.map((p, i) => {
@@ -64,7 +63,7 @@ export default function Constellation({ stars = [], onSelect, selectedDate = nul
         const solid = p.filled && q.filled;
         return (
           <line key={`ln${i}`} x1={p.x} y1={p.y} x2={q.x} y2={q.y}
-            stroke="#9FB0CE" strokeWidth={solid ? 1 : 0.8}
+            stroke="#8B6CCF" strokeWidth={solid ? 1 : 0.8}
             strokeOpacity={solid ? 0.42 : 0.14}
             strokeDasharray={solid ? undefined : "2 4"} />
         );
@@ -101,12 +100,7 @@ export default function Constellation({ stars = [], onSelect, selectedDate = nul
             <circle cx={p.x} cy={p.y} r={r + (isSel ? 8 : 3)} fill={col} opacity={isSel ? 0.4 : 0.14} />
             <circle cx={p.x} cy={p.y} r={r} fill={col}
               stroke="#FFFFFF" strokeOpacity={isToday ? 0.9 : 0.35} strokeWidth={isToday ? 1.4 : 0.6} />
-            {/* 분화한 별(하루 2기록+) — 작은 동반성이 붙은 쌍성 */}
-            {(p.splits || 1) > 1 && (
-              <circle cx={p.x + r * 1.15} cy={p.y - r * 1.0} r={r * 0.55} fill={col}
-                stroke="#FFFFFF" strokeOpacity={0.5} strokeWidth={0.5} />
-            )}
-            {p.hasDiary && <circle cx={p.x} cy={p.y} r={r + 3} fill="none" stroke="#9FB0CE" strokeWidth={0.7} opacity={0.45} />}
+            {p.hasDiary && <circle cx={p.x} cy={p.y} r={r + 3} fill="none" stroke="#8B6CCF" strokeWidth={0.7} opacity={0.45} />}
             {/* 별이 작아서 탭 영역 별도 */}
             <circle cx={p.x} cy={p.y} r={13} fill="transparent" />
           </g>
@@ -158,7 +152,7 @@ function Sparkle({ x, y, size = 3, delay = "0" }) {
     s = size * 0.32;
   const d = `M${x},${y - r} L${x + s},${y - s} L${x + r},${y} L${x + s},${y + s} L${x},${y + r} L${x - s},${y + s} L${x - r},${y} L${x - s},${y - s} Z`;
   return (
-    <path d={d} fill="#EAF2FF">
+    <path d={d} fill="#F4F0FF">
       <animate attributeName="opacity" values="0;1;0.3;1;0" dur="1.8s" begin={`${delay}s`} repeatCount="indefinite" />
     </path>
   );

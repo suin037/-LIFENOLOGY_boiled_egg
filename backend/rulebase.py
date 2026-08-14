@@ -25,10 +25,7 @@ import pandas as pd
 from choice_classifier import SCALE_ALL, classify, extract_startup_context
 from config import settings
 
-DATA = settings.data_abspath                       # <ROOT>/data
-# ⚠ 예전엔 goms_clean_abspath.parent 로 잡았는데, goms_clean 이 data/clean/ 로
-#   옮겨지면서 data/clean/dgroup 을 가리키게 됐다. _csv() 가 없는 경로를 조용히
-#   None 으로 넘겨 L1 생활지표가 통째로 빈 채 서빙됐다. data_dir 기준으로 고정.
+DATA = settings.goms_clean_abspath.parent          # <ROOT>/data
 DGROUP = DATA / "dgroup"
 LANOLLAB = DATA / "lanollab"
 
@@ -236,47 +233,26 @@ def _src_education(profile: dict) -> list[dict]:
 
 
 def bizsurv_rows(profile: dict):
-    """생존율 테이블에서 이 프로필에 맞는 (최신연도 행들, 적용된 맥락) 을 고른다.
-
-    `domain_router` 도 같은 축으로 조회해야 해서 공개 함수로 둔다 — 창업 생존율의
-    필터 규칙이 두 군데로 갈라지면 화면마다 다른 숫자가 나온다.
-
-    예전엔 `전체 업종 × 전 규모(계)` 한 조합만 읽었다. 테이블에는 업종 19개 ×
-    규모 5개 × 연차 5개가 다 들어 있는데 4,718행 중 3행만 쓴 셈이고, 그래서
-    "카페 창업" 과 "IT 창업" 이 같은 숫자를 받았다. 실제 차이는 작지 않다
-    (5년 생존율: 숙박·음식점 26.1% vs 보건·복지 67.4%, 전체 평균 35.4%).
-
-    요청한 조합이 테이블에 없으면 **업종보다 규모를 먼저 포기**한다. 업종별
-    차이가 규모별 차이보다 크기 때문이다. 실제로 완화가 필요한 건 표본이 얇은
-    광업·전기가스의 대규모 칸 정도다.
-    """
+    """창업 문장에서 찾은 업종·규모에 맞는 최신 생존율 행을 반환한다."""
     df = _csv(str(BIZSURV))
     if df is None:
         return None, None
     ctx = extract_startup_context(str(profile.get("choice", "")))
-
-    for industry, scale, applied in (
+    fallbacks = (
         (ctx.industry_or_all, ctx.scale, ctx),
         (ctx.industry_or_all, SCALE_ALL, replace(ctx, scale=SCALE_ALL, scale_inferred=False)),
         ("전체", ctx.scale, replace(ctx, ksic_section=None, industry=None)),
-        ("전체", SCALE_ALL, replace(ctx, ksic_section=None, industry=None,
-                                    scale=SCALE_ALL, scale_inferred=False)),
-    ):
-        d = df[(df["industry"].astype(str) == industry)
-               & (df["firm_size"].astype(str) == scale)]
+        ("전체", SCALE_ALL, replace(ctx, ksic_section=None, industry=None, scale=SCALE_ALL, scale_inferred=False)),
+    )
+    for industry, scale, applied in fallbacks:
+        d = df[(df["industry"].astype(str) == industry) & (df["firm_size"].astype(str) == scale)]
         if not d.empty:
             return d[d["ref_year"] == d["ref_year"].max()], applied
     return None, None
 
 
 def _src_startup(profile: dict) -> list[dict]:
-    """창업 선택 시 — 업종·규모별 창업 N년 생존율.
-
-    ⚠ 예전엔 `"창업" in choice` 부분문자열로 걸렀다. 그래서 "식당 차리고 싶어",
-      "한의원 개원" 처럼 '창업' 이라는 단어를 안 쓴 입력은 분류기가 창업으로
-      판정해도 이 지표만 조용히 빠졌다. 분류는 분류기 한 곳에서만 한다.
-      (record=False — 요청당 집계는 core 에서 이미 한 번 했다)
-    """
+    """창업 선택 시 — 업종·규모별 창업 생존율."""
     if classify(profile.get("choice", ""), record=False).kind != "창업":
         return []
     d, ctx = bizsurv_rows(profile)
@@ -284,7 +260,6 @@ def _src_startup(profile: dict) -> list[dict]:
         return []
     year = int(d["ref_year"].iloc[0])
     out = []
-    # 패널이 넘치지 않게 지표는 1·3·5년만. 연차별 곡선은 타임라인이 5점 다 준다.
     for h in (1, 3, 5):
         m = d[d["survival_horizon_yr"] == h]
         if not m.empty:
@@ -295,10 +270,6 @@ def _src_startup(profile: dict) -> list[dict]:
 
 
 # 등록된 소스(추가 데이터셋은 여기에 _src 함수 하나만 더 붙이면 패널 확장)
-#
-# ⚠ 선택(choice)에 따라 값이 달라지는 소스는 `_CHOICE_SOURCES` 로 분리한다.
-#   A/B 비교는 `core.new_profile_cache()` 로 L1 을 한 번만 계산해 공유하는데,
-#   선택 의존 소스가 여기 섞여 있으면 A 의 업종 생존율이 B 에도 그대로 실린다.
 _SOURCES = [
     _src_job_change_income,   # 경제 — 이직 소득변화 (MVP 핵심)
     _src_wage,                # 경제 — 또래 임금
@@ -308,14 +279,13 @@ _SOURCES = [
     _src_education,           # 진학/취업 — 계열별 취업률·진학률 (KEDI)
 ]
 
-_CHOICE_SOURCES = [
-    _src_startup,             # 창업 (choice=창업, 업종·규모별)
-]
+_CHOICE_SOURCES = [_src_startup]
 
 
-def _run(sources, profile: dict) -> list[dict]:
+def query_life_indicators(profile: dict) -> list[dict]:
+    """프로필 -> 인생 여러 차원의 지표 패널. 실패한 소스는 건너뛴다."""
     out: list[dict] = []
-    for src in sources:
+    for src in _SOURCES:
         try:
             out.extend(src(profile))
         except Exception:
@@ -323,27 +293,23 @@ def _run(sources, profile: dict) -> list[dict]:
     return out
 
 
-def query_life_indicators(profile: dict) -> list[dict]:
-    """프로필 -> 인생 여러 차원의 지표 패널(**선택 무관**). 실패한 소스는 건너뛴다.
-
-    선택에 따라 갈리는 지표는 `query_choice_indicators()` 가 따로 준다.
-    """
-    return _run(_SOURCES, profile)
-
-
 def query_choice_indicators(profile: dict) -> list[dict]:
-    """선택(choice)에 따라 갈리는 지표만. A/B 공유 캐시에 태우면 안 되는 쪽."""
-    return _run(_CHOICE_SOURCES, profile)
+    """A/B 선택에 따라 달라지는 지표. 공유 캐시에 섞지 않는다."""
+    out: list[dict] = []
+    for src in _CHOICE_SOURCES:
+        try:
+            out.extend(src(profile))
+        except Exception:
+            continue
+    return out
 
 
 def startup_closure_timeline(profile: dict, years=(1, 2, 3, 4, 5)) -> dict:
     """창업 폐업 누적확률 타임라인 (L4 '후회 리스크'의 창업판).
 
-    창업은 개인단위 인과 데이터가 없어 이직의 L3/L4 를 못 쓴다. 대신 기업생멸통계
-    생존율을 폐업확률(=1-생존율)로 바꿔 '시간이 지날수록 접을 확률' 을 준다.
-    업종·규모는 자유입력에서 뽑는다(`_bizsurv_rows`).
-
-    테이블에 1~5년이 다 있어서 5점을 그대로 쓴다(예전엔 1·3·5년 3점만 썼다).
+    창업은 개인단위 인과 데이터가 없어 이직의 L3/L4 를 못 쓴다.
+    대신 기업생멸통계 생존율(전체 업종)을 폐업확률(=1-생존율)로 바꿔
+    '시간이 지날수록 접을 확률' 타임라인을 제공한다.
     """
     d, _ = bizsurv_rows(profile)
     if d is None or d.empty:
@@ -357,8 +323,6 @@ def startup_closure_timeline(profile: dict, years=(1, 2, 3, 4, 5)) -> dict:
 
 
 def startup_context_meta(profile: dict) -> dict:
-    """어떤 업종·규모 기준으로 창업 수치가 나갔는지 (커버리지 문구·프론트 표기용)."""
+    """결과 화면에 실제 적용한 창업 업종·규모 기준을 노출한다."""
     _, ctx = bizsurv_rows(profile)
-    if ctx is None:
-        return {}
-    return {**ctx.as_dict(), "label": ctx.label()}
+    return {} if ctx is None else {**ctx.as_dict(), "label": ctx.label()}

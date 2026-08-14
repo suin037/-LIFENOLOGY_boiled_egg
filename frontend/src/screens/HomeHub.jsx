@@ -4,7 +4,6 @@ import { Orbit, ChevronRight, Sparkles, GitCompareArrows } from "lucide-react";
 import { useResult } from "../data/ResultContext.jsx";
 import { Button } from "../components/ui.jsx";
 import DiaryToday from "../components/DiaryToday.jsx";
-import PetMascot from "../components/PetMascot.jsx";
 import { universeSummary } from "../data/myUniverse.js";
 import { jobChangeRumination } from "../data/diarySignals.js";
 
@@ -34,9 +33,6 @@ export default function HomeHub() {
         비춰볼까요?
       </h1>
 
-      {/* 🧸 귀염둥이 육성 — 기록하면 간식, 쓰다듬고 먹이면 친밀도↑ */}
-      <PetMascot />
-
       {/* 가이드 캐러셀 + 이번 주 기록 + 오늘 체크인 */}
       <div className="lg:mt-6 lg:grid lg:grid-cols-[minmax(0,1.45fr)_minmax(300px,.75fr)] lg:items-start lg:gap-7">
         <DiaryToday />
@@ -46,9 +42,9 @@ export default function HomeHub() {
       {rumination.prompt && (
         <button
           onClick={startJobCompare}
-          className="tap mt-4 flex w-full items-center gap-3 rounded-[18px] border border-cyan/40 bg-[#12203a] px-4 py-3.5 text-left transition-colors hover:bg-[#16264a]"
+          className="tap mt-4 flex w-full items-center gap-3 rounded-[18px] border border-cyan/40 bg-[#1D1730] px-4 py-3.5 text-left transition-colors hover:bg-[#16264a]"
         >
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-cyan/15 text-cyan">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-500/15 text-violet-400">
             <GitCompareArrows size={18} strokeWidth={2} />
           </span>
           <span className="min-w-0 flex-1">
@@ -57,13 +53,13 @@ export default function HomeHub() {
             </span>
             <span className="block text-[11px] text-sub">이직 vs 현상 유지, 지금 비교해볼까요?</span>
           </span>
-          <ChevronRight size={18} className="text-cyan" />
+          <ChevronRight size={18} className="text-violet-400" />
         </button>
       )}
 
       {/* 새 시뮬 CTA */}
       <Button className="mt-4 flex items-center justify-center gap-1.5 lg:mt-0 lg:py-4" onClick={() => navigate("/input")}>
-        <Sparkles size={18} strokeWidth={2.2} />
+        <Sparkles size={18} strokeWidth={2.2} className="text-violet-200" />
         새 시뮬레이션 시작
       </Button>
 
@@ -74,7 +70,7 @@ export default function HomeHub() {
           onClick={() => navigate("/my")}
           className="tap flex items-center gap-0.5 text-[12px] text-mut"
         >
-          전체 보기 <ChevronRight size={14} />
+          전체 보기 <ChevronRight size={14} className="text-violet-400" />
         </button>
       </div>
 
@@ -88,15 +84,16 @@ export default function HomeHub() {
         onClick={() => navigate("/my")}
         className="tap mt-2 flex w-full items-center gap-3 rounded-[18px] bg-card px-4 py-3.5 text-left transition-colors hover:bg-card2 lg:mt-3 lg:py-5"
       >
-        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-cyan/15 text-cyan">
+        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-violet-500/15 text-violet-400">
           <Orbit size={18} strokeWidth={2} />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-[14px] font-semibold text-ink">나의 우주 열기</span>
           <span className="block text-[11px] text-mut">별자리·행성·저장한 평행우주</span>
         </span>
-        <ChevronRight size={18} className="text-mut" />
+        <ChevronRight size={18} className="text-violet-400/70" />
       </button>
+
         </aside>
       </div>
     </div>

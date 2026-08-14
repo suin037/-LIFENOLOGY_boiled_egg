@@ -42,7 +42,7 @@ export const MOCK_RESULT = {
 };
 
 // A(이직)=시안, B(잔류)=골드 — 앱 전체에서 끝까지 일관.
-export const A_COLOR = "#7FD4FF";
+export const A_COLOR = "#8B6CCF";
 export const B_COLOR = "#F5C86B";
 
 // 유사인물 총원 (43 + 157). 목업이 200 기준으로 서술되어 있어 파생값으로 고정.
@@ -107,11 +107,11 @@ export const MY_UNIVERSE = {
 
 // 행성 = 삶의 영역. 선택하면 그 영역의 시뮬레이션 우주로.
 export const PLANETS = [
-  { key: "career", label: "진로", from: "#4A90E2", to: "#7FD4FF" },
-  { key: "life", label: "삶의 만족", from: "#E0954A", to: "#F5C86B" },
-  { key: "relation", label: "관계", from: "#8B5CF6", to: "#C4A6FF" },
-  { key: "health", label: "건강", from: "#2FB3A6", to: "#7FE0D4" },
-  { key: "growth", label: "성장성", from: "#5B6CE0", to: "#9AA8FF" },
+  { key: "career", label: "진로", from: "#7655C8", to: "#D8C6FF" },
+  { key: "life", label: "삶의 만족", from: "#D68A35", to: "#FFE09A" },
+  { key: "relation", label: "관계", from: "#C35E7B", to: "#FFACB8" },
+  { key: "health", label: "건강", from: "#28A491", to: "#A0F2D9" },
+  { key: "growth", label: "성장성", from: "#3485CA", to: "#A6E0FF" },
 ];
 
 // 저장된 평행우주 슬롯
@@ -125,5 +125,5 @@ export const SAVED_UNIVERSES = [
 export const MASCOTS = {
   nova: { key: "nova", name: "노바 · Nova", role: "COMET GUIDE", tag: "유성 가이드", color: "#FF9EC0", desc: "예상치 못한 기회와 변화를 전해주는 에너지 넘치는 가이드예요.", traits: ["호기심", "순발력", "활력"] },
   lumi: { key: "lumi", name: "루미 · Lumi", role: "STAR GUIDE", tag: "별빛 가이드", color: "#FFD97A", desc: "별자리와 기록을 돌보며 사용자의 성장을 응원하는 다정한 안내자예요.", traits: ["다정함", "꾸준함", "응원"] },
-  cosmo: { key: "cosmo", name: "코스모 · Cosmo", role: "PLANET EXPLORER", tag: "행성 탐험가", color: "#7CC3FF", desc: "데이터와 결과를 분석해 침착하게 미래를 안내하는 탐험가예요.", traits: ["차분함", "분석력", "신뢰"] },
+  cosmo: { key: "cosmo", name: "코스모 · Cosmo", role: "PLANET EXPLORER", tag: "행성 탐험가", color: "#8B6CCF", desc: "데이터와 결과를 분석해 침착하게 미래를 안내하는 탐험가예요.", traits: ["차분함", "분석력", "신뢰"] },
 };

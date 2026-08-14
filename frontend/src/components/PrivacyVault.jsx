@@ -62,7 +62,7 @@ export default function PrivacyVault() {
         암호문구(비밀번호)로만 열 수 있고, 원문·열쇠는 어디에도 저장되지 않아요.
       </p>
 
-      <div className="mt-3 flex gap-2">
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
         <input
           type="password"
           value={pass}
@@ -73,7 +73,7 @@ export default function PrivacyVault() {
         <button
           onClick={run}
           disabled={busy || !pass}
-          className="tap rounded-xl bg-cyan px-3.5 text-[12px] font-bold text-[#04203a] disabled:opacity-50"
+          className="tap shrink-0 whitespace-nowrap rounded-xl bg-cyan px-3.5 text-[12px] font-bold text-[#160D2D] disabled:opacity-50"
         >
           {busy ? "암호화 중…" : alreadySet ? "잠금 해제·암호화" : "설정·암호화"}
         </button>
@@ -96,7 +96,7 @@ export default function PrivacyVault() {
                 <div className="text-[9.5px] text-[#F0A0A0]">암호 없이 보면</div>
                 <div className="mt-1 break-all font-mono text-[9.5px] text-mut">…암호문(읽을 수 없음)…</div>
               </div>
-              <div className="rounded-xl border border-cyan/30 bg-[#12203a] p-2.5">
+              <div className="rounded-xl border border-cyan/30 bg-[#1D1730] p-2.5">
                 <div className="text-[9.5px] text-cyan">내 암호로 복호화하면</div>
                 <div className="mt-1 text-[10px] leading-relaxed text-sub">“{sample.decrypted}”</div>
               </div>
@@ -120,7 +120,7 @@ export default function PrivacyVault() {
             <div className="text-[9.5px] text-[#F0A0A0]">내 원문 (기기 안에만)</div>
             <div className="mt-1 text-[10.5px] leading-relaxed text-sub">{demoRaw}</div>
           </div>
-          <div className="rounded-xl border border-cyan/30 bg-[#12203a] p-2.5">
+          <div className="rounded-xl border border-cyan/30 bg-[#1D1730] p-2.5">
             <div className="text-[9.5px] text-cyan">외부 AI로 실제 전송되는 내용</div>
             <div className="mt-1 text-[10.5px] leading-relaxed text-sub">{demoMasked}</div>
           </div>

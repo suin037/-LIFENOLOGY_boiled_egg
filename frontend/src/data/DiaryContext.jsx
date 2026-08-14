@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { addCheckin, setDomains } from "./myUniverse.js";
+import { addCheckin, setDomains, syncDiaryEntries } from "./myUniverse.js";
 import { tagDomain } from "./dispositionApi.js";
 
 // ─────────────────────────────────────────────────────────────
@@ -113,6 +113,8 @@ export function DiaryProvider({ children }) {
     try {
       localStorage.setItem(KEY, JSON.stringify(entries));
     } catch (_) {}
+    // JY 일기 저장소의 기존 기록까지 나의 우주 별/별자리 데이터로 연결한다.
+    syncDiaryEntries(entries);
   }, [entries]);
 
   // 오늘 기록 추가/갱신 (하루 1개, 같은 날이면 덮어씀).
@@ -127,6 +129,8 @@ export function DiaryProvider({ children }) {
       skill: extra.competency,
       keyword: extra.emotion,
       note: text,
+      text,
+      answers,
       diaryId: `e-${today}`,
     });
     // 영역(행성) 자동 분류 — 저장 후 비동기로 태깅해 그날 체크인에 domains 를 채운다(지구본 렌즈용).

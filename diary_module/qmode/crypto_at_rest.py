@@ -50,8 +50,9 @@ def enc_field(s):
         return None
     try:
         return _PREFIX + _fernet().encrypt(str(s).encode("utf-8")).decode("ascii")
-    except Exception:
-        return s  # 암호화 실패 시 최소한 앱이 죽지 않게(로그 대체)
+    except Exception as exc:
+        # 민감정보는 암호화 실패 시 평문으로 저장하지 않는다(fail closed).
+        raise RuntimeError("민감정보 암호화에 실패해 저장을 중단했습니다.") from exc
 
 
 def dec_field(s):

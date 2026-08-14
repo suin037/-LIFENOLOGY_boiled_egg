@@ -45,13 +45,15 @@ function pickTrajectory(raw, choice) {
 const maxYear = (rows, fallback) =>
   Array.isArray(rows) && rows.length ? Math.max(...rows.map((p) => p.year ?? 0)) : fallback;
 
-function buildSide(scenario, choice, detail, profile, evidence, domainCov, domainStats) {
+function buildSide(scenario, choice, detail, profile, evidence, domainCov, domainStats, validatedPrediction, indicatorEvidence) {
   const raw = scenario?.raw || {};
   const { rows: trajectory, isBaseline } = pickTrajectory(raw, choice);
   const wellbeing = raw.wellbeing_trajectory || [];
 
-  // 현재 개인단위 매칭·인과·생존 모델은 이직에만 학습되어 있다.
-  const hasIndividual = choice === "이직";
+  // 이직은 개인단위 모델, 창업은 artifact가 배포된 경우 개인단위 자영 이탈모델을 쓴다.
+  // artifact가 없더라도 창업 risk_timeline에는 업종·규모별 기업생멸 통계가 들어온다.
+  const hasIndividual = choice === "이직" || (choice === "창업" && raw.survival_months != null);
+  const hasRisk = choice === "창업" || hasIndividual;
 
   return {
     choice,
@@ -85,8 +87,8 @@ function buildSide(scenario, choice, detail, profile, evidence, domainCov, domai
     neighbors: hasIndividual ? raw.neighbors || [] : [],
     neighbor_changed_ratio: hasIndividual ? raw.neighbor_changed_ratio ?? null : null,
     down_ratio: null,
-    risk_timeline: hasIndividual ? raw.risk_timeline || {} : {},
-    risk_label: hasIndividual ? scenario?.regret_summary?.label ?? null : null,
+    risk_timeline: hasRisk ? raw.risk_timeline || {} : {},
+    risk_label: hasRisk ? scenario?.regret_summary?.label ?? null : null,
 
     // 근거 수준(항목4) — 이 갈래가 어떤 강도의 근거인지 + 수치그래프 표시 정당성.
     evidence_level: evidence?.level || null,      // model | group_stat | rag | insufficient
@@ -96,6 +98,12 @@ function buildSide(scenario, choice, detail, profile, evidence, domainCov, domai
     graph_guard_note: domainCov?.guard_note || null,
     // 영역별 실측 집단통계 지표(항목3) — { domainKey: {label, evidence, indicators[]} }
     domain_stats: domainStats || {},
+    // 새 후보 모델: 검증 집단효과와 실험적 개인 추정치가 분리된 원응답.
+    validated_prediction: validatedPrediction || null,
+    parallel_trajectory: validatedPrediction?.parallel_trajectory || null,
+    observed_outcomes: validatedPrediction?.observed_outcomes || null,
+    // 각 지표의 숫자와 그 숫자를 뒷받침하는 근거 수준을 분리한다.
+    indicator_evidence: indicatorEvidence || null,
   };
 }
 
@@ -118,8 +126,10 @@ export function mapSimulateToPair(sim, { choiceA, choiceB, detailA = "", detailB
   const ev = cmp.evidence_levels || sim.evidence_levels || {};
   const dc = cmp.domain_coverage || sim.domain_coverage || {};
   const ds = cmp.domain_stats || sim.domain_stats || {};
-  const a = buildSide(A, choiceA, detailA, profile, ev.A, dc.A, ds.A);
-  const b = buildSide(B, choiceB, detailB, profile, ev.B, dc.B, ds.B);
+  const vp = cmp.validated_predictions || sim.validated_predictions || {};
+  const ie = cmp.indicator_evidence || sim.indicator_evidence || {};
+  const a = buildSide(A, choiceA, detailA, profile, ev.A, dc.A, ds.A, vp.A, ie.A);
+  const b = buildSide(B, choiceB, detailB, profile, ev.B, dc.B, ds.B, vp.B, ie.B);
 
   // 실데이터가 하나라도 있으면 실수치 모드. 연차별 궤적이 비어도(관측범위 밖/표본부족)
   // 이웃·인과·기대임금·지표 같은 실측이 있으면 목업으로 되돌리지 않는다.
@@ -127,6 +137,7 @@ export function mapSimulateToPair(sim, { choiceA, choiceB, detailA = "", detailB
     (s.trajectory && s.trajectory.length) ||
     (s.neighbors && s.neighbors.length) ||
     s.causal_effect != null || s.expected_wage != null || s.survival_months != null ||
+    s.parallel_trajectory?.status === "available" ||
     (s.life_indicators && s.life_indicators.length);
   if (!hasReal(a) && !hasReal(b)) return null;
   return { a, b };

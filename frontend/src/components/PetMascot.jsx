@@ -1,19 +1,18 @@
 import { useEffect, useState } from "react";
 import Mascot from "./Mascot.jsx";
 import PetCreature from "./PetCreature.jsx";
-import PetShop from "./PetShop.jsx";
-import { loadPet, claimDaily, petMascot, feedMascot, setWhich, moodOf, canPatToday, addBond } from "../data/petCare.js";
-import { loadShop, equippedItem, coinsAvailable } from "../data/petShop.js";
+import { loadPet, claimDaily, petMascot, feedMascot, setWhich, moodOf, canPatToday } from "../data/petCare.js";
+import { hasCheckedInToday } from "../data/myUniverse.js";
 
 // 🧸 마스코트 육성(가벼운 버전) — 쓰다듬기(말랑 튕김) + 간식으로 친밀도 키우기.
 // 3D 느낌은 CSS 소프트 그라디언트·그림자·squash/stretch로 '말랑말랑'하게.
 const GUIDES = [
   { key: "nova", name: "노바", color: "#FF9EC0", glow: "rgba(255,158,192,.45)" },
-  { key: "cosmo", name: "코스모", color: "#7CC3FF", glow: "rgba(124,195,255,.45)" },
+  { key: "cosmo", name: "코스모", color: "#8B6CCF", glow: "rgba(124,195,255,.45)" },
   { key: "lumi", name: "루미", color: "#FFD97A", glow: "rgba(255,217,122,.45)" },
 ];
 
-export default function PetMascot() {
+export default function PetMascot({ rumination, onCompare }) {
   const [pet, setPet] = useState(() => claimDaily(loadPet()));
   const [squish, setSquish] = useState(0); // 탭할 때마다 +1 → 애니 리트리거
   const [hearts, setHearts] = useState([]);
@@ -21,8 +20,6 @@ export default function PetMascot() {
   const [crumbs, setCrumbs] = useState([]); // 와구와구 부스러기
   const [expr, setExpr] = useState("idle"); // 리액션 표정(^ᴗ^)
   const [nonce, setNonce] = useState(0); // 하트 id용(랜덤 대신)
-  const [shopOpen, setShopOpen] = useState(false);
-  const [shop, setShop] = useState(() => loadShop()); // 장착 아이템·코인
 
   // 상호작용하면 잠깐 웃는 표정(^ᴗ^)으로.
   function react(ms = 1400) {
@@ -40,11 +37,12 @@ export default function PetMascot() {
   const guide = GUIDES.find((g) => g.key === pet.which) || GUIDES[1];
   const mood = moodOf(pet.happiness);
   const pattedToday = !canPatToday(pet);
-
-  // 장착 아이템(배경·소품·가구) + 코인
-  const bgItem = equippedItem("background", shop);
-  const accItem = equippedItem("accessory", shop);
-  const coins = coinsAvailable(shop);
+  const checkedIn = hasCheckedInToday();
+  const guideMessage = rumination?.prompt
+    ? `최근 ${rumination.windowDays}일 동안 이직 고민이 ${rumination.count}일 반복됐어요. 이제 기록만 하기보다 두 선택을 비교해볼까요?`
+    : checkedIn
+      ? "오늘 상태는 기록했어요. 무리해서 결정하지 말고, 떠오른 갈림길을 한 줄로 남겨두세요."
+      : "아직 오늘 상태를 모르겠어요. 30초 체크인을 하면 오늘에 맞는 다음 행동을 같이 정해볼게요.";
 
   // 동물을 직접 누르면: 토닥토닥 모션만(친밀도 변화 없음).
   function tapOnly() {
@@ -106,7 +104,7 @@ export default function PetMascot() {
   }
 
   return (
-    <div className="mb-4 overflow-hidden rounded-[22px] border border-white/10 bg-[#101A2A]/70 p-4 backdrop-blur lg:mt-2">
+    <div className="mb-2 mt-3 overflow-hidden rounded-[22px] border border-white/10 bg-[#101A2A]/70 p-4 backdrop-blur">
       <style>{`
         @keyframes pm-bob { 0%,100%{ transform: translateY(0) } 50%{ transform: translateY(-6px) } }
         @keyframes pm-squish {
@@ -130,17 +128,13 @@ export default function PetMascot() {
         @keyframes pm-crumb { 0%{ transform: translate(0,0) scale(1); opacity:1 } 100%{ transform: translate(var(--cx), var(--cy)) scale(.3); opacity:0 } }
       `}</style>
 
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <div className="whitespace-nowrap text-[13px] font-bold text-ink">🧸 귀염둥이</div>
-          <button
-            onClick={() => setShopOpen(true)}
-            className="tap flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-white/8 px-2 py-0.5 text-[10.5px] font-semibold text-ink"
-          >
-            🛍️ 꾸미기 <span className="text-[#F5C846]">🪙{coins}</span>
-          </button>
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="text-[13px] font-bold text-ink">내 생활 관리 친구</div>
+          <div className="mt-0.5 text-[9.5px] text-mut">기록을 살피고 다음 행동을 알려줘요</div>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex items-center gap-1">
+          <span className="mr-1 text-[9.5px] text-mut">돌보미</span>
           {GUIDES.map((g) => (
             <button
               key={g.key}
@@ -154,12 +148,18 @@ export default function PetMascot() {
         </div>
       </div>
 
-      {/* 데스크톱: 가로형(무대 왼쪽 · 컨트롤 오른쪽), 카드 안 가운데 정렬 */}
-      <div className="lg:mt-2 lg:flex lg:items-center lg:justify-center lg:gap-10">
+      <div className="mt-3 rounded-2xl border border-white/10 bg-[#0B1423]/80 px-3 py-2.5 text-[11px] leading-relaxed text-sub">
+        <span className="mr-1 font-bold" style={{ color: guide.color }}>{guide.name}</span>
+        {guideMessage}
+        {rumination?.prompt && onCompare && (
+          <button type="button" onClick={onCompare} className="tap mt-2 block w-full rounded-xl border border-cyan/35 bg-cyan/10 py-2 text-[11px] font-bold text-cyan">
+            이직과 현상 유지 비교하기
+          </button>
+        )}
+      </div>
+
       {/* 무대 — 말랑한 마스코트 */}
-      <div className="relative mx-auto mt-3 flex h-[150px] w-full max-w-[240px] items-end justify-center overflow-hidden rounded-[16px] lg:mx-0 lg:mt-0 lg:h-[220px] lg:w-[380px] lg:max-w-[380px] lg:shrink-0">
-        {/* 장착 배경 */}
-        {bgItem && <div className="pointer-events-none absolute inset-0" style={{ background: bgItem.render }} />}
+      <div className="relative mx-auto mt-2 flex h-[118px] w-full max-w-[220px] items-end justify-center">
         {/* 배경 후광 */}
         <div className="pointer-events-none absolute inset-0" style={{ background: `radial-gradient(circle at 50% 44%, ${guide.glow}, transparent 62%)` }} />
         {/* 바닥 그림자 */}
@@ -184,23 +184,8 @@ export default function PetMascot() {
           <div key={squish} style={{ animation: "pm-squish .5s cubic-bezier(.34,1.56,.64,1)", transformOrigin: "50% 100%" }}>
             {/* 젤리 광택 */}
             <div className="relative">
-              <PetCreature size={124} variant={guide.key} mood={mood} expr={expr} />
+              <PetCreature size={98} variant={guide.key} mood={mood} expr={expr} />
               <div className="pointer-events-none absolute left-[24%] top-[24%] h-8 w-8 rounded-full bg-white/45 blur-[7px]" />
-              {/* 장착 소품 (착용 위치별) */}
-              {accItem && (
-                <span
-                  className="pointer-events-none absolute"
-                  style={{
-                    top: `${accItem.pos?.top ?? 2}px`,
-                    left: accItem.pos?.left ?? "50%",
-                    transform: `translateX(-50%)${accItem.pos?.rotate ? ` rotate(${accItem.pos.rotate}deg)` : ""}`,
-                    fontSize: `${accItem.pos?.size ?? 24}px`,
-                    lineHeight: 1,
-                  }}
-                >
-                  {accItem.render}
-                </span>
-              )}
               {/* 입가로 날아와 와구와구 사라지는 쿠키 */}
               {eating && (
                 <span
@@ -229,12 +214,10 @@ export default function PetMascot() {
         </button>
       </div>
 
-      {/* 오른쪽 컨트롤 열(데스크톱) — 고정폭으로 가운데 정렬 */}
-      <div className="lg:w-[360px] lg:shrink-0">
       {/* 상태 + 액션 */}
-      <div className="mt-1 flex items-center gap-2 text-[11px] lg:mt-0">
+      <div className="mt-1 flex items-center gap-2 text-[11px]">
         <span className="text-mut">기분</span>
-        <span className="font-semibold" style={{ color: mood === "기쁨" ? "#5DCAA5" : mood === "시무룩" ? "#F0A0A0" : "#9FB0CE" }}>
+        <span className="font-semibold" style={{ color: mood === "기쁨" ? "#5DCAA5" : mood === "시무룩" ? "#F0A0A0" : "#8B6CCF" }}>
           {mood === "기쁨" ? "😊 기쁨" : mood === "시무룩" ? "🥺 시무룩" : "🙂 보통"}
         </span>
       </div>
@@ -263,20 +246,7 @@ export default function PetMascot() {
           🍪 간식 주기 ({pet.snacks})
         </button>
       </div>
-      <p className="mt-2 text-[9.5px] leading-relaxed text-mut">쓰다듬기는 하루 한 번(친밀도 +1~10), 간식은 친밀도 +7. 동물을 누르면 토닥토닥.</p>
-      </div>
-      </div>
-
-      {shopOpen && (
-        <PetShop
-          onClose={() => setShopOpen(false)}
-          onChange={() => setShop(loadShop())}
-          onFeed={(b) => {
-            setPet((p) => addBond(p, b));
-            react();
-          }}
-        />
-      )}
+      <p className="mt-2 text-[9.5px] leading-relaxed text-mut">친밀도와 캐릭터 기분은 게임 보상이며 예측 점수에는 반영되지 않아요.</p>
     </div>
   );
 }

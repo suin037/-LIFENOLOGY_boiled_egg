@@ -99,6 +99,9 @@ export function addCheckin(entry = {}) {
   const date = entry.date || todayKey();
   const valence =
     entry.valence != null ? Number(entry.valence) : moodToValence(entry.mood);
+  const answerValues = Array.isArray(entry.answers)
+    ? entry.answers
+    : Object.values(entry.answers || {});
   const star = {
     date,
     mood: entry.mood ?? null,
@@ -112,21 +115,59 @@ export function addCheckin(entry = {}) {
     domains: entry.domains ?? null, // 자동 분류 영역(행성) key 배열 — /tag 결과
     diaryId: entry.diaryId ?? null,
     hasDiary: Boolean(
-      entry.text?.trim() || entry.note?.trim() || entry.answers?.length || entry.diaryId,
+      entry.text?.trim() || entry.note?.trim()
+      || answerValues.some((value) => String(value?.a ?? value ?? "").trim())
+      || entry.diaryId,
     ),
   };
   return patch((s) => {
-    const prev = s.checkins.find((c) => c.date === date);
-    const rest = s.checkins.filter((c) => c.date !== date);
-    // 하루에 서로 다른 기록이 또 남으면 별이 '분화'한다(쌍성) — 이전 내용을 품고 개수를 센다.
-    const prevBody = (prev?.text || prev?.note || "").trim();
-    const newBody = (star.text || star.note || "").trim();
-    if (prev && prev.hasDiary && star.hasDiary && prevBody && newBody && prevBody !== newBody) {
-      star.splits = (prev.splits || 1) + 1;
-      star.priorTexts = [...(prev.priorTexts || []), prevBody].slice(-3);
-      star.domains = [...new Set([...(prev.domains || []), ...(star.domains || [])])];
+    const previous = s.checkins.find((c) => c.date === date);
+    if (previous) {
+      star.domains = entry.domains ?? previous.domains ?? null;
+      star.experiments = entry.experiments ?? previous.experiments ?? [];
     }
+    const rest = s.checkins.filter((c) => c.date !== date);
     s.checkins = [...rest, star].sort((a, b) => a.date.localeCompare(b.date));
+    return s;
+  });
+}
+
+/**
+ * JY diary entries(pm_diary_v5)를 나의 우주 별 저장소에 병합한다.
+ * 나의 우주에서 생성한 domains/experiments는 보존하고 일기 원문과 체크인 값만 갱신한다.
+ */
+export function syncDiaryEntries(entries = []) {
+  if (!Array.isArray(entries) || !entries.length) return loadUniverse();
+  return patch((s) => {
+    const byDate = new Map(s.checkins.map((item) => [item.date, item]));
+    for (const entry of entries) {
+      if (!entry?.date) continue;
+      const previous = byDate.get(entry.date) || {};
+      const answers = entry.answers ?? previous.answers ?? null;
+      const answerValues = Array.isArray(answers) ? answers : Object.values(answers || {});
+      const text = entry.text ?? previous.text ?? "";
+      const note = entry.note ?? text ?? previous.note ?? "";
+      byDate.set(entry.date, {
+        ...previous,
+        date: entry.date,
+        mood: entry.mood ?? previous.mood ?? null,
+        valence: entry.valence ?? moodToValence(entry.mood) ?? previous.valence ?? null,
+        energy: entry.energy ?? previous.energy ?? null,
+        skill: entry.competency ?? entry.skill ?? previous.skill ?? null,
+        keyword: entry.emotion ?? entry.keyword ?? previous.keyword ?? null,
+        note,
+        text,
+        answers,
+        diaryId: entry.id ?? entry.diaryId ?? previous.diaryId ?? `e-${entry.date}`,
+        domains: previous.domains ?? entry.domains ?? null,
+        experiments: previous.experiments ?? entry.experiments ?? [],
+        hasDiary: Boolean(
+          String(text).trim() || String(note).trim()
+          || answerValues.some((value) => String(value?.a ?? value ?? "").trim()),
+        ),
+      });
+    }
+    s.checkins = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
     return s;
   });
 }
@@ -495,14 +536,14 @@ const DEMO_DIARY = {
     note: "그냥 버텼다.",
     text: "하루가 어떻게 갔는지 모르겠다. 그냥 버틴다는 말밖에 안 나온다.",
     answers: [
-      { q: "오늘 가장 마음이 걸린 순간, 그때 나는 무엇을 했나요? 옆에서 본 사람이라면 뭐가 보였을까요?", a: "회의 내내 멍하게 앉아만 있었다. 아무 말도 못 하고 시간만 흘려보냈다. 옆에서 봤다면 완전히 방전된 사람처럼 보였을 거다." },
+      { q: "오늘 가장 마음이 걸린 순간은?", a: "회의 내내 멍했다. 아무 생각이 없었다." },
     ],
   },
   "0-3": {
     note: "다 놓고 싶었다.",
     text: "다 놓고 싶다는 생각이 문득 들었다. 근데 그냥 출근했다.",
     answers: [
-      { q: "오늘 가장 기억에 남는 순간 하나만 편하게 적어주세요.", a: "점심에 혼자 10분 걸은 것. 오늘 유일하게 숨 쉰 것 같은 시간이었다." },
+      { q: "그럼에도 오늘 지킨 것은?", a: "점심에 잠깐 산책했다. 그게 유일한 숨통이었다." },
     ],
   },
   // 4주 전 — 자각
@@ -510,14 +551,14 @@ const DEMO_DIARY = {
     note: "번아웃인가 싶다.",
     text: "아침에 일어나기가 너무 힘들다. 몸이 자꾸 신호를 보낸다 — 두통, 소화불량.",
     answers: [
-      { q: "오늘 가장 마음이 걸린 순간, 그때 나는 무엇을 했나요? 옆에서 본 사람이라면 뭐가 보였을까요?", a: "6시에 상사가 일을 또 던졌을 때. 거절하고 싶었지만 결국 알겠다고 했다. 옆에서 봤다면 또 참는구나 했을 거다." },
+      { q: "오늘 가장 힘들었던 순간은?", a: "6시에 상사가 일을 또 던졌을 때. 거절을 못 했다." },
     ],
   },
   "1-6": {
     note: "숨통이 트였다.",
     text: "친구들이랑 저녁. 회사 밖 사람을 만나니 숨통이 트였다.",
     answers: [
-      { q: "오늘 잘 됐던 일 하나만 꼽는다면? 그게 왜 잘 됐다고 생각하나요?", a: "회사 밖 친구들을 만난 것. 내가 먼저 연락해서 잡은 약속이라 더 좋았다. 사람을 만나니 숨통이 트였다." },
+      { q: "오늘 잘 됐던 일은?", a: "먼저 연락해서 약속을 잡은 것. 나답지 않게 적극적이었다." },
     ],
   },
   // 3주 전 — 준비
@@ -525,8 +566,8 @@ const DEMO_DIARY = {
     note: "이력서 초안을 썼다.",
     text: "미루던 이력서를 드디어 열었다. 한 줄 쓰기까지가 제일 어려웠고, 쓰고 나니 후련했다.",
     answers: [
-      { q: "오늘 잘 됐던 일 하나만 꼽는다면? 그게 왜 잘 됐다고 생각하나요?", a: "미루던 이력서를 열고 지원 두 곳에 버튼을 누른 것. 겁났지만 눌렀다는 게 스스로 대견했다." },
-      { q: "최근 '이건 좀 나답지 않다' 싶었던 순간이 있었나요?", a: "평소 한참 미루는 나인데, 겁나도 일단 지원한 게 좀 나답지 않아서 낯설고 좋았다." },
+      { q: "오늘의 작은 도전은?", a: "이직 지원 두 군데에 지원 버튼을 눌렀다. 겁났지만 결국 눌렀다." },
+      { q: "그게 나답다고 느꼈나?", a: "평소 미루던 나라서, 움직인 게 좀 낯설고 좋았다." },
     ],
   },
   // 2주 전 — 도전
@@ -534,28 +575,28 @@ const DEMO_DIARY = {
     note: "면접 제안이 왔다.",
     text: "면접 제안이 왔다. 설레면서도 안정을 놓기가 무섭다.",
     answers: [
-      { q: "오늘 가장 마음이 걸린 순간, 그때 나는 무엇을 했나요? 옆에서 본 사람이라면 뭐가 보였을까요?", a: "면접 제안에 답장을 못 하고 미룬 것. 안정을 놓기가 무서웠다. 옆에서 봤다면 왜 저렇게 망설이나 했을 거다." },
+      { q: "가장 마음이 걸린 지점은?", a: "안정을 놓기가 무서워 답장을 미뤘다. 이 망설임이 자꾸 나를 잡는다." },
     ],
   },
   "3-4": {
     note: "등산으로 머리를 비웠다.",
     text: "주말 등산. 정상에서 먹는 김밥. 이 맛에 버틴다.",
-    answers: [{ q: "오늘 에너지를 가장 크게 받은 일이 있다면 무엇인가요? 그게 왜 힘이 됐을까요?", a: "주말 등산. 정상에서 김밥 먹고 몸을 움직이니 며칠 만에 머리가 맑아졌다." }],
+    answers: [{ q: "오늘 에너지가 어디서 왔나?", a: "몸을 움직이니 머리가 맑아졌다." }],
   },
   // 지난 주 — 결심
   "4-3": {
     note: "결정을 못 내리는 내가 지친다.",
     text: "면접 볼지 조건을 표로 비교 중. 결정을 못 내리는 내가 제일 지친다.",
     answers: [
-      { q: "이번 주 나를 가장 지치게 한 건? 같은 상황의 친구라면 뭐가 필요해 보일까요?", a: "조건을 표로 비교만 하며 결정을 못 내리는 나 자신. 친구가 이랬다면 '연봉 말고 저녁 있는 삶도 표에 넣어봐'라고 했을 거다." },
+      { q: "결정을 미루는 이유는?", a: "연봉은 나쁘지 않은데 삶이 없다. 저녁이 있는 삶이 자꾸 떠오른다." },
     ],
   },
   "4-6": {
     note: "결국 면접 보기로 했다.",
     text: "결국 면접 보기로 답장했다. 미루기만 하던 내가 움직였다.",
     answers: [
-      { q: "오늘 가장 기억에 남는 순간 하나만 편하게 적어주세요.", a: "면접 보겠다고 답장 버튼을 누른 순간. 미루기만 하던 내가 움직여서 개운했다." },
-      { q: "오늘 잘 됐던 일 하나만 꼽는다면? 그게 왜 잘 됐다고 생각하나요?", a: "지친 저녁이 아니라 개운한 아침에 결정한 것. 컨디션 좋을 때 정하니 후회가 없었다." },
+      { q: "오늘 가장 기억에 남는 순간은?", a: "답장 보내기 버튼을 누른 순간. 개운했다." },
+      { q: "그때 나는 무엇을 했나?", a: "지친 저녁의 판단 말고, 개운한 아침에 결정했다." },
     ],
   },
 };

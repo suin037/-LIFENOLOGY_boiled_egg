@@ -5,11 +5,12 @@ import { CHECKIN } from "../data/questions.js";
 import ChatDiary from "./ChatDiary.jsx";
 import { composeDiary, analyzeEmotion } from "../data/dispositionApi.js";
 import Mascot from "./Mascot.jsx";
-import { X } from "lucide-react";
+import { Clock3, X } from "lucide-react";
+import HomeCalendar from "./HomeCalendar.jsx";
 
 const GUIDES = [
   { key: "daily", mascot: "nova", name: "노바", topic: "오늘의 일상", color: "#FF9EC0", prompt: "오늘 있었던 일, 나와 같이 돌아볼래요?" },
-  { key: "disposition", mascot: "cosmo", name: "코스모", topic: "고민과 선택", color: "#7CC3FF", prompt: "고민 중인 갈림길, 같이 비춰볼까요?" },
+  { key: "disposition", mascot: "cosmo", name: "코스모", topic: "고민과 선택", color: "#8B6CCF", prompt: "고민 중인 갈림길, 같이 비춰볼까요?" },
   { key: "health", mascot: "lumi", name: "루미", topic: "몸과 마음", color: "#FFD97A", prompt: "몸과 마음의 신호를 천천히 살펴봐요." },
 ];
 
@@ -105,23 +106,21 @@ export default function DiaryToday() {
         className={`tap mt-4 w-full rounded-2xl py-3 text-[13px] font-bold ${
           checkinDone
             ? "border border-line bg-[#121A2A] text-sub"
-            : "bg-gradient-to-r from-[#477EF3] to-[#70A0FF] text-white shadow-[0_10px_28px_rgba(71,126,243,.3)]"
+            : "bg-gradient-to-r from-[#7652E8] to-[#A783FF] text-white shadow-[0_10px_28px_rgba(118,82,232,.3)]"
         }`}
       >
-        {checkinDone ? "30초 체크인 수정" : "◴ 30초 체크인 하기"}
+        <span className="inline-flex items-center justify-center gap-2"><Clock3 size={16} />{checkinDone ? "30초 체크인 수정" : "30초 체크인 하기"}</span>
       </button>
 
       <button
         disabled={!checkinDone}
         onClick={save}
         className={`tap mt-3 w-full rounded-2xl py-2.5 text-[13px] font-bold transition-colors ${
-          checkinDone ? "bg-gradient-to-r from-cyan to-cyan-deep text-[#04203a]" : "bg-[#1E2740] text-mut"
+          checkinDone ? "bg-[#8B6CCF] text-white" : "bg-[#1E2740] text-mut"
         }`}
       >
         기록 저장
       </button>
-      <Caption>{tag}로 자동 기록됩니다.</Caption>
-
       {checkinOpen && (
         <div
           className="fixed inset-0 z-50 flex animate-backdrop-in items-end justify-center bg-[#02050C]/70 backdrop-blur-[4px]"
@@ -135,7 +134,7 @@ export default function DiaryToday() {
               <div className="mx-auto mb-3 h-1 w-11 rounded-full bg-[#647087]/65" />
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-[11px] font-bold text-[#72A6FF]">30초 체크인</div>
+                  <div className="text-[11px] font-bold text-violet-400">30초 체크인</div>
                   <h2 className="mt-1 text-[22px] font-bold tracking-[-.02em]">오늘, 어땠나요?</h2>
                 </div>
                 <button type="button" onClick={() => setCheckinOpen(false)} className="tap flex h-10 w-10 items-center justify-center rounded-full bg-[#202B3E] text-sub" aria-label="체크인 닫기">
@@ -155,7 +154,7 @@ export default function DiaryToday() {
                         key={item.v}
                         type="button"
                         onClick={() => setMood(item.v)}
-                        className={`tap flex min-w-0 flex-col items-center rounded-[22px] border py-3 ${on ? "border-[#6597FF] bg-[#1A315C] shadow-[0_0_0_1px_rgba(101,151,255,.18)]" : "border-[#2A3549] bg-[#182234]"}`}
+                        className={`tap flex min-w-0 flex-col items-center rounded-[22px] border py-3 ${on ? "border-[#8B6CCF] bg-[#241A3B] shadow-[0_0_0_1px_rgba(139,108,207,.18)]" : "border-[#2A3549] bg-[#182234]"}`}
                       >
                         <span className={`text-[27px] leading-none ${on ? "scale-110" : "opacity-80"}`}>{item.emoji}</span>
                         <span className={`mt-2 text-[10px] ${on ? "font-semibold text-white" : "text-mut"}`}>{item.label}</span>
@@ -171,7 +170,7 @@ export default function DiaryToday() {
                   {CHECKIN.energy.opts.map((option) => {
                     const on = energy === option.v;
                     return (
-                      <button key={option.v} type="button" onClick={() => setEnergy(option.v)} className={`tap rounded-full border px-5 py-2.5 text-[12px] font-semibold ${on ? "border-[#6597FF] bg-[#1A315C] text-white" : "border-[#2A3549] bg-[#182234] text-sub"}`}>
+                      <button key={option.v} type="button" onClick={() => setEnergy(option.v)} className={`tap rounded-full border px-5 py-2.5 text-[12px] font-semibold ${on ? "border-[#8B6CCF] bg-[#241A3B] text-white" : "border-[#2A3549] bg-[#182234] text-sub"}`}>
                         {option.label}
                       </button>
                     );
@@ -184,7 +183,7 @@ export default function DiaryToday() {
                 <div className="flex flex-wrap gap-2">
                   {CHECKIN.competency.opts.map((item) => {
                     const on = competency === item;
-                    return <button key={item} type="button" onClick={() => setCompetency(item)} className={`tap rounded-full border px-4 py-2.5 text-[12px] font-semibold ${on ? "border-[#6597FF] bg-[#1A315C] text-white" : "border-[#2A3549] bg-[#182234] text-sub"}`}>{item}</button>;
+                    return <button key={item} type="button" onClick={() => setCompetency(item)} className={`tap rounded-full border px-4 py-2.5 text-[12px] font-semibold ${on ? "border-[#8B6CCF] bg-[#241A3B] text-white" : "border-[#2A3549] bg-[#182234] text-sub"}`}>{item}</button>;
                   })}
                 </div>
               </section>
@@ -194,7 +193,7 @@ export default function DiaryToday() {
                 <div className="flex flex-wrap gap-2">
                   {CHECKIN.emotion.opts.map((option) => {
                     const on = emotion === option.key;
-                    return <button key={option.key} type="button" onClick={() => setEmotion(option.key)} className={`tap rounded-full border px-4 py-2.5 text-[12px] font-semibold ${on ? "border-[#6597FF] bg-[#1A315C] text-white" : "border-[#2A3549] bg-[#182234] text-sub"}`}>{option.emoji} {option.key}</button>;
+                    return <button key={option.key} type="button" onClick={() => setEmotion(option.key)} className={`tap rounded-full border px-4 py-2.5 text-[12px] font-semibold ${on ? "border-[#8B6CCF] bg-[#241A3B] text-white" : "border-[#2A3549] bg-[#182234] text-sub"}`}>{option.emoji} {option.key}</button>;
                   })}
                 </div>
               </section>
@@ -204,7 +203,7 @@ export default function DiaryToday() {
               <button
                 type="button"
                 onClick={() => { setCheckinDone(true); setCheckinOpen(false); }}
-                className="tap w-full rounded-full bg-gradient-to-r from-[#477EF3] to-[#70A0FF] py-3.5 text-[14px] font-bold text-white shadow-[0_12px_30px_rgba(71,126,243,.28)]"
+                className="tap w-full rounded-full bg-[#8B6CCF] py-3.5 text-[14px] font-bold text-white shadow-[0_12px_30px_rgba(77,54,126,.34)]"
               >
                 체크인 반영하기
               </button>
@@ -409,6 +408,7 @@ function GuideCarousel({ onOpen }) {
 }
 
 function WeekStrip({ entries }) {
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const today = new Date();
   const days = Array.from({ length: 7 }, (_, index) => {
     const date = new Date(today);
@@ -421,6 +421,7 @@ function WeekStrip({ entries }) {
 
   return (
     <div className="mb-5 border-b border-line pb-4">
+      <div className="mb-2 flex items-center justify-between"><span className="text-[11px] font-semibold text-sub">최근 7일</span><button type="button" onClick={()=>setCalendarOpen(true)} className="tap rounded-full border border-white/10 px-3 py-1.5 text-[10px] text-[#BBA4ED]">전체 캘린더 보기</button></div>
       <div className="grid grid-cols-7 gap-1">
         {days.map(({ date, key, entry }, index) => {
           const isToday = index === days.length - 1;
@@ -437,6 +438,7 @@ function WeekStrip({ entries }) {
           );
         })}
       </div>
+      {calendarOpen&&<div className="fixed inset-0 z-[90] flex items-end justify-center bg-[#02040B]/75 p-4 backdrop-blur-sm md:items-center" onClick={()=>setCalendarOpen(false)}><div className="max-h-[92dvh] w-full max-w-[820px] overflow-y-auto rounded-[26px]" onClick={(e)=>e.stopPropagation()}><div className="sticky top-2 z-10 flex justify-end px-2"><button type="button" onClick={()=>setCalendarOpen(false)} className="tap flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#0B1322] text-sub"><X size={17}/></button></div><div className="-mt-12"><HomeCalendar /></div></div></div>}
     </div>
   );
 }
