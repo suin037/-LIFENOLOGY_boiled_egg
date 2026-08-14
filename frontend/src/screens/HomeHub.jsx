@@ -36,35 +36,12 @@ export default function HomeHub() {
         비춰볼까요?
       </h1>
 
-      {/* 새 시뮬 CTA — 이 앱이 하는 일이 제목 바로 아래 오게 한다.
-          좁은 화면·넓은 화면 모두에서 첫 화면에 보이도록 그리드 위에 둔다. */}
-      <Button
-        className="mt-4 flex items-center justify-center gap-1.5 lg:mt-5 lg:max-w-[420px] lg:py-4"
-        onClick={() => navigate("/input")}
-      >
-        <Sparkles size={18} strokeWidth={2.2} className="text-violet-200" />
-        새 시뮬레이션 시작
-      </Button>
-
-      {/* 가이드 캐러셀 + 이번 주 기록 + 오늘 체크인 */}
-      <div className="lg:mt-6 lg:grid lg:grid-cols-[minmax(0,1.45fr)_minmax(300px,.75fr)] lg:items-start lg:gap-7">
-        <DiaryToday />
-        <aside className="lg:sticky lg:top-0">
-
-      {/* AI 서버가 안 잡히면 조용히 사라지지 않고 알려준다 */}
-      <ApiStatus />
-
-      {/* 떠나 있는 작은 탐험 — 나의 우주에서 고른 길을 잊지 않게 여기 걸어둔다 */}
-      <ExpeditionBoard />
-
-      {/* 오늘 해볼 만한 것 — 인생 갈림길(기회 카드)보다 작은, 오늘 크기의 제안 */}
-      <DailySuggest />
-
-      {/* 반복 고민 넛지 — 최근 2주 이직 고민이 잦으면 비교를 먼저 제안 */}
+      {/* 반복 고민 넛지 — 일기에서 잡힌 '지금 비교해볼 것'이라 시뮬 버튼보다 먼저 온다.
+          버튼은 빈 시작이고, 이건 이미 이유가 있는 시작이다. */}
       {rumination.prompt && (
         <button
           onClick={startJobCompare}
-          className="tap mt-4 flex w-full items-center gap-3 rounded-[18px] border border-cyan/40 bg-[#1D1730] px-4 py-3.5 text-left transition-colors hover:bg-[#16264a]"
+          className="tap mt-4 flex w-full items-center gap-3 rounded-[18px] border border-cyan/40 bg-[#1D1730] px-4 py-3.5 text-left transition-colors hover:bg-[#16264a] lg:max-w-[560px]"
         >
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-500/15 text-violet-400">
             <GitCompareArrows size={18} strokeWidth={2} />
@@ -79,37 +56,61 @@ export default function HomeHub() {
         </button>
       )}
 
-      {/* 나의 우주 요약 */}
-      <div className="mb-2 mt-7 flex items-center justify-between px-1 lg:mt-6">
-        <span className="text-[15px] font-bold text-ink">나의 우주</span>
-        <button
-          onClick={() => navigate("/my")}
-          className="tap flex items-center gap-0.5 text-[12px] text-mut"
-        >
-          전체 보기 <ChevronRight size={14} className="text-violet-400" />
-        </button>
-      </div>
-
-      <div className="grid grid-cols-3 gap-2">
-        <Stat label="시뮬레이션" value={universe.stats.simulations} />
-        <Stat label="수집한 별" value={universe.stats.stars} />
-        <Stat label="탐험한 우주" value={universe.stats.universes} />
-      </div>
-
-      <button
-        onClick={() => navigate("/my")}
-        className="tap mt-2 flex w-full items-center gap-3 rounded-[18px] bg-card px-4 py-3.5 text-left transition-colors hover:bg-card2 lg:mt-3 lg:py-5"
+      {/* 새 시뮬 CTA — 이 앱이 하는 일이 첫 화면에 보이도록 그리드 위에 둔다. */}
+      <Button
+        className="mt-3 flex items-center justify-center gap-1.5 lg:max-w-[420px] lg:py-4"
+        onClick={() => navigate("/input")}
       >
-        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-violet-500/15 text-violet-400">
-          <Orbit size={18} strokeWidth={2} />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-[14px] font-semibold text-ink">나의 우주 열기</span>
-          <span className="block text-[11px] text-mut">별자리·행성·저장한 평행우주</span>
-        </span>
-        <ChevronRight size={18} className="text-violet-400/70" />
-      </button>
+        <Sparkles size={18} strokeWidth={2.2} className="text-violet-200" />
+        새 시뮬레이션 시작
+      </Button>
 
+      {/* 왼쪽: 오늘의 기록 → 나의 우주 요약 / 오른쪽: 서버 상태·탐험·오늘의 제안 */}
+      <div className="lg:mt-6 lg:grid lg:grid-cols-[minmax(0,1.45fr)_minmax(300px,.75fr)] lg:items-start lg:gap-7">
+        <div>
+          <DiaryToday />
+
+          {/* 나의 우주 요약 — 오늘 기록한 것이 어디에 쌓이는지 바로 밑에서 보이게 한다. */}
+          <div className="mb-2 mt-7 flex items-center justify-between px-1">
+            <span className="text-[15px] font-bold text-ink">나의 우주</span>
+            <button
+              onClick={() => navigate("/my")}
+              className="tap flex items-center gap-0.5 text-[12px] text-mut"
+            >
+              전체 보기 <ChevronRight size={14} className="text-violet-400" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            <Stat label="시뮬레이션" value={universe.stats.simulations} />
+            <Stat label="수집한 별" value={universe.stats.stars} />
+            <Stat label="탐험한 우주" value={universe.stats.universes} />
+          </div>
+
+          <button
+            onClick={() => navigate("/my")}
+            className="tap mt-2 flex w-full items-center gap-3 rounded-[18px] bg-card px-4 py-3.5 text-left transition-colors hover:bg-card2 lg:mt-3 lg:py-5"
+          >
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-violet-500/15 text-violet-400">
+              <Orbit size={18} strokeWidth={2} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[14px] font-semibold text-ink">나의 우주 열기</span>
+              <span className="block text-[11px] text-mut">별자리·행성·저장한 평행우주</span>
+            </span>
+            <ChevronRight size={18} className="text-violet-400/70" />
+          </button>
+        </div>
+
+        <aside className="lg:sticky lg:top-0">
+          {/* AI 서버가 안 잡히면 조용히 사라지지 않고 알려준다 */}
+          <ApiStatus />
+
+          {/* 떠나 있는 작은 탐험 — 나의 우주에서 고른 길을 잊지 않게 여기 걸어둔다 */}
+          <ExpeditionBoard />
+
+          {/* 오늘 해볼 만한 것 — 인생 갈림길(기회 카드)보다 작은, 오늘 크기의 제안 */}
+          <DailySuggest />
         </aside>
       </div>
     </div>
