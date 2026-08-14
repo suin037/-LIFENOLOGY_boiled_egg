@@ -9,12 +9,13 @@ export async function fetchCompanySummary(name) {
   return res.json();
 }
 
-/** 재무·공시 + AI 요약(흐름·최근 관심사·지원동기 포인트). */
-export async function analyzeCompany(name) {
+/** 재무·공시 + AI 요약(흐름·최근 관심사·지원동기 포인트).
+ *  corpCode 를 주면 그 회사로 확정한다(이름이 비슷한 회사가 여럿일 때 사용자가 고른 값). */
+export async function analyzeCompany(name, corpCode = null) {
   const res = await fetch(`${BASE}/company/analyze`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, uid: "me" }),
+    body: JSON.stringify({ name, corp_code: corpCode || null, uid: "me" }),
   });
   if (!res.ok) throw new Error(`API ${res.status}`);
   return res.json();

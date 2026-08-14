@@ -38,7 +38,7 @@ function dateLabel(date) { const [, month, day] = String(date).split("-"); retur
 
 export default function MyUniverseV2() {
   const navigate = useNavigate();
-  const { setChoices, setScenarioTexts, setScenarioDomains } = useResult();
+  const { profile, setChoices, setScenarioTexts, setScenarioDomains } = useResult();
   const [state, setState] = useState(loadUniverse);
   const [planet, setPlanet] = useState(null);
   const [week, setWeek] = useState(null);
@@ -106,7 +106,7 @@ export default function MyUniverseV2() {
       </div>
       <p className="pointer-events-none absolute bottom-5 left-1/2 z-20 -translate-x-1/2 text-[10px] text-white/40">행성을 클릭해 영역별 미래를 비교해보세요 · 드래그 회전 · 휠/핀치 확대</p>
 
-      {planet && !future && <PlanetModal planet={planet} state={state} groups={orbitGroups} scenarios={planetScenarios} onClose={() => setPlanet(null)} onSimulate={() => navigate("/input")} onArchive={() => navigate("/archive")} onOpportunity={pickOpportunity} onOpenScenario={setFuture} />}
+      {planet && !future && <PlanetModal planet={planet} state={state} groups={orbitGroups} scenarios={planetScenarios} onClose={() => setPlanet(null)} onSimulate={() => navigate("/input")} onArchive={() => navigate("/archive")} onOpportunity={pickOpportunity} onOpenScenario={setFuture} profile={profile} />}
       {future && <FutureScenarioPanel planet={planet} future={future} onClose={()=>setFuture(null)} onCompare={()=>navigate("/input")}/>} 
     </div>
   );
@@ -233,7 +233,7 @@ const EFFORT_COLOR = {
   "길게 준비": "#8FB4F0",
 };
 
-function Opportunities({ planet, state, onPick }) {
+function Opportunities({ planet, state, onPick, profile }) {
   const mat = useMemo(() => futureMaterials(planet.key, state), [planet.key, state]);
   const [found, setFound] = useState(() => getCachedOpportunities(planet.key));
   const [busy, setBusy] = useState(false);
@@ -254,7 +254,7 @@ function Opportunities({ planet, state, onPick }) {
   async function scan() {
     setBusy(true);
     try {
-      setFound(await scanOpportunities(planet, { speech: loadSpeech(), state }));
+      setFound(await scanOpportunities(planet, { speech: loadSpeech(), state, profile }));
     } finally {
       setBusy(false);
     }
@@ -392,7 +392,7 @@ function tierState(tier, mat) {
   return { open: missing.length === 0, missing };
 }
 
-function FutureYears({ planet, state }) {
+function FutureYears({ planet, state, profile }) {
   const mat = useMemo(() => futureMaterials(planet.key, state), [planet.key, state]);
   const tiers = useMemo(() => YEAR_TIERS.map((t) => ({ ...t, ...tierState(t, mat) })), [mat]);
   const furthest = useMemo(() => {
@@ -413,7 +413,7 @@ function FutureYears({ planet, state }) {
   async function write() {
     setBusy(true);
     try {
-      setStory(await writeFuture(planet, years, { speech: loadSpeech(), state }));
+      setStory(await writeFuture(planet, years, { speech: loadSpeech(), state, profile }));
     } finally {
       setBusy(false);
     }
@@ -523,7 +523,7 @@ function FutureYears({ planet, state }) {
   );
 }
 
-function PlanetModal({ planet, state, groups, scenarios, onClose, onSimulate, onArchive, onOpportunity, onOpenScenario }) {
+function PlanetModal({ planet, state, groups, scenarios, onClose, onSimulate, onArchive, onOpportunity, onOpenScenario, profile }) {
   const entries = useMemo(() => planetEntries(state, planet.key), [state, planet.key]);
   const recent = useMemo(() => entries.slice(-3).reverse(), [entries]);
   const futures = useMemo(() => [...(scenarios || [])].reverse(), [scenarios]);
@@ -541,9 +541,9 @@ function PlanetModal({ planet, state, groups, scenarios, onClose, onSimulate, on
         같은 영역으로 분류된 일기의 흐름·감정·대표 기록을 여기서 보여준다. */}
     <DomainRecords planet={planet} state={state} entries={entries} recent={recent} />
     {/* 기록에서 아직 안 가본 길을 찾아 내민다 — 누르면 그 갈림길로 시뮬레이션이 열린다. */}
-    <Opportunities planet={planet} state={state} onPick={onOpportunity} />
+    <Opportunities planet={planet} state={state} onPick={onOpportunity} profile={profile} />
     {/* 과거(일기)와 미래(시뮬)가 한 행성에서 만났으니, 그 둘을 이어 'N년 뒤'를 쓴다. */}
-    <FutureYears planet={planet} state={state} />
+    <FutureYears planet={planet} state={state} profile={profile} />
 
     <div className="mt-4 grid grid-cols-3 gap-2">{[["저장한 결과",futures.length],["비교한 미래",futures.length*2],["관련 기록",entries.length]].map(([l,v])=><Mini key={l} label={l} value={v}/>)}</div>
     <button onClick={onArchive} className="tap mt-4 w-full rounded-xl border border-[#8B6CCF]/40 bg-[#8B6CCF]/10 text-[12px] font-bold text-[#C7B5F2]">저장한 시뮬레이션 전체 보기</button>

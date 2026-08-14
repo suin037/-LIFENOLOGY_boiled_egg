@@ -7,6 +7,9 @@ export default function CompanyAnalysis({ company, auto = false }) {
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+  // 이름이 정확히 안 맞을 때 후보를 직접 고르게 한다 — 서버가 임의로 고르면
+  // '토스'를 물었는데 '비스토스' 공시가 그 회사인 척 나온다.
+  const [choices, setChoices] = useState(null);
 
   // 전용 화면에서는 검색하자마자 바로 불러온다(버튼을 한 번 더 누르게 하지 않는다).
   useEffect(() => {
@@ -14,15 +17,21 @@ export default function CompanyAnalysis({ company, auto = false }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auto, company]);
 
-  async function run() {
+  async function run(corpCode = null, pickedName = null) {
     if (busy) return;
-    setBusy(true); setErr(null);
+    setBusy(true); setErr(null); setChoices(null);
     try {
-      const res = await analyzeCompany(company);
+      const res = await analyzeCompany(pickedName || company, corpCode);
       if (res.ok) setData(res);
       else if (res.reason === "no_dart_key") setErr("OpenDART 인증키가 아직 설정되지 않았어요.");
-      else if (res.reason === "not_found") setErr(`'${company}'을(를) 공시 목록에서 찾지 못했어요. 비상장이거나 이름이 다를 수 있어요.`);
-      else setErr("기업 정보를 불러오지 못했어요.");
+      else if (res.reason === "not_found") {
+        setErr(`'${company}'을(를) 공시 목록에서 찾지 못했어요. 비상장이거나 이름이 다를 수 있어요.`);
+      } else if (res.reason === "ambiguous") {
+        setChoices(res.candidates || []);
+        setErr(`'${company}'와 이름이 정확히 같은 회사가 공시에 없어요. 아래에서 골라주세요.`);
+      } else if (res.reason === "no_data") {
+        setErr(`'${res.name}'은 공시에 등록돼 있지만 공개된 재무·공시 자료가 없어요. 지어내지 않으려고 분석을 멈췄어요.`);
+      } else setErr("기업 정보를 불러오지 못했어요.");
     } catch {
       setErr("분석 서버에 연결하지 못했어요.");
     } finally {
@@ -41,13 +50,28 @@ export default function CompanyAnalysis({ company, auto = false }) {
         </p>
         <button
           type="button"
-          onClick={run}
+          onClick={() => run()}
           disabled={busy}
           className="tap mt-2 w-full rounded-lg bg-white/10 py-2 text-[11px] font-bold text-ink disabled:opacity-50"
         >
           {busy ? "공시를 읽는 중…" : "기업 분석 불러오기"}
         </button>
         {err && <p className="mt-1.5 text-[10px] leading-relaxed text-[#FFB36B]">{err}</p>}
+        {/* 비슷한 이름이 여럿일 때 — 서버가 대신 고르지 않고 여기서 사용자가 고른다. */}
+        {choices?.length > 0 && (
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {choices.map((c) => (
+              <button
+                key={c.corp_code}
+                type="button"
+                onClick={() => run(c.corp_code, c.name)}
+                className="tap rounded-full border border-white/[.12] px-2.5 py-1 text-[10px] text-sub hover:border-[#8B6CCF]"
+              >
+                {c.name}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     );
   }

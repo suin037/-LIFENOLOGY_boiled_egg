@@ -4,6 +4,7 @@ import { loadUniverse, hasRecord } from "./myUniverse.js";
 import { listUniverses } from "./savedUniverses.js";
 import { doneExpeditions } from "./expeditions.js";
 import { domainAnalysis } from "./diarySignals.js";
+import { localPersonaBlock } from "./jobAnalysis.js";
 
 const BASE = import.meta.env.VITE_QMODE_BASE || "http://localhost:8000";
 
@@ -111,7 +112,7 @@ function putCachedOpportunities(planetKey, value) {
   } catch { /* 무시 */ }
 }
 
-export async function scanOpportunities(planet, { speech = "polite", state } = {}) {
+export async function scanOpportunities(planet, { speech = "polite", state, profile = null } = {}) {
   const s = state || loadUniverse();
   const { records, sims, trips, total } = futureMaterials(planet.key, s);
   const a = domainAnalysis(planet.key, s);
@@ -126,6 +127,7 @@ export async function scanOpportunities(planet, { speech = "polite", state } = {
         analysis: a?.ok ? { n: a.n, moodAvg: a.moodAvg, topEmotions: a.topEmotions } : null,
         sims,
         trips,
+        persona: profile ? localPersonaBlock(profile) : null,
         speech,
       }),
     });
@@ -142,7 +144,7 @@ export async function scanOpportunities(planet, { speech = "polite", state } = {
   }
 }
 
-export async function writeFuture(planet, years, { speech = "polite", state } = {}) {
+export async function writeFuture(planet, years, { speech = "polite", state, profile = null } = {}) {
   const s = state || loadUniverse();
   const { records, sims, trips, total } = futureMaterials(planet.key, s);
   const a = domainAnalysis(planet.key, s);
@@ -160,6 +162,7 @@ export async function writeFuture(planet, years, { speech = "polite", state } = 
           : null,
         sims,
         trips,
+        persona: profile ? localPersonaBlock(profile) : null,
         speech,
       }),
     });

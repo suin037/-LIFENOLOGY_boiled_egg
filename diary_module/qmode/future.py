@@ -63,9 +63,19 @@ _SYSTEM = (
     "2) 점치지 마라. '~할 것이다' 대신 '이대로라면 ~쯤에 있을 것 같다'처럼 쓴다.\n"
     "3) 다녀온 탐험과 회고가 있으면 반드시 반영해라 — 실제로 해보고 알게 된 것이\n"
     "   가장 무거운 재료다. 상상한 갈림길보다 겪고 온 한 줄이 앞선다.\n"
-    "4) 좋게만 쓰지 마라. 기록이 무거우면 무거운 대로, 나아지는 중이면 그대로 쓴다.\n"
-    "5) 성격 진단·병명·수치 예측 금지. 조언을 늘어놓지 말고 장면으로 보여줘라.\n"
-    "6) 한국어로만 쓴다.\n"
+    "4) **future 는 이 사람이 닿을 수 있는 자리를 그린다.** 힘든 기록을 지우거나\n"
+    "   미화하지는 않되, 무게중심은 '이미 하고 있는 것이 쌓였을 때 도달하는 곳'에 둔다.\n"
+    "   기록에 있는 작은 움직임(먼저 연락한 것, 다시 붙잡은 것, 선을 그은 것,\n"
+    "   다녀온 탐험)이 몇 년 뒤 무엇이 되어 있을지를 보여줘라.\n"
+    "   '여전히 그대로일 것'으로 끝내지 마라 — 지금 힘든 사람에게 그건 예언이 아니라\n"
+    "   체념을 건네는 것이다. 힘듦은 지나온 자리로 두고, 도착점은 열어둬라.\n"
+    "5) 아래 [성향]이 있으면 그 사람이 무엇을 지키려는 사람인지에 비춰 써라.\n"
+    "   같은 흐름이라도 안정을 지키려는 사람과 성장을 좇는 사람의 5년 뒤는 다르다.\n"
+    "   성향을 라벨로 부르지 말고(‘당신은 안정형이라…’ 금지) 장면 속에 녹여라.\n"
+    "6) hinge 는 경고가 아니라 손잡이다. '안 하면 이렇게 된다'가 아니라\n"
+    "   '여기를 잡으면 저쪽으로 간다'로 써라. 실제로 붙잡을 수 있는 지점이어야 한다.\n"
+    "7) 성격 진단·병명·수치 예측 금지. 조언을 늘어놓지 말고 장면으로 보여줘라.\n"
+    "8) 한국어로만 쓴다.\n"
     "\n"
     "JSON만 출력한다: "
     '{"now": "...", "future": "...", "hinge": "...", "basis": ["...", "..."]}'
@@ -148,7 +158,7 @@ _FALLBACK_NOTE = "서버가 꺼져 있어 이야기를 쓰지 못했어요. 잠�
 
 
 def scenario(domain_label, years, records, analysis=None, sims=None, trips=None,
-             speech="polite", model=None, max_tokens=1400):
+             persona=None, speech="polite", model=None, max_tokens=1400):
     """그 영역의 'N년 뒤' 서사 → {now, future, hinge, basis[]}."""
     sp = "casual" if speech == "casual" else "polite"
     rec_block = _records_block(records)
@@ -160,6 +170,9 @@ def scenario(domain_label, years, records, analysis=None, sims=None, trips=None,
         return {"ok": False, "reason": _FALLBACK_NOTE}
 
     parts = [f"[영역] {domain_label}", f"[햇수] {years}년 뒤"]
+    if (persona or "").strip():
+        parts.append("[성향 — 이 사람이 무엇을 지키려는지. 라벨로 부르지 말고 장면에 녹여라]\n"
+                     + str(persona).strip()[:1200])
     stat = _analysis_block(analysis)
     if stat:
         parts.append(f"[이 영역 요약] {stat}")

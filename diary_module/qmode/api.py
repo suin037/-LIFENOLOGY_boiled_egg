@@ -482,6 +482,13 @@ def company_summary(name: str = "", corp_code: str = ""):
         return {"ok": False, "reason": str(e)}
 
 
+def _norm_corp(name):
+    """회사명 비교용 정규화 — 공백·괄호·'주식회사'를 떼고 소문자로."""
+    import re
+    s = re.sub(r"주식회사|\(주\)|㈜", "", str(name or ""))
+    return re.sub(r"[\s\(\)（）·.,'\"-]", "", s).lower()
+
+
 @app.post("/company/analyze")
 def company_analyze(req: CompanyAnalyzeReq):
     """재무 추이 + 공시 제목 → 지원자 관점 요약(사업 흐름·최근 집중·지원동기 포인트)."""
@@ -495,11 +502,25 @@ def company_analyze(req: CompanyAnalyzeReq):
             hits = dart.find_company(req.name)
             if not hits:
                 return {"ok": False, "reason": "not_found", "name": req.name}
-            code, matched = hits[0]["corp_code"], hits[0]["name"]
+            # 이름이 정확히 맞을 때만 자동 선택한다. find_company 는 부분일치라
+            # '토스' → '비스토스' 처럼 전혀 다른 회사가 1순위로 잡힌다. 그걸 그대로
+            # 분석하면 사용자가 물은 회사의 공시인 척하는 거짓말이 된다.
+            exact = [h for h in hits if _norm_corp(h["name"]) == _norm_corp(req.name)]
+            if exact:
+                code, matched = exact[0]["corp_code"], exact[0]["name"]
+            else:
+                return {"ok": False, "reason": "ambiguous", "name": req.name,
+                        "candidates": [{"name": h["name"], "corp_code": h["corp_code"]}
+                                       for h in hits[:6]]}
         fin = dart.financials(code)
         disc = dart.disclosures(code)
     except Exception as e:      # noqa: BLE001
         return {"ok": False, "reason": str(e)}
+
+    # 재무도 공시도 없으면 쓸 근거가 없다. 그래도 LLM 을 태우면 회사 이름만 보고
+    # 그럴듯한 말을 만들 여지가 생긴다 — 아예 부르지 않는다(비상장·신설 법인이 여기 해당).
+    if not fin and not disc:
+        return {"ok": False, "reason": "no_data", "name": matched, "corp_code": code}
 
     R1._load_dotenv()
     if not os.getenv("ANTHROPIC_API_KEY"):
@@ -980,6 +1001,7 @@ class FutureReq(BaseModel):
     analysis: Optional[dict] = None   # {n, moodAvg, topEmotions, trend}
     sims: list[dict] = []             # [{savedAt, choiceA, choiceB, headline, decision, reflection, doneActions}]
     trips: list[dict] = []            # 다녀온 작은 탐험 [{title, step, note, doneAt}]
+    persona: Optional[str] = None     # 프론트가 만든 성향 블록(가치 순서·MBTI·기록 신호)
     speech: Optional[str] = None
 
 
@@ -990,7 +1012,7 @@ def future_scenario(req: FutureReq):
     years = max(1, min(30, int(req.years or 5)))
     return FU.scenario(req.label or "이 영역", years, req.records,
                        analysis=req.analysis, sims=req.sims, trips=req.trips,
-                       speech=req.speech)
+                       persona=req.persona, speech=req.speech)
 
 
 class MediaReq(BaseModel):
@@ -1028,6 +1050,7 @@ class OpportunityReq(BaseModel):
     analysis: Optional[dict] = None
     sims: list[dict] = []
     trips: list[dict] = []            # 다녀온 작은 탐험 — 같은 길을 또 권하지 않게 넘긴다
+    persona: Optional[str] = None
     speech: Optional[str] = None
 
 
