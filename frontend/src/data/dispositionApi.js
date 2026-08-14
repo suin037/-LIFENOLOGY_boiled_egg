@@ -3,7 +3,7 @@
 //
 // 주간 리포트는 '완성된 주'에만 만든다. 한 번 만들면 DB(week_reports)에 저장되고,
 // 지난 주는 재생성 없이 저장본(getSavedReport)을 즉시 불러온다.
-const BASE = import.meta.env.VITE_QMODE_BASE || "http://localhost:8000";
+const BASE = import.meta.env.VITE_QMODE_BASE || "http://localhost:8000/qmode";
 export const REPORT_UID = "me";
 
 // 저장된 주간 리포트 조회 → { found, report, actions, ... }

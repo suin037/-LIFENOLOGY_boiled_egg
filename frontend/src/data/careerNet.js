@@ -1,6 +1,6 @@
 // 커리어넷 오픈API 연결 — 서버(qmode api)가 키를 들고 대신 호출한다.
 // 브라우저에서 직접 부르면 인증키가 노출되고 CORS 도 막히므로 프록시 구조가 맞다.
-const BASE = import.meta.env.VITE_QMODE_BASE || "http://localhost:8000";
+const BASE = import.meta.env.VITE_QMODE_BASE || "http://localhost:8000/qmode";
 
 /** 직업가치관검사 28문항(대학/일반). */
 export async function fetchValueTest() {
