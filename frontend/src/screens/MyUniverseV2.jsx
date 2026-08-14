@@ -53,10 +53,14 @@ export default function MyUniverseV2() {
   // 결과 시나리오가 원래 행성에 다시 쌓이게 한다.
   function pickOpportunity(item) {
     if (!planet) return;
+    // 두 입력칸에는 '길 이름'만 넣는다 — 100자짜리 한 줄 칸이고 사용자가 직접 적는 자리다.
+    // 전에는 카드 설명문(why, 두 문장)을 그대로 넣어 시뮬레이션 칸이 설명으로 꽉 찼다.
+    // 왜 이 길이 나왔는지는 카드에서 이미 읽었으니 여기서 되풀이하지 않는다.
     setChoices({ a: item.choiceA, b: item.choiceB });
-    setScenarioTexts({ a: item.why || "", b: "" });
+    setScenarioTexts({ a: item.choiceA, b: item.choiceB });
     setScenarioDomains({ a: [planet.key], b: [planet.key] });
     setPlanet(null);
+    setCluster(null);
     navigate("/input");
   }
 

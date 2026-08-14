@@ -13,14 +13,16 @@ import { jobChangeRumination } from "../data/diarySignals.js";
 // 홈 = 진입 허브. 인사 + 마스코트 + 오늘 기록 + 새 시뮬 + 나의 우주 요약.
 export default function HomeHub() {
   const navigate = useNavigate();
-  const { profile, setChoices } = useResult();
+  const { profile, setChoices, setScenarioTexts } = useResult();
   const universe = universeSummary();
   // 반복되는 이직 고민을 일기에서 감지하면 → 비교를 먼저 제안(정직: 숫자 아님, 비교 제안일 뿐).
   // 결과 카드(28일)와 창을 맞춰 숫자가 어긋나 보이지 않게 한다.
   const rumination = useMemo(() => jobChangeRumination({ windowDays: 28, threshold: 4 }), []);
 
   function startJobCompare() {
+    // 입력칸까지 채워야 넘어간 화면이 비어 보이지 않는다(choices 만 넣으면 빈 칸으로 뜬다).
     setChoices({ a: "이직", b: "유지" });
+    setScenarioTexts({ a: "이직", b: "현상 유지" });
     navigate("/input");
   }
 
