@@ -16,7 +16,7 @@ function ZodiacArt({ month, cx, cy, size }) {
 const COL=["#E24B4A","#D85A30","#EDA100","#5DCAA5","#378ADD"];
 const PASTEL=["#F0A3A2","#F2B48E","#F7DCA0","#AEE6CF","#A8CDF5"];
 // 평소 별빛 — 순백은 너무 쨍해서, 푸른 기 도는 은은한 별빛으로. (Constellation 반짝이와 같은 톤)
-const CALM="#CBD8EE";
+const CALM="#DEE8FB";
 // 캘린더는 모달(최대 820px)이라 넓게 써도 된다. 별자리끼리 겹치지 않게 간격을 벌렸다.
 const W=470,H=300,CX=W/2,CY=H/2,ZOOM_MONTH=2.2,MINI_R_MIN=16,MINI_R_SPREAD=60;
 const ZR=16;   // 기록 성단 반지름 — 간격(STEP)보다 작아야 이웃과 안 겹친다
@@ -28,6 +28,8 @@ const rng=(n)=>{const x=Math.sin(n*12.9898+78.233)*43758.5453;return x-Math.floo
 // 18개쯤 쌓이면 완전히 밝아진다(한 달 내내 쓰지 않아도 도달할 수 있는 값).
 const glow=(n)=>Math.min(1,(n||0)/18);
 const lit=(n)=>(n>0 ? Math.min(1,.55+glow(n)*.45) : .22);
+// 하얀 별은 기록 그 자체라 그림보다 밝게 시작한다.
+const litStar=(n)=>(n>0 ? Math.min(1,.78+glow(n)*.22) : .26);
 
 // 별 하나씩 따로 반짝이게 하는 규칙. 11칸(소수)으로 나눠 그림마다 배분이 어긋나게 하고,
 // 칸마다 서로 안 맞아떨어지는 주기·시작 시각을 준다 → 같이 깜박이는 티가 안 난다.
@@ -92,7 +94,7 @@ export default function JyConstellationArchive({monthGroups,weeksByMonth,focusMo
         11칸으로 나눠 서로 안 맞아떨어지는 주기(2.3~5.1초)와 시작 시각을 준다.
         별이 318개라 전부 돌리면 무거워서, 11칸 중 7칸만 켠다. */}
     <style>{ZART_TWINKLE}</style>
-    <rect width={W} height={H} fill="#071121"/><circle cx={CX} cy={CY} r="105" fill="url(#jy-core)"/>
+    <rect width={W} height={H} fill="#071121"/><circle cx={CX} cy={CY} r="68" fill="url(#jy-core)"/>
     {Array.from({length:34},(_,i)=><circle key={i} cx={(i*73)%W} cy={(i*47)%H} r={i%7===0?1:.55} fill="#CAD5EA" opacity={.22+(i%4)*.1}/>) }
     <g style={{transform:cam,transformOrigin:"0 0",transition:"transform .75s cubic-bezier(.2,.85,.25,1)"}}>
       {months.length>1&&<polyline points={months.map((m)=>`${m.cx},${m.cy}`).join(" ")} fill="none" stroke="#8B6CCF" strokeWidth=".7" strokeOpacity=".12"/>}
@@ -121,14 +123,14 @@ export default function JyConstellationArchive({monthGroups,weeksByMonth,focusMo
             밝기는 별자리 그림과 같은 규칙(lit)을 쓴다 — 그달 일기가 많을수록 밝다.
             그림만 밝아지고 별은 그대로면 둘이 따로 노는 것처럼 보인다.
             달을 눌러 자세히 볼 때(active)는 그 달만 보는 것이므로 밝기를 줄이지 않는다. */}
-        <g opacity={active?1:lit(mo.count)}
-           style={{filter:active||mo.count<=0?"none":`drop-shadow(0 0 ${(1+glow(mo.count)*2.4).toFixed(1)}px rgba(190,205,240,${(.25+glow(mo.count)*.4).toFixed(2)}))`}}>
+        <g opacity={active?1:litStar(mo.count)}
+           style={{filter:active||mo.count<=0?"none":`drop-shadow(0 0 ${(.5+glow(mo.count)*.9).toFixed(1)}px rgba(214,228,255,${(.4+glow(mo.count)*.35).toFixed(2)}))`}}>
         {mo.stars.map((s)=>(
           <g key={s.key}
              style={{transform:active?`translate(${s.zoomX}px,${s.zoomY}px)`:`translate(${s.blobX}px,${s.blobY}px)`,
                      transition:"transform .8s cubic-bezier(.25,.9,.3,1)"}}>
             {/* 번짐 → 4갈래 빛 → 알맹이 → 심지. 겹쳐야 별처럼 보인다. */}
-            <circle r={s.r+2.2} fill={active?s.c:CALM} opacity=".14" style={{transition:"fill .5s"}}/>
+            <circle r={s.r+1.25} fill={active?s.c:CALM} opacity=".2" style={{transition:"fill .5s"}}/>
             {!active&&s.glint&&(
               <g stroke={CALM} strokeWidth=".28" strokeLinecap="round" opacity=".5">
                 <line x1={-s.r*2.6} y1="0" x2={s.r*2.6} y2="0"/>
@@ -141,7 +143,7 @@ export default function JyConstellationArchive({monthGroups,weeksByMonth,focusMo
               {!active&&s.twinkle&&<animate attributeName="opacity" values="1;.62;1"
                                  dur={`${s.tw}s`} begin={`${s.delay}s`} repeatCount="indefinite"/>}
             </circle>
-            <circle r={s.r*.42} fill="#fff" opacity={active?0:.6} style={{transition:"opacity .5s"}}/>
+            <circle r={s.r*.44} fill="#fff" opacity={active?0:.8} style={{transition:"opacity .5s"}}/>
           </g>
         ))}
         </g>
