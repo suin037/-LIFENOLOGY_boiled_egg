@@ -24,6 +24,11 @@ const STEP=35, RIGHT=430;   // 12달 × 별자리 폭(64)이 좌우로 잘리지
 const ART_OFFSET=56;   // 별자리를 띠에서 위·아래로 띄우는 거리(기록 성단과 24px 벌어진다)
 const rng=(n)=>{const x=Math.sin(n*12.9898+78.233)*43758.5453;return x-Math.floor(x);};
 
+// 그달 일기 수 → 밝기. 별자리 그림과 하얀 별이 같은 규칙을 써야 둘이 같이 켜진다.
+// 18개쯤 쌓이면 완전히 밝아진다(한 달 내내 쓰지 않아도 도달할 수 있는 값).
+const glow=(n)=>Math.min(1,(n||0)/18);
+const lit=(n)=>(n>0 ? Math.min(1,.55+glow(n)*.45) : .22);
+
 // 별 하나씩 따로 반짝이게 하는 규칙. 11칸(소수)으로 나눠 그림마다 배분이 어긋나게 하고,
 // 칸마다 서로 안 맞아떨어지는 주기·시작 시각을 준다 → 같이 깜박이는 티가 안 난다.
 const ZART_TWINKLE = (() => {
@@ -64,7 +69,7 @@ export default function JyConstellationArchive({monthGroups,weeksByMonth,focusMo
           // 별처럼 보이게 — 밝기·반짝임 주기를 조금씩 다르게(같은 날이면 항상 같은 값).
           const seed=rng(k*7+i*13);
           stars.push({key:s.date,blobX:cx+zp[0],blobY:cy+zp[1],zoomX:vx,zoomY:vy,
-                      c:COL[lvl-1],p:PASTEL[lvl-1],r:1+lvl*.16,
+                      c:COL[lvl-1],p:PASTEL[lvl-1],r:.86+lvl*.14,   // 살짝 작게(그림이 커진 만큼)
                       glint:seed>.72,                       // 일부만 4갈래 빛
                       twinkle:seed<.34,                     // 반짝임도 일부만(성능)
                       tw:(2.6+seed*2.4).toFixed(2),         // 반짝임 주기(초)
@@ -101,17 +106,23 @@ export default function JyConstellationArchive({monthGroups,weeksByMonth,focusMo
             불투명도만으로는 선이 얇아 잘 안 보여서 brightness 로 선·별 자체를 밝히고,
             빛무리(drop-shadow)도 두 겹으로 겹쳐 번지게 한다. */}
         {!active&&<g pointerEvents="none"
-           opacity={mo.count>0 ? Math.min(1, .55+Math.min(1,mo.count/18)*.45) : .22}
+           opacity={lit(mo.count)}
            style={{filter: mo.count>0
-             ? `drop-shadow(0 0 ${(2+Math.min(1,mo.count/18)*4).toFixed(1)}px rgba(180,158,246,${(.38+Math.min(1,mo.count/18)*.5).toFixed(2)}))`
-               + ` drop-shadow(0 0 ${(6+Math.min(1,mo.count/18)*8).toFixed(1)}px rgba(140,120,220,.3))`
-               + ` brightness(${(1.15+Math.min(1,mo.count/18)*.45).toFixed(2)})`
+             ? `drop-shadow(0 0 ${(2+glow(mo.count)*4).toFixed(1)}px rgba(180,158,246,${(.38+glow(mo.count)*.5).toFixed(2)}))`
+               + ` drop-shadow(0 0 ${(6+glow(mo.count)*8).toFixed(1)}px rgba(140,120,220,.3))`
+               + ` brightness(${(1.15+glow(mo.count)*.45).toFixed(2)})`
              : "brightness(1.1)"}}>
           <ZodiacArt month={mo.num} cx={mo.cx} cy={mo.cy+(mo.labelUp?-ART_OFFSET:ART_OFFSET)} size={ZR*4}/>
         </g>}
         {!active&&mo.zLines.map((ln,li)=><line key={`z${li}`} x1={mo.cx+ln[0]} y1={mo.cy+ln[1]} x2={mo.cx+ln[2]} y2={mo.cy+ln[3]} stroke="#9FB0CE" strokeWidth=".4" strokeOpacity=".38" style={{transition:"opacity .4s"}}/>)}
         {/* 평소엔 별을 연보라 하나로 — 12달이 한눈에 차분히 보인다.
-            달을 눌러 자세히 볼 때만 그날 기분 색으로 갈라진다(색이 의미를 갖는 순간). */}
+            달을 눌러 자세히 볼 때만 그날 기분 색으로 갈라진다(색이 의미를 갖는 순간).
+
+            밝기는 별자리 그림과 같은 규칙(lit)을 쓴다 — 그달 일기가 많을수록 밝다.
+            그림만 밝아지고 별은 그대로면 둘이 따로 노는 것처럼 보인다.
+            달을 눌러 자세히 볼 때(active)는 그 달만 보는 것이므로 밝기를 줄이지 않는다. */}
+        <g opacity={active?1:lit(mo.count)}
+           style={{filter:active||mo.count<=0?"none":`drop-shadow(0 0 ${(1+glow(mo.count)*2.4).toFixed(1)}px rgba(190,205,240,${(.25+glow(mo.count)*.4).toFixed(2)}))`}}>
         {mo.stars.map((s)=>(
           <g key={s.key}
              style={{transform:active?`translate(${s.zoomX}px,${s.zoomY}px)`:`translate(${s.blobX}px,${s.blobY}px)`,
@@ -133,6 +144,7 @@ export default function JyConstellationArchive({monthGroups,weeksByMonth,focusMo
             <circle r={s.r*.42} fill="#fff" opacity={active?0:.6} style={{transition:"opacity .5s"}}/>
           </g>
         ))}
+        </g>
         {/* 기록 없는 달은 눌러도 펼칠 게 없다 — 커서·색으로 구분한다. */}
         {!active&&<g onClick={()=>{ if(mo.count>0) onMonthPick(mo.m.monthKey); }}
                      style={{cursor:mo.count>0?"pointer":"default"}} opacity={mo.count>0?1:.45}>
