@@ -7,16 +7,20 @@ const HAIRC = [
   ["갈색", "#4E3629"], ["흑발", "#2C1B18"], ["밝은갈", "#B0703C"],
   ["금발", "#D6B370"], ["핑크", "#FC909F"], ["애쉬", "#8A8D91"], ["보라", "#A56BBF"],
 ];
+// react-nice-avatar 의 남성 헤어(thick·mohawk)는 hairColorRandom 이 켜져야 hairColor 가
+// 반영된다 — 끄면 thick 은 대부분, mohawk 은 전부 고정 검정으로 그려진다(렌더 실측).
+// 반대로 여성 헤어는 이 플래그 없이도 색이 먹고, 켜면 오히려 칠해지는 면이 줄어든다.
+// 그래서 남성 프리셋에만 붙인다.
 const WOMAN_HAIR = [["롱", "womanLong"], ["단발", "womanShort"], ["숏", "normal"]];
+const MAN_HAIR = [["숏", "normal"], ["덥수룩", "thick"], ["모히칸", "mohawk"]];
 export const HAIR_PRESETS = [
   ...WOMAN_HAIR.flatMap(([hn, hs]) => HAIRC.map(([cn, cc]) => ({
-    label: `${hn} ${cn}`, cfg: { sex: "woman", hairStyle: hs, hairColor: cc, eyeBrowStyle: "upWoman" },
+    label: `여 ${hn} ${cn}`, cfg: { sex: "woman", hairStyle: hs, hairColor: cc, eyeBrowStyle: "upWoman" },
   }))),
-  ...HAIRC.slice(0, 5).map(([cn, cc]) => ({
-    label: `숏 ${cn}`, cfg: { sex: "man", hairStyle: "normal", hairColor: cc, eyeBrowStyle: "up" },
-  })),
-  { label: "덥수룩 (검정)", cfg: { sex: "man", hairStyle: "thick", hairColor: "#2C1B18", eyeBrowStyle: "up" } },
-  { label: "모히칸 (검정)", cfg: { sex: "man", hairStyle: "mohawk", hairColor: "#2C1B18", eyeBrowStyle: "up" } },
+  ...MAN_HAIR.flatMap(([hn, hs]) => HAIRC.map(([cn, cc]) => ({
+    label: `남 ${hn} ${cn}`,
+    cfg: { sex: "man", hairStyle: hs, hairColor: cc, eyeBrowStyle: "up", hairColorRandom: true },
+  }))),
 ];
 
 const SKIN = [["밝은", "#F9C9B6"], ["보통", "#F1C27D"], ["웜", "#E0AC69"], ["구릿빛", "#C68642"], ["어두운", "#8D5524"]];
