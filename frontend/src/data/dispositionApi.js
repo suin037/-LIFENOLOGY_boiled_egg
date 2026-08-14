@@ -24,6 +24,69 @@ export async function clearSavedReports(uid) {
   }
 }
 
+// 일기 텍스트 → 인생 영역(행성) 자동 분류. { primary, domains:[key...] } 또는 실패 시 null.
+export async function tagDomain(text) {
+  try {
+    const res = await fetch(`${BASE}/tag`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
+// 마스코트 대화 한 턴 → 답변 텍스트. 실패 시 간단 폴백.
+export async function chatTurn(messages, persona = "lumi") {
+  try {
+    const res = await fetch(`${BASE}/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages, persona }),
+    });
+    if (!res.ok) throw new Error();
+    return (await res.json()).reply;
+  } catch {
+    return "그랬구나. 조금 더 얘기해줄래?";
+  }
+}
+
+// 일기 텍스트 → 내가 만든 감정모델 추론 { ok, emotion, mood, crisis_level }. 감정 미선택 시 폴백용.
+// 체크포인트 없으면 { ok:false } → 호출부가 LLM 폴백으로 강등.
+export async function analyzeEmotion(text) {
+  try {
+    const res = await fetch(`${BASE}/emotion`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+    if (!res.ok) return null;
+    const j = await res.json();
+    return j && j.ok ? j : null;
+  } catch {
+    return null;
+  }
+}
+
+// 대화 전체 → 1인칭 일기 { text, mood, emotion, domains }. 체크인 저장용.
+export async function composeDiary(messages) {
+  try {
+    const res = await fetch(`${BASE}/diary/compose`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages }),
+    });
+    if (!res.ok) throw new Error();
+    return await res.json();
+  } catch {
+    const text = messages.filter((m) => m.role !== "bot").map((m) => m.text).join(" ");
+    return { text, mood: 3, emotion: "", domains: ["life"] };
+  }
+}
+
 // 분석·서사 생성. uid+week_key 주면 결과가 DB에 저장된다.
 export async function analyzeDisposition({ ranked_cards, mbti, entries, uid, week_key }) {
   const res = await fetch(`${BASE}/analyze`, {

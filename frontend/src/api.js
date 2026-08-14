@@ -136,6 +136,10 @@ function buildSimulateBody({ profile, choiceA, choiceB, choiceADetail, choiceBDe
       major: profile.major || profile.occupation || "공학",
       monthly_wage: profile.income ?? profile.monthly_wage ?? null,
       edu_level: profile.edu_level ?? 7,
+      occupation_group: profile.occupation_group ?? null,
+      employment_status: profile.employment_status ?? null,
+      tenure_years: profile.tenure_years ?? null,
+      firm_size: profile.firm_size ?? null,
       // 성향 개인화 입력: 온보딩/설정 가치 순위(카드 id). 있을 때만 실어 보낸다.
       // 백엔드가 qmode.value_ranking.axis_weights 로 가중치 변환 → 강조·초점·서사 개인화.
       ...(profile.value_ranking?.length ? { value_ranking: profile.value_ranking } : {}),
@@ -182,6 +186,8 @@ export async function runCompareRaw(args) {
       profile: body.profile,
       choice_a: body.choice_a,
       choice_b: body.choice_b,
+      ...(body.choice_a_detail ? { choice_a_detail: body.choice_a_detail } : {}),
+      ...(body.choice_b_detail ? { choice_b_detail: body.choice_b_detail } : {}),
       // 삶의 영역(항목3·4) — /compare 도 영역지표·근거수준·그래프 가드를 반환하도록 함께 전송
       ...(body.choice_a_domains ? { choice_a_domains: body.choice_a_domains } : {}),
       ...(body.choice_b_domains ? { choice_b_domains: body.choice_b_domains } : {}),
@@ -191,11 +197,35 @@ export async function runCompareRaw(args) {
   return res.json();
 }
 
+// 검증 중인 이직 재정 모델을 단독 확인할 때 사용한다.
+// 집단 검증값(population_evidence)과 개인 실험값(personalized_estimate)을 구분해 읽어야 한다.
+export async function getJobChangeFinancialImpact(profile) {
+  const body = buildSimulateBody({ profile, choiceA: "이직", choiceB: "유지" }).profile;
+  const res = await fetch(`${API_BASE}/models/job-change/financial-impact`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`job-change financial impact ${res.status}`);
+  return res.json();
+}
+
+// KOWEPS 25~35세 종단 관측 근거. 개인예측/인과효과가 아니라 사건군·비교군 분포다.
+export async function getKowepsEvidence(payload) {
+  const res = await fetch(`${API_BASE}/evidence/koweps`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`koweps evidence ${res.status}`);
+  return res.json();
+}
+
 export async function runSimulate(args) {
   return mapSimulateToResult(await runSimulateRaw(args));
 }
 
-export async function generateSceneImages({ avatarBlob, choiceA, choiceB, narrative, timeoutMs = 60000 }) {
+export async function generateSceneImages({ avatarBlob, avatarSpec, choiceA, choiceB, narrative, timeoutMs = 60000 }) {
   const storyText = (story) => {
     if (typeof story === "string") return story;
     const detail = story?.detail || {};
@@ -205,6 +235,7 @@ export async function generateSceneImages({ avatarBlob, choiceA, choiceB, narrat
   };
   const form = new FormData();
   form.append("avatar", avatarBlob, "avatar.png");
+  form.append("avatar_spec", JSON.stringify(avatarSpec || {}));
   form.append("choice_a", choiceA);
   form.append("choice_b", choiceB);
   form.append("narrative_a", storyText(narrative.a));

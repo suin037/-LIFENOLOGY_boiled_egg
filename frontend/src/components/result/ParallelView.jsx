@@ -8,9 +8,9 @@ import { labelOf } from "../../data/prediction.js";
 // 변화 흐름 — A/B 두 갈래의 소득 중앙값 궤적을 한 차트에 겹침.
 // 근거 수준 라벨 → 뱃지 색. (항목4)
 const EV_STYLE = {
-  모델예측: { bg: "#123049", fg: "#7FD4FF", bd: "#245a80" },
+  모델예측: { bg: "#211832", fg: "#8B6CCF", bd: "#6F55A7" },
   집단통계: { bg: "#123a2e", fg: "#5FE0B0", bd: "#1f5a45" },
-  RAG설명: { bg: "#2a2340", fg: "#C4A6FF", bd: "#463a6a" },
+  RAG설명: { bg: "#2a2340", fg: "#8B6CCF", bd: "#463a6a" },
   데이터부족: { bg: "#3a1220", fg: "#FF9EC0", bd: "#5a2436" },
 };
 function EvBadge({ label }) {
@@ -73,7 +73,7 @@ export default function ParallelView({ a, b }) {
               formatter={(v) => [`${v}만원`, ""]}
               labelFormatter={(l, p) => `${l} · 추적 ${p?.[0]?.payload?.sample_n}명`}
             />
-            <Legend wrapperStyle={{ fontSize: 11, color: "#9FB0CE" }} iconType="plainline" />
+            <Legend wrapperStyle={{ fontSize: 11, color: "#8B6CCF" }} iconType="plainline" />
             <Line type="monotone" dataKey={la} stroke={A_COLOR} strokeWidth={2} dot={{ r: 2.5 }} />
             <Line type="monotone" dataKey={lb} stroke={B_COLOR} strokeWidth={2} strokeDasharray={lb === la ? "0" : "4 3"} dot={{ r: 2.5 }} />
           </LineChart>

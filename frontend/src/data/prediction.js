@@ -26,12 +26,12 @@ export const SLOT_OPTIONS = [
 ];
 
 export const LIFE_DIMENSIONS = {
-  경제: { icon: "💰", color: "#7FD4FF" },
+  경제: { icon: "💰", color: "#8B6CCF" },
   삶의질: { icon: "🌿", color: "#7FE0D4" },
-  정신건강: { icon: "🧠", color: "#C4A6FF" },
+  정신건강: { icon: "🧠", color: "#8B6CCF" },
   신체건강: { icon: "❤️", color: "#FF9EBC" },
   직업환경: { icon: "🏢", color: "#F5C86B" },
-  "진학·취업": { icon: "🎓", color: "#9AA8FF" },
+  "진학·취업": { icon: "🎓", color: "#8B6CCF" },
   창업: { icon: "🌱", color: "#7FE0A6" },
 };
 

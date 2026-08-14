@@ -1,5 +1,5 @@
 export const BG_COLORS = [
-  "#6BD9E9", "#F4D150", "#E0DDFF", "#FFB6C1", "#9287FF", "#D2EFF3", "#FFE0B2",
+  "#6BD9E9", "#F4D150", "#E0DDFF", "#FFB6C1", "#8B6CCF", "#D2EFF3", "#FFE0B2",
   "#B5EAD7", "#FFDAC1", "#C7CEEA", "#FF9AA2", "#A0E7E5", "#FBE7C6", "#111827",
 ];
 
@@ -31,7 +31,7 @@ export const FACE_PRESETS = SKIN.flatMap(([sn, sc]) => EXPR.map(([en, e]) => ({
   label: `${sn}·${en}`, cfg: { faceColor: sc, ...e },
 })));
 
-const HATC = [["흑", "#2C1B18"], ["갈", "#77311D"], ["보라", "#9287FF"], ["청록", "#6BD9E9"], ["핑크", "#FC909F"]];
+const HATC = [["흑", "#2C1B18"], ["갈", "#77311D"], ["보라", "#8B6CCF"], ["청록", "#6BD9E9"], ["핑크", "#FC909F"]];
 export const ACC_PRESETS = [
   { label: "없음", cfg: { glassesStyle: "none", hatStyle: "none" } },
   { label: "동근안경", cfg: { glassesStyle: "round", hatStyle: "none" } },
@@ -39,12 +39,12 @@ export const ACC_PRESETS = [
   ...HATC.map(([cn, cc]) => ({ label: `비니 ${cn}`, cfg: { glassesStyle: "none", hatStyle: "beanie", hatColor: cc } })),
   ...HATC.map(([cn, cc]) => ({ label: `터번 ${cn}`, cfg: { glassesStyle: "none", hatStyle: "turban", hatColor: cc } })),
   { label: "비니+안경", cfg: { glassesStyle: "round", hatStyle: "beanie", hatColor: "#2C1B18" } },
-  { label: "터번+안경", cfg: { glassesStyle: "square", hatStyle: "turban", hatColor: "#9287FF" } },
+  { label: "터번+안경", cfg: { glassesStyle: "square", hatStyle: "turban", hatColor: "#8B6CCF" } },
 ];
 
 const SHIRT = [["후드", "hoody"], ["티셔츠", "short"], ["폴로", "polo"]];
 const SHIRTC = [
-  ["보라", "#9287FF"], ["청록", "#6BD9E9"], ["핑크", "#FC909F"], ["노랑", "#F4D150"],
+  ["보라", "#8B6CCF"], ["청록", "#6BD9E9"], ["핑크", "#FC909F"], ["노랑", "#F4D150"],
   ["갈색", "#77311D"], ["검정", "#111827"], ["연보라", "#E0DDFF"], ["크림", "#E7DBC0"], ["민트", "#B5EAD7"],
 ];
 export const OUTFIT_PRESETS = SHIRT.flatMap(([sn, ss]) => SHIRTC.map(([cn, cc]) => ({
@@ -64,4 +64,24 @@ export function normalizeAvatar(config) {
     return { ...DEFAULT_AVATAR };
   }
   return { ...DEFAULT_AVATAR, ...config };
+}
+
+// 이미지 생성 모델은 참고 PNG만 보고 머리·성별 표현을 임의로 다시 해석할 수 있다.
+// 선택한 조합을 텍스트 제약으로도 함께 보내 A/B 장면에서 같은 캐릭터를 유지한다.
+export function avatarGenerationSpec(config) {
+  const c = normalizeAvatar(config);
+  return {
+    characterType: "gender-neutral illustrated avatar",
+    hairStyle: c.hairStyle,
+    hairColor: c.hairColor,
+    skinTone: c.faceColor,
+    eyeStyle: c.eyeStyle,
+    eyebrowStyle: c.eyeBrowStyle,
+    mouthStyle: c.mouthStyle,
+    glassesStyle: c.glassesStyle,
+    hatStyle: c.hatStyle,
+    hatColor: c.hatColor,
+    outfitStyle: c.shirtStyle,
+    outfitColor: c.shirtColor,
+  };
 }

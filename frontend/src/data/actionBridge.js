@@ -51,18 +51,47 @@ const DOMAIN_ACTIONS = {
   ],
 };
 
-export function actionsFor(choice, domains = []) {
+// 일기 신호별 '확인 행동' — 최근 기록에서 드러난 상태를 다음 단계에 반영한다(로컬 규칙, API 0).
+const SIGNAL_ACTIONS = {
+  stabilityPreference: ["이직 시 최소 확보돼야 할 안전 조건 3개(급여 하한·고용형태·수습기간) 적기", "막연한 불안을 '확인 가능한 조건'으로 바꿔요.", "implementation"],
+  jobDissatisfaction: ["최근 가장 스트레스였던 업무 상황 1개를 적고, 회사 문제인지 직무 문제인지 구분하기", "불만의 원인을 나눠야 이직이 답인지 알 수 있어요.", "smallExperiment"],
+  growthStagnation: ["지난 6개월간 새로 배운 것 3개 적기 — 없으면 다음 자리에서 배우고 싶은 것 3개", "성장 정체가 자리 문제인지 시기 문제인지 살펴봐요.", "possibleSelf"],
+  burnout: ["이번 주 회복을 방해하는 요인 하나와 줄일 행동 하나 정하기", "지친 상태의 결정은 미루고, 회복부터 확보해요.", "implementation"],
+  jobChange: ["이직을 미루게 하는 진짜 이유를 한 문장으로 적기", "반복되는 고민의 핵심을 눈에 보이게 만들어요.", "possibleSelf"],
+};
+
+// signals = computeDiarySignals() 결과(선택). 있으면 강한 신호 순으로 확인 행동을 앞에 끼운다.
+export function actionsFor(choice, domains = [], signals = null) {
   const keys = [...new Set(domains)].filter((key) => DOMAIN_ACTIONS[key]);
   const source = keys.length ? keys : fallbackDomains(choice);
-  return source
-    .flatMap((domain) => DOMAIN_ACTIONS[domain].map(([text, purpose, basisKey]) => ({
+  const domainList = source.flatMap((domain) =>
+    DOMAIN_ACTIONS[domain].map(([text, purpose, basisKey]) => ({
       id: `${domain}:${text}`,
       domain,
       text,
       purpose,
       ...COMMON_BASIS[basisKey],
-    })))
-    .slice(0, 3);
+    })),
+  );
+
+  const signalList = [];
+  if (signals?.ok) {
+    for (const s of (signals.signals || []).filter((x) => x.days > 0).sort((a, b) => b.days - a.days)) {
+      const def = SIGNAL_ACTIONS[s.key];
+      if (def) signalList.push({ id: `sig:${s.key}`, domain: "signal", signal: s.label, days: s.days, text: def[0], purpose: def[1], ...COMMON_BASIS[def[2]] });
+    }
+  }
+
+  // 신호 행동 최대 2개를 앞에, 나머지는 도메인 행동으로 채워 3개. 같은 문구는 한 번만.
+  const merged = [];
+  const seen = new Set();
+  for (const a of [...signalList.slice(0, 2), ...domainList]) {
+    if (seen.has(a.text)) continue;
+    seen.add(a.text);
+    merged.push(a);
+    if (merged.length >= 3) break;
+  }
+  return merged;
 }
 
 function fallbackDomains(choice) {
@@ -87,7 +116,19 @@ export function clearActiveGoal() {
   try { localStorage.removeItem(GOAL_KEY); } catch { /* 저장 불가 환경 */ }
 }
 
-// 저장된 우주의 결정(A/B) → 향해 가는 실제 선택. 보류면 null.
+// 작은 실험에 적은 답을 목표의 completedActions 에 upsert(완료 기록). 빈 값이면 삭제.
+export function saveActionResponse(actionId, text) {
+  const goal = loadActiveGoal();
+  if (!goal) return null;
+  const v = (text || "").trim();
+  const rest = (goal.completedActions || []).filter((a) => a.id !== actionId);
+  const completedActions = v ? [...rest, { id: actionId, text: v }] : rest;
+  const value = { ...goal, completedActions };
+  try { localStorage.setItem(GOAL_KEY, JSON.stringify(value)); } catch { /* 저장 불가 환경 */ }
+  return value;
+}
+
+// 저장된 우주의 결정(A/B) → 지금 탐험 중인 실제 선택. 보류면 null.
 export function chosenChoice(u) {
   if (u?.decision === "A") return u.choiceA;
   if (u?.decision === "B") return u.choiceB;

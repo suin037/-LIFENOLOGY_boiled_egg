@@ -1,63 +1,76 @@
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Orbit, ChevronRight, Sparkles } from "lucide-react";
+import { Orbit, ChevronRight, GitCompareArrows, BookOpen, Sparkles } from "lucide-react";
 import { useResult } from "../data/ResultContext.jsx";
-import { Card, Button } from "../components/ui.jsx";
-import { MASCOTS } from "../data/result.js";
 import DiaryToday from "../components/DiaryToday.jsx";
-import MoodTrend from "../components/MoodTrend.jsx";
-import Mascot from "../components/Mascot.jsx";
-import { universeSummary } from "../data/myUniverse.js";
+import { loadUniverse, universeSummary } from "../data/myUniverse.js";
+import { domainRumination } from "../data/diarySignals.js";
 
 // 홈 = 진입 허브. 인사 + 마스코트 + 오늘 기록 + 새 시뮬 + 나의 우주 요약.
 export default function HomeHub() {
   const navigate = useNavigate();
-  const { profile } = useResult();
-  const guide = MASCOTS.cosmo;
+  const { profile, setChoices } = useResult();
   const universe = universeSummary();
+  const [universeState, setUniverseState] = useState(loadUniverse);
+  const [rumination, setRumination] = useState(() => domainRumination({ windowDays: 28, threshold: 4 }));
+
+  useEffect(() => {
+    const refresh = () => {
+      setRumination(domainRumination({ windowDays: 28, threshold: 4 }));
+      setUniverseState(loadUniverse());
+    };
+    window.addEventListener("pm:universe", refresh);
+    return () => window.removeEventListener("pm:universe", refresh);
+  }, []);
+
+  function startSuggestedCompare() {
+    if (!rumination.compare) return;
+    setChoices({ a: rumination.compare.a, b: rumination.compare.b });
+    navigate("/input");
+  }
+
+  const recentActivity = [
+    ...(universeState.scenarios || []).map((item) => ({ type: "simulation", date: item.date, title: item.title || "새로운 미래를 비교했어요" })),
+    ...(universeState.checkins || []).filter((item) => !item.empty).map((item) => ({ type: "record", date: item.date, title: item.text || item.note || "오늘의 기록을 남겼어요" })),
+  ].filter((item) => item.date).sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 4);
 
   return (
-    <div className="pb-2">
-      {/* 인사 */}
-      <div className="mb-0.5 mt-1 text-[13px] text-sub">
-        안녕하세요, {profile.name?.trim() ? `${profile.name.trim()}님` : "탐험가님"} 👋
-      </div>
-      <h1 className="text-[25px] font-bold leading-[1.22] tracking-[-.02em]">
-        오늘도 어떤 갈림길을
-        <br />
-        비춰볼까요?
-      </h1>
+    <div className="pb-2 lg:min-h-full lg:pb-10">
+      {/* 가이드 캐러셀 + 이번 주 기록 + 오늘 체크인 */}
+      <div className="lg:grid lg:grid-cols-[minmax(0,1.8fr)_minmax(360px,.8fr)] lg:items-stretch lg:gap-8 xl:gap-12">
+        <section className="min-w-0 lg:flex lg:flex-col">
+          <div className="mb-0.5 mt-1 text-[13px] text-sub lg:text-[15px]">안녕하세요, {profile.name?.trim() ? `${profile.name.trim()}님` : "탐험가님"} 👋</div>
+          <h1 className="text-[25px] font-bold leading-[1.22] tracking-[-.02em] lg:text-[42px] xl:text-[48px]">오늘도 어떤 갈림길을<br />비춰볼까요?</h1>
+          <div className="mt-5 lg:flex lg:flex-1 lg:mt-7"><DiaryToday /></div>
+        </section>
+        <aside className="lg:flex lg:h-full lg:flex-col lg:border-l lg:border-white/[.08] lg:pl-8 xl:pl-10">
 
-      {/* 마스코트 한마디 */}
-      <Card highlight className="mt-4 flex items-center gap-3">
-        <Mascot which={guide.key} size={44} />
-        <div className="min-w-0">
-          <div className="text-[11px] font-bold" style={{ color: guide.color }}>
-            {guide.name} · {guide.tag}
-          </div>
-          <p className="mt-0.5 text-[12px] leading-relaxed text-sub">
-            데이터에서 비슷한 사람들의 경로를 찾아 차분히 비춰드릴게요.
-          </p>
-        </div>
-      </Card>
-
-      {/* 오늘 기록(일기) + 최근 감정 흐름 */}
-      <DiaryToday />
-      <MoodTrend />
-
-      {/* 새 시뮬 CTA */}
-      <Button className="mt-4 flex items-center justify-center gap-1.5" onClick={() => navigate("/input")}>
-        <Sparkles size={18} strokeWidth={2.2} />
-        새 시뮬레이션 시작
-      </Button>
+      {rumination.prompt && (
+        <button
+          onClick={startSuggestedCompare}
+          className="tap mb-4 flex w-full items-center gap-3 rounded-[18px] border border-violet-400/40 bg-[#1D1730] px-4 py-3.5 text-left transition-colors hover:bg-[#241B3C]"
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-500/15 text-violet-300">
+            <GitCompareArrows size={18} strokeWidth={2} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[13px] font-semibold text-violet-200">
+              최근 {rumination.windowDays}일 동안 {rumination.domain.label} 이야기가 {rumination.count}일 나타났어요
+            </span>
+            <span className="block text-[11px] text-sub">{rumination.compare.action}, 지금 비교해볼까요? · 키워드 기반</span>
+          </span>
+          <ChevronRight size={18} className="text-violet-400" />
+        </button>
+      )}
 
       {/* 나의 우주 요약 */}
-      <div className="mb-2 mt-7 flex items-center justify-between px-1">
+      <div className="mb-2 mt-4 flex items-center justify-between px-1 lg:mt-0">
         <span className="text-[15px] font-bold text-ink">나의 우주</span>
         <button
           onClick={() => navigate("/my")}
           className="tap flex items-center gap-0.5 text-[12px] text-mut"
         >
-          전체 보기 <ChevronRight size={14} />
+          전체 보기 <ChevronRight size={14} className="text-violet-400" />
         </button>
       </div>
 
@@ -69,25 +82,39 @@ export default function HomeHub() {
 
       <button
         onClick={() => navigate("/my")}
-        className="tap mt-2 flex w-full items-center gap-3 rounded-[18px] bg-card px-4 py-3.5 text-left transition-colors hover:bg-card2"
+        className="tap mt-2 flex w-full items-center gap-3 rounded-[18px] bg-card px-4 py-3.5 text-left transition-colors hover:bg-card2 lg:mt-3 lg:py-5"
       >
-        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-cyan/15 text-cyan">
+        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-violet-500/15 text-violet-400">
           <Orbit size={18} strokeWidth={2} />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-[14px] font-semibold text-ink">나의 우주 열기</span>
           <span className="block text-[11px] text-mut">별자리·행성·저장한 평행우주</span>
         </span>
-        <ChevronRight size={18} className="text-mut" />
+        <ChevronRight size={18} className="text-violet-400/70" />
       </button>
+
+      <div className="mb-2 mt-7 flex items-center justify-between border-t border-white/[.08] px-1 pt-5">
+        <span className="text-[15px] font-bold text-ink">최근 활동</span>
+        <button onClick={() => navigate("/archive")} className="tap text-[11px] text-mut">전체 보기</button>
+      </div>
+      <div className="overflow-hidden rounded-[18px] border border-white/[.07] bg-card/70 lg:flex-1">
+        {recentActivity.length ? recentActivity.map((item, index) => {
+          const Icon = item.type === "simulation" ? Sparkles : BookOpen;
+          return <button key={`${item.type}-${item.date}-${index}`} onClick={() => navigate(item.type === "simulation" ? "/archive" : "/my")} className="tap flex w-full items-center gap-3 border-b border-white/[.06] px-4 py-3 text-left last:border-0 hover:bg-white/[.03]"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-500/15"><Icon size={15}/></span><span className="min-w-0 flex-1"><span className="block truncate text-[12px] font-semibold text-ink">{item.title}</span><span className="mt-0.5 block text-[10px] text-mut">{item.type === "simulation" ? "미래 비교" : "오늘의 기록"}</span></span><span className="shrink-0 text-[10px] text-mut">{String(item.date).slice(5).replace("-", ".")}</span></button>;
+        }) : <p className="px-4 py-6 text-center text-[11px] text-mut">기록이나 시뮬레이션을 시작하면 최근 활동이 표시돼요.</p>}
+      </div>
+
+        </aside>
+      </div>
     </div>
   );
 }
 
 function Stat({ label, value }) {
   return (
-    <div className="rounded-[18px] bg-card px-2 py-3.5 text-center">
-      <div className="text-[20px] font-bold text-ink">{value}</div>
+    <div className="rounded-[18px] border border-white/[.04] bg-card px-2 py-3.5 text-center lg:py-7">
+      <div className="text-[20px] font-bold text-ink lg:text-[24px]">{value}</div>
       <div className="mt-0.5 text-[10px] text-mut">{label}</div>
     </div>
   );

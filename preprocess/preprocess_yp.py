@@ -29,6 +29,8 @@ import pandas as pd
 RAW_DIR = Path("data/raw/yp")           # YP2021_w01.xlsx ~ w04.xlsx
 OUT_PANEL = Path("data/clean/yp_clean.csv")
 OUT_SPELL = Path("data/clean/yp_spells.csv")
+CPI_PATH = Path("data/reference/cpi_korea_2020base.csv")
+CPI_BASE_YEAR = 2024                    # 실질소득 기준연도(= 최신 웨이브)
 
 WAVES = [1, 2, 3, 4]
 WAVE_YEAR = {1: 2021, 2: 2022, 3: 2023, 4: 2024}   # 조사연도(확인 필요)
@@ -170,6 +172,18 @@ def to_monthly_income(amount, unit, hours, days):
     return pd.Series(out, index=amount.index)
 
 
+def load_cpi() -> dict:
+    """소비자물가지수(2020=100) 연도별. 필요한 연도가 없으면 중단(추정치 금지)."""
+    if not CPI_PATH.exists():
+        raise FileNotFoundError(f"CPI 기준표 없음: {CPI_PATH} (data/reference/README.md 참고)")
+    cpi = {int(r["year"]): float(r["cpi"])
+           for _, r in pd.read_csv(CPI_PATH).iterrows()}
+    need = set(WAVE_YEAR.values()) | {CPI_BASE_YEAR}
+    if missing := sorted(need - cpi.keys()):
+        raise KeyError(f"CPI 기준표에 없는 연도: {missing} → {CPI_PATH} 에 추가할 것")
+    return cpi
+
+
 def build_panel() -> pd.DataFrame:
     print("[1] 웨이브 로딩 + wide→long 변환")
     frames = [load_wave(w) for w in WAVES]
@@ -197,7 +211,19 @@ def build_panel() -> pd.DataFrame:
               "income_now"] = np.nan
     n_ok = panel["income_now"].notna().sum()
     print(f"    유효 소득: {n_ok:,}행 / 중앙값 "
-          f"{panel['income_now'].median():.0f}만원")
+          f"{panel['income_now'].median():.0f}만원 (명목)")
+
+    # [3-1] 실질소득 환산 — 웨이브가 2021~2024로 4년 걸쳐 있어 명목 그대로 두면
+    #       매칭 풀(L2)·궤적(L5)에 서로 다른 화폐가치가 섞이고, 소득 증가율에
+    #       물가상승분이 성장으로 잡힌다. KLIPS 와 같은 CPI 표·기준연도를 쓴다.
+    cpi = load_cpi()
+    panel["income_now_nominal"] = panel["income_now"]
+    panel["income_now"] = (panel["income_now"]
+                           * panel["year"].map(lambda y: cpi[CPI_BASE_YEAR] / cpi[int(y)])
+                           ).round(1)
+    print(f"    실질소득(기준 {CPI_BASE_YEAR}년) 중앙값 "
+          f"{panel['income_now'].median():.0f}만원 · "
+          f"연도별 {panel.groupby('year')['income_now'].median().round(0).to_dict()}")
 
     print("[4] 이직 이벤트 플래그")
     # 그만둔 시기(job_end_y)가 있으면 그 웨이브에 이직 발생

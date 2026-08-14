@@ -246,6 +246,11 @@ def main() -> None:
     if lf is not None:
         joblib.dump(lf, ARTIFACTS / "lifelines.pkl")
     report = {
+        # ⚠ 이 리포트는 **이 스크립트(GOMS 단면)** 산출물만 설명한다.
+        # 서빙은 연령대에 따라 econml_yp / econml_klips 를 먼저 고르므로,
+        # "지금 무엇이 서빙되는가" 는 artifacts/manifest.json 을 볼 것
+        # (scripts/build_artifact_manifest.py 가 생성).
+        "scope": "GOMS 단면 — L2 KNN + L3 EconML (+ 가능 시 L4). 서빙 전체 명세는 manifest.json",
         "trained_at": datetime.now(timezone.utc).isoformat(),
         "synthetic": args.synthetic,
         "rows": len(df),

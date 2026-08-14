@@ -1,11 +1,11 @@
 import { createContext, useContext, useMemo, useRef, useState } from "react";
 import { getPredictionPair } from "./prediction.js";
 import { DEFAULT_AVATAR } from "./avatarOptions.js";
-import { loadCosmetics } from "./cosmetics.js";
 import { generateSceneImages, runCompareRaw, runSimulateRaw } from "../api.js";
 import { mapSimulateToPair } from "./simulateAdapter.js";
 import { avatarToPngBlob } from "./avatarImage.js";
-import { initDemoFromUrl, noteSimulationRun } from "./myUniverse.js";
+import { avatarGenerationSpec } from "./avatarOptions.js";
+import { initDemoFromUrl, noteSimulationRun, recordScenario, loadUniverse } from "./myUniverse.js";
 
 // 결과 데이터 + 온보딩 프로필을 한 곳에 모으는 컨텍스트.
 // runSimulation() 이 선택(choices)+심정(diary)으로 결과 쌍{a,b}을 만든다.
@@ -16,8 +16,6 @@ const ResultContext = createContext(null);
 // 발표/체험 링크의 ?demo=1 요청이 있을 때만 나의 우주 예시 기록을 준비한다.
 initDemoFromUrl();
 
-const savedCosmetics = loadCosmetics();
-
 const DEFAULT_PROFILE = {
   name: "",
   age: 29,
@@ -26,14 +24,15 @@ const DEFAULT_PROFILE = {
   occupation: "사회계열",
   income: 280, // 만원/월 → 백엔드 monthly_wage
   edu_level: 7, // 대졸
-  values: ["배움·성취", "건강·안정"], // qmode UI 표시용 가치 강제순위
-  value_ranking: ["growth", "stability"], // 가치 카드 id 중요한 순 → 개인화 입력(백엔드가 가중치로 변환)
+  occupation_group: null, // KSCO 직종 대분류 1~9 — 이직 시뮬레이션에서 수집
+  employment_status: null, // KLIPS 종사상지위 1~5
+  tenure_years: null, // 현재 일자리 근속연수
+  firm_size: null, // KLIPS 기업규모 코드 1~11
+  values: [], // qmode UI 표시용 가치 강제순위 — 온보딩에서 사용자가 직접 선택
+  value_ranking: [], // 가치 카드 id 중요한 순 → 개인화 입력(백엔드가 가중치로 변환)
   mbti: "", // 심리 성향 input
   psych_answers: {}, // { D2:"…", D1:"…", D4:"…" } 서술형 답변 → disposition_block 로 전송
-  avatarConfig: {
-    ...DEFAULT_AVATAR,
-    ...(savedCosmetics.avatarBackground ? { bgColor: savedCosmetics.avatarBackground } : {}),
-  }, // 아바타 빌더 선택(피부·머리·안경·배경)
+  avatarConfig: DEFAULT_AVATAR, // 아바타 빌더 선택(피부·머리·안경·배경)
 };
 
 export function ResultProvider({ children }) {
@@ -54,7 +53,17 @@ export function ResultProvider({ children }) {
     const choiceA = opts.choiceA || choices.a;
     const choiceB = opts.choiceB || choices.b;
     const currentDiary = opts.diary ?? diary;
+    const scenarioDomain = loadUniverse().planet;
     noteSimulationRun();
+    // 그 날 그 영역(현재 행성)에서 시나리오를 만들었음을 기록 → 지구본에 ◆ 로 표시.
+    try {
+      recordScenario({
+        domain: scenarioDomain,
+        title: choiceB ? `${choiceA} vs ${choiceB}` : `${choiceA} 시나리오`,
+      });
+    } catch {
+      /* 시나리오 기록 실패 무시 */
+    }
     const pair = { ...getPredictionPair({ profile, choiceA, choiceB, detail: currentDiary }), dataMode: "demo" };
     setResult(pair);
     const requestArgs = {
@@ -88,6 +97,25 @@ export function ResultProvider({ children }) {
         imageLoading: false,
       };
       setResult(preview);
+      try {
+        const summarize = (side) => {
+          if (!side) return "";
+          const signals = [
+            side.choice,
+            side.expected_wage != null ? `예상 소득 ${Math.round(side.expected_wage).toLocaleString()}만원` : "",
+            side.causal_effect != null ? `추정 변화 ${Number(side.causal_effect).toFixed(1)}%` : "",
+            side.risk_label || side.coverage || "",
+          ].filter(Boolean);
+          return signals.join(" · ");
+        };
+        recordScenario({
+          domain: scenarioDomain,
+          title: choiceB ? `${choiceA} vs ${choiceB}` : `${choiceA} 시나리오`,
+          br: [summarize(preview.a), summarize(preview.b)].filter(Boolean),
+        });
+      } catch {
+        /* 우주 패널 요약 저장 실패는 결과 화면을 막지 않는다. */
+      }
     } catch (error) {
       const fallback = { ...pair, dataMode: "demo", narrativeError: error.message };
       setResult(fallback);
@@ -115,7 +143,13 @@ export function ResultProvider({ children }) {
 
         try {
           const avatarBlob = await avatarToPngBlob(profile.avatarConfig);
-          const visual = await generateSceneImages({ avatarBlob, choiceA, choiceB, narrative });
+          const visual = await generateSceneImages({
+            avatarBlob,
+            avatarSpec: avatarGenerationSpec(profile.avatarConfig),
+            choiceA,
+            choiceB,
+            narrative,
+          });
           if (simulationRunRef.current !== runId) return;
           setResult({ ...storyResult, visuals: visual.images, visualModel: visual.model, imageLoading: false });
         } catch (imageError) {
@@ -140,6 +174,7 @@ export function ResultProvider({ children }) {
       const avatarBlob = await avatarToPngBlob(profile.avatarConfig);
       const visual = await generateSceneImages({
         avatarBlob,
+        avatarSpec: avatarGenerationSpec(profile.avatarConfig),
         choiceA: result.a.choice,
         choiceB: result.b.choice,
         narrative,

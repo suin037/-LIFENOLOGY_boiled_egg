@@ -11,12 +11,20 @@ const TASTE = [
   { id: "T1", layer: "taste", text: "최근 꽂힌 영화·책·영상 하나. 어떤 장면이나 인물이 남았나요?" },
   { id: "T4", layer: "taste", text: "요즘 시간이 가장 잘 녹아 없어지는 활동은? 하고 난 뒤 어떤 기분이 남나요?" },
   { id: "T2", layer: "taste", text: "요즘 반복해서 듣는 노래나 플레이리스트 있나요? 주로 언제 손이 가나요?" },
+  { id: "T7", layer: "taste", text: "오늘 에너지를 가장 크게 받은 일이 있다면 무엇인가요? 그게 왜 힘이 됐을까요?" },
 ];
 
 const RELATION = [
   { id: "R3", layer: "relation", text: "오늘 잘 됐던 일 하나만 꼽는다면? 그게 왜 잘 됐다고 생각하나요?" },
   { id: "R4", layer: "relation", text: "최근 '이건 좀 나답지 않다' 싶었던 순간이 있었나요?" },
   { id: "R5", layer: "relation", text: "이번 주 나를 가장 지치게 한 건? 같은 상황의 친구라면 뭐가 필요해 보일까요?" },
+];
+
+// 성향 심화(구 설정 화면의 성향 질문 D2·D1·D4를 이 리스트로 이관 — 매일 하나 로테이션).
+const DEPTH = [
+  { id: "D2", layer: "depth", text: "지금 삶에서 늘리고 싶은 것 하나, 줄이고 싶은 것 하나를 꼽는다면?" },
+  { id: "D1", layer: "depth", text: "최근 망설인 선택이 있나요? 무엇이 마음에 걸렸나요?" },
+  { id: "D4", layer: "depth", text: "최근 누군가가 부러웠던 순간이 있나요? 무엇이 부러웠나요?" },
 ];
 
 // 날짜 기반 결정적 픽(같은 날 = 같은 문항). 실제 scheduler의 7일 무중복은 backend 몫.
@@ -26,11 +34,11 @@ function pickBy(arr, seed) {
 
 export function todayQuestions(date = new Date()) {
   const seed = date.getFullYear() * 1000 + (date.getMonth() + 1) * 40 + date.getDate();
-  return [...CORE, pickBy(TASTE, seed), pickBy(RELATION, seed + 1)];
+  return [...CORE, pickBy(TASTE, seed), pickBy(RELATION, seed + 1), pickBy(DEPTH, seed + 2)];
 }
 
 // qid → 질문 텍스트 (답변 표시에 "어떤 질문이었는지" 보여주기 위함)
-const ALL = [...CORE, ...TASTE, ...RELATION];
+const ALL = [...CORE, ...TASTE, ...RELATION, ...DEPTH];
 export function questionText(qid) {
   return ALL.find((q) => q.id === qid)?.text || qid;
 }

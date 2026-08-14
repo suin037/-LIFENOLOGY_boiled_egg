@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { useResult } from "../data/ResultContext.jsx";
 import { Eyebrow, Button } from "../components/ui.jsx";
 import AvatarBuilder from "../components/AvatarBuilder.jsx";
-import { universeSummary } from "../data/myUniverse.js";
 
 const OCCUPATIONS = [
   "연구·공학기술",
@@ -43,7 +42,9 @@ export default function Onboarding() {
   const { profile, setProfile, setOnboarded } = useResult();
 
   const [visibleThrough, setVisibleThrough] = useState(0);
-  const unlockLevel = universeSummary().highestLevel;
+  const [incomeInput, setIncomeInput] = useState(() =>
+    Number(profile.income) > 0 ? String(profile.income) : "",
+  );
   const agePct = ((profile.age - 18) / 52) * 100;
   const ranked = profile.values; // 라벨 배열, 앞이 1순위
   const steps = ["이름", "나이", "직종", "소득", "가치", "성격유형", "아바타"];
@@ -62,6 +63,17 @@ export default function Onboarding() {
     if (event.key !== "Enter" || event.nativeEvent?.isComposing) return;
     event.preventDefault();
     reveal(index);
+  }
+
+  function updateIncome(value) {
+    const normalized = value.replace(/^0+(?=\d)/, "");
+    setIncomeInput(normalized);
+    setProfile((p) => ({ ...p, income: normalized === "" ? 0 : Number(normalized) }));
+  }
+
+  function confirmIncome() {
+    if (incomeInput === "") return;
+    reveal(4);
   }
 
   // 탭한 순서 = 우선순위. 다시 누르면 해제(뒤 순위 자동 당겨짐). 부분순위 허용.
@@ -109,7 +121,7 @@ export default function Onboarding() {
           [&::-webkit-slider-thumb]:h-[18px] [&::-webkit-slider-thumb]:w-[18px]
           [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full
           [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-[0_0_8px_rgba(127,212,255,.6)]"
-        style={{ background: `linear-gradient(90deg, #7FD4FF, #4A90E2 ${agePct}%, #1E2740 ${agePct}%)` }} />
+        style={{ background: `linear-gradient(90deg, #8B6CCF, #8B6CCF ${agePct}%, #1E2740 ${agePct}%)` }} />
       <div className="mt-3 flex justify-between text-[11px] text-mut"><span>18세</span><span>70세</span></div>
     </div>,
     <div key="occupation">
@@ -129,19 +141,21 @@ export default function Onboarding() {
     <div key="income">
       <label className="mb-2 block text-xs text-sub">현재 월소득</label>
       <div className="flex items-center gap-2">
-        <input type="number" min="0" value={profile.income}
-          onChange={(e) => {
-            setProfile((p) => ({ ...p, income: Number(e.target.value) }));
-            if (e.target.value !== "") reveal(4);
-          }}
+        <input type="number" min="0" step="1" value={incomeInput}
+          placeholder="예: 300"
+          onChange={(e) => updateIncome(e.target.value)}
+          onKeyDown={(e) => incomeInput !== "" && revealOnEnter(e, 4)}
           className="w-full rounded-xl border border-line bg-[#0E1424] px-3.5 py-3 text-sm text-ink outline-none focus:border-cyan" />
         <span className="whitespace-nowrap text-[11px] text-mut">만원 / 월</span>
       </div>
+      {incomeInput !== "" && visibleThrough < 4 && (
+        <Button className="mt-3" onClick={confirmIncome}>다음</Button>
+      )}
     </div>,
     <div key="values">
       <div className="flex items-center justify-between gap-3">
-        <label className="text-xs text-sub">지금 내 삶에서 중요한 <b className="text-cyan">순서대로</b> 골라주세요</label>
-        <span className="shrink-0 text-[11px] text-mut">{ranked.length}개 선택</span>
+        <label className="text-xs text-sub">지금 내 삶에서 중요한 <b className="text-cyan">순서대로</b> 골라주세요 </label>
+        <span className="shrink-0 text-[11px] text-mut">3순위 선택 권장  ({ranked.length}개 선택)</span>
       </div>
       <div className="mt-2 flex flex-col gap-1.5">
         {VALUE_CARDS.map((c) => {
@@ -152,12 +166,12 @@ export default function Onboarding() {
               key={c.id}
               onClick={() => toggleRank(c.label)}
               className={`tap flex items-center gap-3 rounded-xl border px-3.5 py-2.5 text-left transition-colors ${
-                on ? "border-cyan bg-[#12203a]" : "border-line bg-[#0E1424]"
+                on ? "border-cyan bg-[#211735] shadow-[inset_0_0_20px_rgba(112,75,163,.12)]" : "border-line bg-[#0E1424]"
               }`}
             >
               <span
                 className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold transition-colors ${
-                  on ? "bg-cyan text-[#04203a]" : "bg-[#1E2740] text-mut"
+                  on ? "bg-[#8B6CCF] text-white" : "bg-[#1E2740] text-mut"
                 }`}
               >
                 {on ? rank + 1 : "+"}
@@ -173,14 +187,13 @@ export default function Onboarding() {
       </div>
       {ranked.length > 0 && (
         <button type="button" onClick={() => reveal(5)}
-          className="tap mt-2.5 w-full rounded-xl border border-cyan/60 bg-[#12203a] py-2.5 text-[12px] font-semibold text-cyan">
+          className="tap mt-2.5 w-full rounded-xl border border-cyan bg-[#1D1730] py-2.5 text-[12px] font-semibold text-cyan">
           선택 완료
         </button>
       )}
     </div>,
     <div key="mbti">
       <label className="mb-1 block text-xs text-sub">성격유형 (MBTI) <span className="text-[10px] text-mut">· 선택</span></label>
-      <p className="mb-2 text-[10px] text-mut">모르거나 원하지 않으면 선택하지 않아도 돼요.</p>
       <div className="flex flex-col gap-1.5">
         {MBTI_AXES.map((ax) => (
           <div key={ax.i} className="flex gap-1.5">
@@ -191,7 +204,7 @@ export default function Onboarding() {
                   key={letter}
                   onClick={() => pickMbti(ax.i, letter)}
                   className={`tap flex-1 rounded-xl border py-2 text-[12px] transition-colors ${
-                    on ? "border-cyan bg-[#12203a] text-cyan" : "border-line bg-[#0E1424] text-sub"
+                    on ? "border-cyan bg-[#1D1730] text-cyan" : "border-line bg-[#0E1424] text-sub"
                   }`}
                 >
                   <b className="mr-1">{letter}</b>
@@ -203,7 +216,7 @@ export default function Onboarding() {
         ))}
       </div>
       <button type="button" onClick={() => reveal(6)}
-        className="tap mt-2.5 w-full rounded-xl border border-cyan/60 bg-[#12203a] py-2.5 text-[12px] font-semibold text-cyan">
+        className="tap mt-2.5 w-full rounded-xl border border-cyan bg-[#1D1730] py-2.5 text-[12px] font-semibold text-cyan">
         다음
       </button>
     </div>,
@@ -212,31 +225,46 @@ export default function Onboarding() {
       <AvatarBuilder
         config={profile.avatarConfig}
         onChange={(cfg) => setProfile((p) => ({ ...p, avatarConfig: cfg }))}
-        unlockLevel={unlockLevel}
       />
     </div>
   ];
 
   return (
-    <div>
-      <Eyebrow>나를 알려주세요 · {Math.min(visibleThrough + 1, steps.length)}/{steps.length}</Eyebrow>
-      <div className="mb-8 flex gap-1.5">
-        {steps.map((label, index) => (
-          <b key={label} className={`h-1 flex-1 rounded-full ${index <= visibleThrough ? "bg-cyan" : "bg-[#1E2740]"}`} />
-        ))}
-      </div>
+    <div className="lg:grid lg:min-h-[calc(100vh-140px)] lg:grid-cols-[330px_minmax(0,1fr)] lg:items-start lg:gap-14 xl:grid-cols-[380px_minmax(0,1fr)] xl:gap-20">
+      <aside className="hidden lg:sticky lg:top-[112px] lg:block">
+        <p className="text-[12px] font-bold tracking-[.16em] text-violet-300">START YOUR UNIVERSE</p>
+        <h1 className="mt-4 text-[38px] font-bold leading-[1.18] tracking-[-.04em]">당신의 선택을<br />더 잘 이해하기 위해</h1>
+        <p className="mt-4 max-w-[310px] text-[13px] leading-6 text-sub">입력한 정보는 두 미래를 같은 기준으로 비교하고 결과를 개인화하는 데 사용됩니다.</p>
+        <ol className="mt-9 space-y-2">
+          {steps.map((label, index) => {
+            const current = index === visibleThrough;
+            const complete = index < visibleThrough;
+            return <li key={label} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-[12px] transition-colors ${current ? "bg-violet-500/15 font-semibold text-violet-200" : complete ? "text-sub" : "text-mut"}`}><span className={`flex h-7 w-7 items-center justify-center rounded-full border text-[10px] font-bold ${current ? "border-violet-400 bg-violet-500/20" : complete ? "border-violet-400/30 bg-violet-500/10 text-violet-300" : "border-white/10"}`}>{complete ? "✓" : index + 1}</span>{label}</li>;
+          })}
+        </ol>
+      </aside>
 
-      <div className="space-y-5">
-        {stepContent.slice(0, visibleThrough + 1).map((content, index) => (
-          <section key={steps[index]} className="animate-fade">
-            {content}
-          </section>
-        ))}
-      </div>
+      <main className="min-w-0 lg:max-w-[760px] lg:rounded-[28px] lg:border lg:border-white/[.07] lg:bg-[#0C1727]/70 lg:p-8 lg:shadow-[0_24px_70px_rgba(0,0,0,.24)] lg:backdrop-blur-xl xl:p-10">
+        <Eyebrow>나를 알려주세요 · {Math.min(visibleThrough + 1, steps.length)}/{steps.length}</Eyebrow>
+        <h2 className="mb-5 hidden text-[26px] font-bold tracking-[-.03em] lg:block">나만의 평행우주 준비하기</h2>
+        <div className="mb-8 flex gap-1.5">
+          {steps.map((label, index) => (
+            <b key={label} className={`h-1 flex-1 rounded-full ${index <= visibleThrough ? "bg-[#8B6CCF] shadow-[0_0_8px_rgba(139,108,207,.22)]" : "bg-[#1E2740]"}`} />
+          ))}
+        </div>
 
-      {visibleThrough >= steps.length - 1 && (
-        <Button className="mb-2 mt-8" onClick={finish}>저장하고 시작하기</Button>
-      )}
+        <div className="space-y-5 lg:space-y-6">
+          {stepContent.slice(0, visibleThrough + 1).map((content, index) => (
+            <section key={steps[index]} className="animate-fade lg:rounded-[18px] lg:border lg:border-white/[.055] lg:bg-black/10 lg:p-5">
+              {content}
+            </section>
+          ))}
+        </div>
+
+        {visibleThrough >= steps.length - 1 && (
+          <Button className="mb-2 mt-8 lg:ml-auto lg:max-w-[320px]" onClick={finish}>저장하고 시작하기</Button>
+        )}
+      </main>
     </div>
   );
 }

@@ -23,6 +23,7 @@ const DEFAULTS = {
   planet: "career",
   simRuns: 0, // 시뮬레이션 실행 횟수 (다른 저장소에 카운터가 없어 여기서 센다)
   demo: false, // 예시 기록으로 채워진 상태인가 (화면에 배지로 항상 표시)
+  scenarios: [], // [{ date, domain, title, br }] 그 날 그 영역에서 만든 평행우주 시나리오 → 지구본 ◆
 };
 
 // ── 저장/로드 ────────────────────────────────────────────────
@@ -33,6 +34,7 @@ export function loadUniverse() {
       ...DEFAULTS,
       ...raw,
       checkins: Array.isArray(raw.checkins) ? raw.checkins : [],
+      scenarios: Array.isArray(raw.scenarios) ? raw.scenarios : [],
       pinnedSlots: { ...DEFAULTS.pinnedSlots, ...(raw.pinnedSlots || {}) },
     };
   } catch {
@@ -46,6 +48,8 @@ function persist(state) {
   } catch {
     /* localStorage 불가 환경(사파리 프라이빗 등) — 메모리로만 동작 */
   }
+  // 같은 탭에선 storage 이벤트가 안 뜨므로 직접 알린다 → 화면 즉시 갱신(자동 태깅 반영 등).
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("pm:universe"));
   return state;
 }
 
@@ -95,6 +99,9 @@ export function addCheckin(entry = {}) {
   const date = entry.date || todayKey();
   const valence =
     entry.valence != null ? Number(entry.valence) : moodToValence(entry.mood);
+  const answerValues = Array.isArray(entry.answers)
+    ? entry.answers
+    : Object.values(entry.answers || {});
   const star = {
     date,
     mood: entry.mood ?? null,
@@ -105,14 +112,62 @@ export function addCheckin(entry = {}) {
     note: entry.note ?? "", // 한 줄 기록
     text: entry.text ?? "", // 일기 본문
     answers: entry.answers ?? null, // 질문별 답 [{ q, a }]
+    domains: entry.domains ?? null, // 자동 분류 영역(행성) key 배열 — /tag 결과
     diaryId: entry.diaryId ?? null,
     hasDiary: Boolean(
-      entry.text?.trim() || entry.note?.trim() || entry.answers?.length || entry.diaryId,
+      entry.text?.trim() || entry.note?.trim()
+      || answerValues.some((value) => String(value?.a ?? value ?? "").trim())
+      || entry.diaryId,
     ),
   };
   return patch((s) => {
+    const previous = s.checkins.find((c) => c.date === date);
+    if (previous) {
+      star.domains = entry.domains ?? previous.domains ?? null;
+      star.experiments = entry.experiments ?? previous.experiments ?? [];
+    }
     const rest = s.checkins.filter((c) => c.date !== date);
     s.checkins = [...rest, star].sort((a, b) => a.date.localeCompare(b.date));
+    return s;
+  });
+}
+
+/**
+ * JY diary entries(pm_diary_v5)를 나의 우주 별 저장소에 병합한다.
+ * 나의 우주에서 생성한 domains/experiments는 보존하고 일기 원문과 체크인 값만 갱신한다.
+ */
+export function syncDiaryEntries(entries = []) {
+  if (!Array.isArray(entries) || !entries.length) return loadUniverse();
+  return patch((s) => {
+    const byDate = new Map(s.checkins.map((item) => [item.date, item]));
+    for (const entry of entries) {
+      if (!entry?.date) continue;
+      const previous = byDate.get(entry.date) || {};
+      const answers = entry.answers ?? previous.answers ?? null;
+      const answerValues = Array.isArray(answers) ? answers : Object.values(answers || {});
+      const text = entry.text ?? previous.text ?? "";
+      const note = entry.note ?? text ?? previous.note ?? "";
+      byDate.set(entry.date, {
+        ...previous,
+        date: entry.date,
+        mood: entry.mood ?? previous.mood ?? null,
+        valence: entry.valence ?? moodToValence(entry.mood) ?? previous.valence ?? null,
+        energy: entry.energy ?? previous.energy ?? null,
+        skill: entry.competency ?? entry.skill ?? previous.skill ?? null,
+        keyword: entry.emotion ?? entry.keyword ?? previous.keyword ?? null,
+        note,
+        text,
+        answers,
+        diaryId: entry.id ?? entry.diaryId ?? previous.diaryId ?? `e-${entry.date}`,
+        domains: previous.domains ?? entry.domains ?? null,
+        experiments: previous.experiments ?? entry.experiments ?? [],
+        hasDiary: Boolean(
+          String(text).trim() || String(note).trim()
+          || answerValues.some((value) => String(value?.a ?? value ?? "").trim()),
+        ),
+      });
+    }
+    s.checkins = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
     return s;
   });
 }
@@ -225,6 +280,110 @@ export function completedCount(s = loadUniverse()) {
   return constellationGroups(s).filter((g) => g.complete && g.filled > 0).length;
 }
 
+// 특정 날 체크인에 자동분류 영역(행성 key 배열)을 나중에 채운다(/tag 응답 도착 시).
+export function setDomains(date, domains) {
+  return patch((s) => {
+    const c = s.checkins.find((x) => x.date === date);
+    if (c) c.domains = domains;
+    return s;
+  });
+}
+
+// 행성(도메인) 렌즈 — 그 영역 기록을 '독립 축적'해 별자리를 만든다.
+// 달력 주와 무관하게, 그 영역 기록 7개가 모이면 별자리 1개 완성(각 행성이 자기 별자리를 쌓음).
+// planetKey 없으면 기존 달력 주 기준(전체).
+export function groupsByPlanet(planetKey, s = loadUniverse()) {
+  if (!planetKey) return constellationGroups(s);
+  const legacyKeys = ["career", "life", "relation", "health", "growth"];
+  const domainsOf = (checkin) => {
+    if (Array.isArray(checkin.domains) && checkin.domains.length) return checkin.domains;
+    const text = `${checkin.text || ""} ${checkin.note || ""}`;
+    const inferred = [];
+    if (/회사|직장|이직|취업|진로|업무|면접|돈|소득|연봉/.test(text)) inferred.push("career");
+    if (/건강|수면|잠|운동|병원|스트레스|불안|체력/.test(text)) inferred.push("health");
+    if (/가족|친구|연인|동료|관계|사람/.test(text)) inferred.push("relation");
+    if (/공부|배움|성장|자격증|시험|목표/.test(text)) inferred.push("growth");
+    if (inferred.length) return [...new Set(inferred)];
+    // 예시 기록은 과거 버전에 영역 값이 없었으므로 날짜 기준으로 고르게 복구한다.
+    if (s.demo) {
+      const hash = String(checkin.date || "").split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
+      return [legacyKeys[hash % legacyKeys.length]];
+    }
+    return ["life"];
+  };
+  const filtered = {
+    ...s,
+    checkins: s.checkins.filter((c) => domainsOf(c).includes(planetKey)),
+  };
+  return constellationGroups(filtered);
+}
+
+// 적응형 별자리 묶기 — 기록 수에 맞춰 묶어 별자리가 너무 많아지지도, 너무 비지도 않게.
+//  · 항상 그룹 ≤ 8개, 각 그룹 ≥ 7별(마지막 제외) → 분석(4개↑)이 항상 가능.
+//  · 전체(planetKey 없음)면 모든 기록, 도메인이면 그 영역만.
+//  · 달력이 아니라 '기록 순서' 기준이라 희박한 영역도 텅 빈 별자리가 안 생긴다.
+export function adaptiveGroups(planetKey, s = loadUniverse()) {
+  const all = !planetKey || planetKey === "all";
+  const stars = s.checkins
+    .filter(
+      (c) =>
+        !c.empty &&
+        (c.mood != null || c.valence != null) &&
+        (all || (Array.isArray(c.domains) && c.domains.includes(planetKey))),
+    )
+    .sort((a, b) => a.date.localeCompare(b.date));
+  if (!stars.length) return [];
+
+  const size = Math.max(STARS_PER_CONSTELLATION, Math.ceil(stars.length / 8));
+  const groups = [];
+  for (let i = 0; i < stars.length; i += size) {
+    const chunk = stars.slice(i, i + size);
+    groups.push({
+      index: groups.length,
+      stars: chunk,
+      filled: chunk.length,
+      complete: true,
+      remaining: 0,
+      label: `${chunk[0].date.slice(5)}~${chunk[chunk.length - 1].date.slice(5)}`,
+    });
+  }
+  return groups;
+}
+
+// 그 날 그 영역에서 평행우주 시나리오를 만들었음을 기록 → 지구본 ◆. (date,domain) upsert.
+export function recordScenario({ domain, title, br = [], date } = {}) {
+  const d = date || todayKey();
+  return patch((s) => {
+    const rest = (s.scenarios || []).filter((x) => !(x.date === d && x.domain === domain));
+    s.scenarios = [...rest, { date: d, domain, title: title || "평행우주 시나리오", br }];
+    return s;
+  });
+}
+
+// 그 행성(영역)에서 만든 시나리오들 — PlanetGlobe scenarios prop 용.
+export function scenariosByPlanet(planetKey, s = loadUniverse()) {
+  return (s.scenarios || []).filter((x) => x.domain === planetKey);
+}
+
+// 결과 화면 '작은 실험'에 적은 답을 그날 기록에 덧붙인다.
+// 별(mood)을 덮어쓰지 않고 experiments[] 에 누적 → 다음 diarySignals 분석에 반영된다.
+// (actionId 당 1개 upsert. 같은 실험을 다시 적으면 덮어씀.)
+export function logExperiment({ actionId, prompt, text, date } = {}) {
+  const v = (text || "").trim();
+  const d = date || todayKey();
+  return patch((s) => {
+    let c = s.checkins.find((x) => x.date === d);
+    if (!c) {
+      c = { date: d, mood: null, valence: null, energy: null, skill: null, keyword: null, note: "", text: "", answers: null, domains: null, diaryId: null, experiments: [], hasDiary: true };
+      s.checkins = [...s.checkins, c].sort((a, b) => a.date.localeCompare(b.date));
+    }
+    const rest = (c.experiments || []).filter((e) => e.actionId !== actionId);
+    c.experiments = v ? [...rest, { actionId, prompt: prompt || "", text: v }] : rest;
+    if (v) c.hasDiary = true;
+    return s;
+  });
+}
+
 // ── XP / 레벨 ────────────────────────────────────────────────
 // 참여 지표다. 실측 데이터와 무관하며 값은 팀 재량으로 정한 것.
 export const XP_RULES = {
@@ -270,7 +429,7 @@ function rememberHighestLevel(level) {
   return highest;
 }
 
-const TITLES = [
+export const LEVEL_TITLES = [
   [1, "첫 별 관측자"],
   [3, "성운 여행자"],
   [6, "별자리 수집가"],
@@ -280,8 +439,8 @@ const TITLES = [
 ];
 
 export function titleFor(level) {
-  let t = TITLES[0][1];
-  for (const [min, name] of TITLES) if (level >= min) t = name;
+  let t = LEVEL_TITLES[0][1];
+  for (const [min, name] of LEVEL_TITLES) if (level >= min) t = name;
   return t;
 }
 
@@ -377,14 +536,14 @@ const DEMO_DIARY = {
     note: "그냥 버텼다.",
     text: "하루가 어떻게 갔는지 모르겠다. 그냥 버틴다는 말밖에 안 나온다.",
     answers: [
-      { q: "오늘 가장 마음이 걸린 순간은?", a: "회의 내내 멍했다. 아무 생각이 없었다." },
+      { q: "오늘 가장 마음이 걸린 순간, 그때 나는 무엇을 했나요? 옆에서 본 사람이라면 뭐가 보였을까요?", a: "회의 내내 멍하게 앉아만 있었다. 아무 말도 못 하고 시간만 흘려보냈다. 옆에서 봤다면 완전히 방전된 사람처럼 보였을 거다." },
     ],
   },
   "0-3": {
     note: "다 놓고 싶었다.",
     text: "다 놓고 싶다는 생각이 문득 들었다. 근데 그냥 출근했다.",
     answers: [
-      { q: "그럼에도 오늘 지킨 것은?", a: "점심에 잠깐 산책했다. 그게 유일한 숨통이었다." },
+      { q: "오늘 가장 기억에 남는 순간 하나만 편하게 적어주세요.", a: "점심에 혼자 10분 걸은 것. 오늘 유일하게 숨 쉰 것 같은 시간이었다." },
     ],
   },
   // 4주 전 — 자각
@@ -392,14 +551,14 @@ const DEMO_DIARY = {
     note: "번아웃인가 싶다.",
     text: "아침에 일어나기가 너무 힘들다. 몸이 자꾸 신호를 보낸다 — 두통, 소화불량.",
     answers: [
-      { q: "오늘 가장 힘들었던 순간은?", a: "6시에 상사가 일을 또 던졌을 때. 거절을 못 했다." },
+      { q: "오늘 가장 마음이 걸린 순간, 그때 나는 무엇을 했나요? 옆에서 본 사람이라면 뭐가 보였을까요?", a: "6시에 상사가 일을 또 던졌을 때. 거절하고 싶었지만 결국 알겠다고 했다. 옆에서 봤다면 또 참는구나 했을 거다." },
     ],
   },
   "1-6": {
     note: "숨통이 트였다.",
     text: "친구들이랑 저녁. 회사 밖 사람을 만나니 숨통이 트였다.",
     answers: [
-      { q: "오늘 잘 됐던 일은?", a: "먼저 연락해서 약속을 잡은 것. 나답지 않게 적극적이었다." },
+      { q: "오늘 잘 됐던 일 하나만 꼽는다면? 그게 왜 잘 됐다고 생각하나요?", a: "회사 밖 친구들을 만난 것. 내가 먼저 연락해서 잡은 약속이라 더 좋았다. 사람을 만나니 숨통이 트였다." },
     ],
   },
   // 3주 전 — 준비
@@ -407,8 +566,8 @@ const DEMO_DIARY = {
     note: "이력서 초안을 썼다.",
     text: "미루던 이력서를 드디어 열었다. 한 줄 쓰기까지가 제일 어려웠고, 쓰고 나니 후련했다.",
     answers: [
-      { q: "오늘의 작은 도전은?", a: "이직 지원 두 군데에 지원 버튼을 눌렀다. 겁났지만 결국 눌렀다." },
-      { q: "그게 나답다고 느꼈나?", a: "평소 미루던 나라서, 움직인 게 좀 낯설고 좋았다." },
+      { q: "오늘 잘 됐던 일 하나만 꼽는다면? 그게 왜 잘 됐다고 생각하나요?", a: "미루던 이력서를 열고 지원 두 곳에 버튼을 누른 것. 겁났지만 눌렀다는 게 스스로 대견했다." },
+      { q: "최근 '이건 좀 나답지 않다' 싶었던 순간이 있었나요?", a: "평소 한참 미루는 나인데, 겁나도 일단 지원한 게 좀 나답지 않아서 낯설고 좋았다." },
     ],
   },
   // 2주 전 — 도전
@@ -416,30 +575,40 @@ const DEMO_DIARY = {
     note: "면접 제안이 왔다.",
     text: "면접 제안이 왔다. 설레면서도 안정을 놓기가 무섭다.",
     answers: [
-      { q: "가장 마음이 걸린 지점은?", a: "안정을 놓기가 무서워 답장을 미뤘다. 이 망설임이 자꾸 나를 잡는다." },
+      { q: "오늘 가장 마음이 걸린 순간, 그때 나는 무엇을 했나요? 옆에서 본 사람이라면 뭐가 보였을까요?", a: "면접 제안에 답장을 못 하고 미룬 것. 안정을 놓기가 무서웠다. 옆에서 봤다면 왜 저렇게 망설이나 했을 거다." },
     ],
   },
   "3-4": {
     note: "등산으로 머리를 비웠다.",
     text: "주말 등산. 정상에서 먹는 김밥. 이 맛에 버틴다.",
-    answers: [{ q: "오늘 에너지가 어디서 왔나?", a: "몸을 움직이니 머리가 맑아졌다." }],
+    answers: [{ q: "오늘 에너지를 가장 크게 받은 일이 있다면 무엇인가요? 그게 왜 힘이 됐을까요?", a: "주말 등산. 정상에서 김밥 먹고 몸을 움직이니 며칠 만에 머리가 맑아졌다." }],
   },
   // 지난 주 — 결심
   "4-3": {
     note: "결정을 못 내리는 내가 지친다.",
     text: "면접 볼지 조건을 표로 비교 중. 결정을 못 내리는 내가 제일 지친다.",
     answers: [
-      { q: "결정을 미루는 이유는?", a: "연봉은 나쁘지 않은데 삶이 없다. 저녁이 있는 삶이 자꾸 떠오른다." },
+      { q: "이번 주 나를 가장 지치게 한 건? 같은 상황의 친구라면 뭐가 필요해 보일까요?", a: "조건을 표로 비교만 하며 결정을 못 내리는 나 자신. 친구가 이랬다면 '연봉 말고 저녁 있는 삶도 표에 넣어봐'라고 했을 거다." },
     ],
   },
   "4-6": {
     note: "결국 면접 보기로 했다.",
     text: "결국 면접 보기로 답장했다. 미루기만 하던 내가 움직였다.",
     answers: [
-      { q: "오늘 가장 기억에 남는 순간은?", a: "답장 보내기 버튼을 누른 순간. 개운했다." },
-      { q: "그때 나는 무엇을 했나?", a: "지친 저녁의 판단 말고, 개운한 아침에 결정했다." },
+      { q: "오늘 가장 기억에 남는 순간 하나만 편하게 적어주세요.", a: "면접 보겠다고 답장 버튼을 누른 순간. 미루기만 하던 내가 움직여서 개운했다." },
+      { q: "오늘 잘 됐던 일 하나만 꼽는다면? 그게 왜 잘 됐다고 생각하나요?", a: "지친 저녁이 아니라 개운한 아침에 결정한 것. 컨디션 좋을 때 정하니 후회가 없었다." },
     ],
   },
+};
+
+// 예시 기록의 영역(행성) 태그 — 데모에서도 행성별 그래프·리포트가 보이도록.
+// 일기 있는 날은 내용에 맞는 영역, 나머지(기분만 남긴 날)는 '삶의 만족(life)'.
+const DEMO_DOMAINS = {
+  "0-0": ["career"], "0-3": ["career", "health"],
+  "1-2": ["health", "career"], "1-6": ["relation"],
+  "2-3": ["career", "growth"],
+  "3-2": ["career"], "3-4": ["health"],
+  "4-3": ["career", "growth"], "4-6": ["career", "growth"],
 };
 
 /** 예시 기록 3주치를 넣는다. 달력 주(월~일)에 맞춰 넣어 요일과 무관하게 같은 모양이 나온다. */
@@ -461,6 +630,7 @@ export function seedDemoCheckins() {
         note: diary?.note ?? ((w * 7 + d) % 4 === 1 ? DEMO_NOTES[noteAt++ % DEMO_NOTES.length] : ""),
         text: diary?.text ?? "",
         answers: diary?.answers ?? null,
+        domains: DEMO_DOMAINS[`${w}-${d}`] ?? ["life"],
       });
     });
   });

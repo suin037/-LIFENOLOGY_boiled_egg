@@ -93,7 +93,7 @@ export default function DiaryCheckIn({ onSaved }) {
               key={m.v}
               onClick={() => setMood(m.v)}
               className={`tap flex flex-1 flex-col items-center gap-0.5 rounded-xl py-1.5 transition-colors ${
-                on ? "bg-[#12203a]" : ""
+                on ? "bg-[#1D1730]" : ""
               }`}
             >
               <span className={`text-2xl transition-transform ${on ? "scale-110" : "opacity-60"}`}>
@@ -144,7 +144,7 @@ export default function DiaryCheckIn({ onSaved }) {
       {!openDetail && (
         <button
           onClick={() => setOpenDetail(true)}
-          className="tap mt-3 flex w-full items-center justify-center gap-1.5 rounded-2xl border border-cyan bg-[#12203a] py-3 text-[13px] font-bold text-cyan"
+          className="tap mt-3 flex w-full items-center justify-center gap-1.5 rounded-2xl border border-cyan bg-[#1D1730] py-3 text-[13px] font-bold text-cyan"
         >
           ✍️ 오늘의 질문에 자세히 답하기
           <span className="text-[11px] font-normal text-sub">· 4문항</span>
@@ -186,7 +186,7 @@ export default function DiaryCheckIn({ onSaved }) {
         disabled={!mood}
         onClick={save}
         className={`tap mt-3 w-full rounded-2xl py-2.5 text-[13px] font-bold transition-colors ${
-          mood ? "bg-gradient-to-r from-cyan to-[#7FD4FF] text-[#04203a]" : "bg-[#1E2740] text-mut"
+          mood ? "bg-[#8B6CCF] text-white" : "bg-[#1E2740] text-mut"
         }`}
       >
         기록 저장{answeredCount > 0 ? ` · 질문 ${answeredCount}개` : ""}
@@ -210,7 +210,7 @@ function Chip({ on, onClick, children }) {
     <button
       onClick={onClick}
       className={`tap !min-h-0 h-[30px] rounded-full border px-2 py-0 text-[12px] leading-none transition-colors ${
-        on ? "border-cyan bg-[#12203a] text-cyan" : "border-line text-sub"
+        on ? "border-cyan bg-[#1D1730] text-cyan" : "border-line text-sub"
       }`}
     >
       {children}

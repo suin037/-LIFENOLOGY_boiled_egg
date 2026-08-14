@@ -20,5 +20,12 @@ def build_feature_vector(req: PredictRequest) -> dict:
         "happy": req.happy,
         "is_regular": req.is_regular,
         "firm_size": req.firm_size,
+        "occupation_group": req.occupation_group,
+        "employment_status": req.employment_status,
+        "tenure_years": req.tenure_years,
         "edu_level": req.edu_level,
+        # 궤적 매칭 정교화용(선택). 주면 그 축까지 써서 이웃을 고르고,
+        # 안 주면 그 축은 거리 계산에서 아예 빠진다(중앙값으로 채우지 않는다).
+        "tenure_years": req.tenure_years,
+        "job_category": req.job_category,
     }
