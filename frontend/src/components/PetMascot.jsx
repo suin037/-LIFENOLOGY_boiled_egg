@@ -3,6 +3,7 @@ import Mascot from "./Mascot.jsx";
 import PetCreature from "./PetCreature.jsx";
 import { loadPet, claimDaily, petMascot, feedMascot, setWhich, moodOf, canPatToday } from "../data/petCare.js";
 import { hasCheckedInToday } from "../data/myUniverse.js";
+import { petItem } from "../data/planetShop.js";
 
 // 🧸 마스코트 육성(가벼운 버전) — 쓰다듬기(말랑 튕김) + 간식으로 친밀도 키우기.
 // 3D 느낌은 CSS 소프트 그라디언트·그림자·squash/stretch로 '말랑말랑'하게.
@@ -14,6 +15,13 @@ const GUIDES = [
 
 export default function PetMascot({ rumination, onCompare }) {
   const [pet, setPet] = useState(() => claimDaily(loadPet()));
+  // 상점에서 산 꾸미기 — 구매·장착 즉시 반영되게 이벤트를 듣는다.
+  const [gear, setGear] = useState(petItem);
+  useEffect(() => {
+    const refresh = () => setGear(petItem());
+    window.addEventListener("pm:planet-shop", refresh);
+    return () => window.removeEventListener("pm:planet-shop", refresh);
+  }, []);
   const [squish, setSquish] = useState(0); // 탭할 때마다 +1 → 애니 리트리거
   const [hearts, setHearts] = useState([]);
   const [eating, setEating] = useState(false);
@@ -148,7 +156,10 @@ export default function PetMascot({ rumination, onCompare }) {
         </div>
       </div>
 
-      <div className="mt-3 rounded-2xl border border-white/10 bg-[#0B1423]/80 px-3 py-2.5 text-[11px] leading-relaxed text-sub">
+      {/* 말풍선 — 폭이 카드 전체(374px)라 98px 캐릭터의 말로 보이지 않았다.
+          캐릭터 무대(220px)에 가깝게 좁히고 가운데 정렬하고, 아래로 꼬리를 달아
+          누가 하는 말인지 모양으로 드러낸다. */}
+      <div className="relative mx-auto mt-3 max-w-[268px] rounded-2xl border border-white/10 bg-[#0B1423]/80 px-3.5 py-2.5 text-center text-[11px] leading-relaxed text-sub">
         <span className="mr-1 font-bold" style={{ color: guide.color }}>{guide.name}</span>
         {guideMessage}
         {rumination?.prompt && onCompare && (
@@ -156,6 +167,8 @@ export default function PetMascot({ rumination, onCompare }) {
             이직과 현상 유지 비교하기
           </button>
         )}
+        {/* 꼬리 — 아래 두 변만 남긴 정사각형을 돌려 말풍선에서 뻗어 나온 것처럼 */}
+        <span className="absolute bottom-[-6px] left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 border-b border-r border-white/10 bg-[#0B1423]" />
       </div>
 
       {/* 무대 — 말랑한 마스코트 */}
@@ -184,7 +197,7 @@ export default function PetMascot({ rumination, onCompare }) {
           <div key={squish} style={{ animation: "pm-squish .5s cubic-bezier(.34,1.56,.64,1)", transformOrigin: "50% 100%" }}>
             {/* 젤리 광택 */}
             <div className="relative">
-              <PetCreature size={98} variant={guide.key} mood={mood} expr={expr} />
+              <PetCreature size={98} variant={guide.key} mood={mood} expr={expr} accessory={gear} />
               <div className="pointer-events-none absolute left-[24%] top-[24%] h-8 w-8 rounded-full bg-white/45 blur-[7px]" />
               {/* 입가로 날아와 와구와구 사라지는 쿠키 */}
               {eating && (

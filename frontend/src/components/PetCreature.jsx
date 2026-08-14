@@ -18,7 +18,57 @@ function star(cx, cy, o, i, fill) {
   return <path d={`${p}Z`} fill={fill} />;
 }
 
-export default function PetCreature({ size = 120, variant = "cosmo", mood = "기쁨", expr = "idle" }) {
+// 상점에서 산 꾸미기 — 100×100 좌표계 기준으로 머리 위(y 17~35)나 목(y 72~88)에 얹는다.
+// 종류마다 몸 모양이 조금 달라도 이 범위면 어색하지 않게 걸린다.
+function Accessory({ id }) {
+  if (id === "beanie") {
+    return (
+      <g>
+        <path d="M33,32 A17,15 0 0 1 67,32 Z" fill="#6E7FE0" />
+        <rect x="31" y="29.5" width="38" height="6" rx="3" fill="#8E9CF0" />
+        <circle cx="50" cy="16" r="4" fill="#DDE4FF" />
+      </g>
+    );
+  }
+  if (id === "crown") {
+    return (
+      <g>
+        <path d="M34,32 L38,20 L44,28 L50,17 L56,28 L62,20 L66,32 Z" fill="#F5C846" />
+        <circle cx="50" cy="16.5" r="2.4" fill="#FFF0B8" />
+        <rect x="34" y="30.5" width="32" height="4" rx="2" fill="#E0AE2C" />
+      </g>
+    );
+  }
+  if (id === "scarf") {
+    return (
+      <g>
+        <rect x="30" y="73" width="40" height="7" rx="3.5" fill="#F0837C" />
+        <path d="M62,79 l7,10 l-7,-2 z" fill="#E2726B" />
+      </g>
+    );
+  }
+  if (id === "glasses") {
+    return (
+      <g fill="none" stroke="#3B4560" strokeWidth="1.7">
+        <circle cx="41" cy="52" r="7" />
+        <circle cx="59" cy="52" r="7" />
+        <path d="M48,52 h4" strokeLinecap="round" />
+      </g>
+    );
+  }
+  if (id === "ribbon") {
+    return (
+      <g transform="translate(70 31)">
+        <path d="M0,0 L-8,-5 L-8,5 Z" fill="#F27DA8" />
+        <path d="M0,0 L8,-5 L8,5 Z" fill="#F27DA8" />
+        <circle cx="0" cy="0" r="2.6" fill="#FFB6D0" />
+      </g>
+    );
+  }
+  return null;   // "none" 포함
+}
+
+export default function PetCreature({ size = 120, variant = "cosmo", mood = "기쁨", expr = "idle", accessory = "none" }) {
   const v = V[variant] || V.cosmo;
   const gid = `clay_${variant}`;
   const sad = mood === "시무룩";
@@ -163,6 +213,8 @@ export default function PetCreature({ size = 120, variant = "cosmo", mood = "기
           )}
         </>
       )}
+      {/* 꾸미기는 맨 위에 — 안경이 눈 뒤로 가면 안 보인다. */}
+      <Accessory id={accessory} />
     </svg>
   );
 }

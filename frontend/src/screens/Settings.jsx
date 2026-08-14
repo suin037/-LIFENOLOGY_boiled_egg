@@ -198,7 +198,7 @@ export default function Settings() {
       <PetMascot rumination={rumination} onCompare={startJobCompare} />
 
       <Card>
-        <div className="flex items-center justify-between gap-4"><div><div className="text-xs font-semibold text-mut">나의 우주 꾸미기</div><p className="mt-1 text-[10px] leading-relaxed text-sub">영역 색은 유지하고 행성의 질감·광택·고리를 변경합니다.</p></div><button type="button" onClick={()=>setPlanetShopOpen(true)} className="tap shrink-0 rounded-xl bg-[#8B6CCF] px-4 text-[11px] font-bold">상점 열기</button></div>
+        <div className="flex items-center justify-between gap-4"><div><div className="text-xs font-semibold text-mut">꾸미기 상점</div><p className="mt-1 text-[10px] leading-relaxed text-sub">행성의 질감·광택·고리, 생활 관리 친구의 모자·목도리 같은 것을 바꿉니다.</p></div><button type="button" onClick={()=>setPlanetShopOpen(true)} className="tap shrink-0 rounded-xl bg-[#8B6CCF] px-4 text-[11px] font-bold">상점 열기</button></div>
       </Card>
 
       {/* 개인정보 암호화 */}
