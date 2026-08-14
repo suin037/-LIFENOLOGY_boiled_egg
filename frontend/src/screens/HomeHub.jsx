@@ -3,13 +3,16 @@ import { useNavigate } from "react-router-dom";
 import { Orbit, ChevronRight, GitCompareArrows, BookOpen, Sparkles } from "lucide-react";
 import { useResult } from "../data/ResultContext.jsx";
 import DiaryToday from "../components/DiaryToday.jsx";
+import DailySuggest from "../components/DailySuggest.jsx";
+import ExpeditionBoard from "../components/ExpeditionBoard.jsx";
+import ApiStatus from "../components/ApiStatus.jsx";
 import { loadUniverse, universeSummary } from "../data/myUniverse.js";
 import { domainRumination } from "../data/diarySignals.js";
 
 // 홈 = 진입 허브. 인사 + 마스코트 + 오늘 기록 + 새 시뮬 + 나의 우주 요약.
 export default function HomeHub() {
   const navigate = useNavigate();
-  const { profile, setChoices } = useResult();
+  const { profile, setChoices, setScenarioTexts } = useResult();
   const universe = universeSummary();
   const [universeState, setUniverseState] = useState(loadUniverse);
   const [rumination, setRumination] = useState(() => domainRumination({ windowDays: 28, threshold: 4 }));
@@ -25,7 +28,9 @@ export default function HomeHub() {
 
   function startSuggestedCompare() {
     if (!rumination.compare) return;
+    // 입력칸까지 채워야 넘어간 화면이 비어 보이지 않는다(choices 만 넣으면 빈 칸으로 뜬다).
     setChoices({ a: rumination.compare.a, b: rumination.compare.b });
+    setScenarioTexts({ a: rumination.compare.a, b: rumination.compare.b });
     navigate("/input");
   }
 
@@ -45,6 +50,8 @@ export default function HomeHub() {
         </section>
         <aside className="lg:flex lg:h-full lg:flex-col lg:border-l lg:border-white/[.08] lg:pl-8 xl:pl-10">
 
+      {/* 반복 고민 넛지 — 일기에서 잡힌 '지금 비교해볼 것'이라 시뮬 버튼보다 먼저 온다.
+          버튼은 빈 시작이고, 이건 이미 이유가 있는 시작이다. */}
       {rumination.prompt && (
         <button
           onClick={startSuggestedCompare}
@@ -93,6 +100,15 @@ export default function HomeHub() {
         </span>
         <ChevronRight size={18} className="text-violet-400/70" />
       </button>
+
+      {/* AI 서버가 안 잡히면 조용히 사라지지 않고 알려준다 */}
+      <ApiStatus />
+
+      {/* 떠나 있는 작은 탐험 — 나의 우주에서 고른 길을 잊지 않게 여기 걸어둔다 */}
+      <ExpeditionBoard />
+
+      {/* 오늘 해볼 만한 것 — 인생 갈림길(기회 카드)보다 작은, 오늘 크기의 제안 */}
+      <DailySuggest />
 
       <div className="mb-2 mt-7 flex items-center justify-between border-t border-white/[.08] px-1 pt-5">
         <span className="text-[15px] font-bold text-ink">최근 활동</span>

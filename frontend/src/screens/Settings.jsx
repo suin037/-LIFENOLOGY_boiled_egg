@@ -14,7 +14,7 @@ import PrivacyVault from "../components/PrivacyVault.jsx";
 import { LEVEL_TITLES, XP_RULES, universeSummary } from "../data/myUniverse.js";
 import { LEVEL_REWARDS } from "../data/unlocks.js";
 import PetMascot from "../components/PetMascot.jsx";
-import PlanetShop from "../components/PlanetShop.jsx";
+import PetShop from "../components/PetShop.jsx";
 import { domainRumination } from "../data/diarySignals.js";
 import { Bell, ChevronRight, LockKeyhole, Palette, UserRound, LogOut } from "lucide-react";
 
@@ -138,7 +138,7 @@ export default function Settings() {
   const [prefs, setPrefs] = useState(loadPrefs);
   const [editingAvatar, setEditingAvatar] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
-  const [planetShopOpen, setPlanetShopOpen] = useState(false);
+  const [shopOpen, setShopOpen] = useState(false);
   const [profileDraft, setProfileDraft] = useState(null);
   const [activeSection, setActiveSection] = useState("profile");
   const universe = universeSummary();
@@ -234,7 +234,7 @@ export default function Settings() {
       <PetMascot rumination={rumination} onCompare={startSuggestedCompare} />
 
       <Card>
-        <div className="flex items-center justify-between gap-4"><div><div className="text-xs font-semibold text-mut">나의 우주 꾸미기</div><p className="mt-1 text-[10px] leading-relaxed text-sub">영역 색은 유지하고 행성의 질감·광택·고리를 변경합니다.</p></div><button type="button" onClick={()=>setPlanetShopOpen(true)} className="tap shrink-0 rounded-xl bg-[#8B6CCF] px-4 text-[11px] font-bold">상점 열기</button></div>
+        <div className="flex items-center justify-between gap-4"><div><div className="text-xs font-semibold text-mut">꾸미기 상점</div><p className="mt-1 text-[10px] leading-relaxed text-sub">배경·소품·간식·행성 스킨을 코인으로 사서 꾸며요.</p></div><button type="button" onClick={()=>setShopOpen(true)} className="tap shrink-0 rounded-xl bg-[#8B6CCF] px-4 text-[11px] font-bold">상점 열기</button></div>
       </Card>
       </section>}
 
@@ -477,7 +477,7 @@ export default function Settings() {
 
       </div>
       </div>
-      {planetShopOpen&&<PlanetShop onClose={()=>setPlanetShopOpen(false)}/>} 
+      {shopOpen&&<PetShop onClose={()=>setShopOpen(false)}/>} 
     </div>
   );
 }
