@@ -163,7 +163,8 @@ function ClusterPanel({ group, planet, onClose, onWhole }) {
 
       {/* 모양 — 그 묶음의 별을 그대로 그린다. */}
       <div className="mt-4 rounded-[20px] border border-white/[.07] bg-[#070D19] p-3">
-        <Constellation size={250} stars={stars} todayDate={todayKey()} />
+        {/* seed 를 넘겨야 3D 우주에 떠 있던 그 별자리와 같은 모양이 나온다. */}
+        <Constellation size={250} stars={stars} todayDate={todayKey()} seed={group?.weekStart} />
       </div>
 
       {/* 상태 */}

@@ -3,6 +3,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Html, OrbitControls, Sparkles } from "@react-three/drei";
 import * as THREE from "three";
 import { RotateCcw } from "lucide-react";
+import { seedFrom, starShapeFor } from "../data/starShapes.js";
 
 const PLANET_POSITIONS = [
   [-3.8, 1.7, -.8], [0, -.8, 1.1], [-4, -2.35, -4.15],
@@ -11,6 +12,20 @@ const PLANET_POSITIONS = [
 const PLANET_SIZES = [1.05, 1.35, .9, 1, 1.12];
 const INITIAL_CAMERA = new THREE.Vector3(0, 3.7, 14.4);
 const UNIVERSE_TARGET = new THREE.Vector3(0, -1.1, 0);
+
+// 행성은 매 프레임 제 궤도를 돈다. 별자리·시나리오도 반드시 같은 식을 써야 행성을 따라간다.
+// (전에는 이 셋이 PLANET_POSITIONS 를 '고정 위치'로 읽어, 행성만 궤도를 돌고 별자리는
+//  출발 자리에 남았다. 몇 분만 지나도 별자리가 행성과 떨어져 엉뚱한 데 떠 있었다.)
+function planetPositionAt(index, time, out = new THREE.Vector3()) {
+  const base = PLANET_POSITIONS[index] || PLANET_POSITIONS[0];
+  const radius = Math.hypot(base[0], base[2]);
+  const angle = Math.atan2(base[2], base[0]) + time * (.0045 + index * .00035);
+  return out.set(
+    Math.cos(angle) * radius,
+    base[1] + Math.sin(time * .22 + index) * .06,
+    Math.sin(angle) * radius,
+  );
+}
 
 function seeded(seed) {
   let value = seed;
@@ -155,22 +170,13 @@ function Planet({ planet, index, selected, onSelect, skin }) {
   const mesh = useRef();
   const position = PLANET_POSITIONS[index];
   const size = PLANET_SIZES[index];
-  const orbitRadius = Math.hypot(position[0], position[2]);
-  const orbitStart = Math.atan2(position[2], position[0]);
   const selectPlanet = (event) => { event.stopPropagation(); onSelect(planet.key); };
   const showPointer = (event) => { event.stopPropagation(); document.body.style.cursor = "pointer"; };
   const hidePointer = () => { document.body.style.cursor = ""; };
   const texture = useMemo(() => makePlanetTexture(planet.from, planet.to, index * 13.7), [planet.from, planet.to, index]);
   useFrame((state, delta) => {
     if (mesh.current) mesh.current.rotation.y += delta * (.028 + index * .004);
-    if (group.current) {
-      const angle = orbitStart + state.clock.elapsedTime * (.0045 + index * .00035);
-      group.current.position.set(
-        Math.cos(angle) * orbitRadius,
-        position[1] + Math.sin(state.clock.elapsedTime * .22 + index) * .06,
-        Math.sin(angle) * orbitRadius,
-      );
-    }
+    if (group.current) planetPositionAt(index, state.clock.elapsedTime, group.current.position);
   });
   return <group ref={group} position={position}>
     <mesh onClick={selectPlanet} onDoubleClick={selectPlanet} onPointerOver={showPointer} onPointerOut={hidePointer}>
@@ -206,9 +212,11 @@ function Planet({ planet, index, selected, onSelect, skin }) {
   </group>;
 }
 
+const SHAPE_SCALE = .42;   // 뼈대(-1~1)를 행성 옆에 놓기 좋은 크기로
+
 function Constellation3D({ group, index, anchorIndex, onOpen }) {
   const orbit = useRef();
-  const root = PLANET_POSITIONS[anchorIndex];
+  const figure = useRef();
   // 별자리 하나는 최대 7별로 끊어 넘어온다(starGroupsOf). 여기서 또 자르면 별이 사라진다.
   const visible = group.stars.filter((s)=>!s.empty);
   // 그 행성 안에서 몇 번째 별자리인지로 궤도를 잡는다.
@@ -217,37 +225,53 @@ function Constellation3D({ group, index, anchorIndex, onOpen }) {
   const ord = group.index ?? index;
   const planetSize = PLANET_SIZES[anchorIndex] ?? 1;
   const orbitRadius = planetSize + .75 + (ord % 3) * .3;   // 행성에 붙어 도는 좁은 띠
-  const points = useMemo(() => visible.map((_, i)=>{
-    const a = i * 1.71 + ord;
-    const radius = .32 + i * .035;
-    return [Math.cos(a)*radius, Math.sin(a)*radius*.72, (i-3)*.055];
-  }), [group.weekStart, visible.length, ord]);
-  const geometry = useMemo(()=>new THREE.BufferGeometry().setFromPoints(points.map((p)=>new THREE.Vector3(...p))),[points]);
-  // 별을 Points 하나로 그린다 — 별마다 mesh + pointLight 를 두면 기록이 늘수록
-  // 드로우콜과 동적 광원이 같이 늘어난다(1년치면 광원만 100개가 넘어 프레임이 무너졌다).
+  // 기록 개수에 맞는 디자인 별자리를 골라 그 자리에 별을 앉힌다.
+  const shape = useMemo(
+    () => starShapeFor(visible.length, seedFrom(group.weekStart || `${group.domain}-${ord}`)),
+    [group.weekStart, group.domain, visible.length, ord],
+  );
   const starGeo = useMemo(()=>{
     const g = new THREE.BufferGeometry();
-    g.setAttribute("position", new THREE.Float32BufferAttribute(points.flat(), 3));
+    const xyz = shape.points.slice(0, visible.length)
+      .flatMap(([x,y]) => [x * SHAPE_SCALE, y * SHAPE_SCALE, 0]);
+    g.setAttribute("position", new THREE.Float32BufferAttribute(xyz, 3));
     return g;
-  },[points]);
+  },[shape, visible.length]);
+  // 선은 순번이 아니라 뼈대가 정한 edges 만 긋는다 — 전부를 한 줄로 이으면 실타래가 된다.
+  const edgeGeo = useMemo(()=>{
+    const g = new THREE.BufferGeometry();
+    const xyz = shape.edges.flatMap(([a,b]) =>
+      [shape.points[a], shape.points[b]].flatMap(([x,y]) => [x * SHAPE_SCALE, y * SHAPE_SCALE, 0]));
+    g.setAttribute("position", new THREE.Float32BufferAttribute(xyz, 3));
+    return g;
+  },[shape]);
   useFrame((state,delta)=>{
     if (!orbit.current) return;
+    // 행성을 따라간다.
+    planetPositionAt(anchorIndex, state.clock.elapsedTime, orbit.current.position);
     orbit.current.rotation.y += delta * (.055 + (ord % 5) * .006);
     orbit.current.rotation.z = Math.sin(state.clock.elapsedTime * .08 + ord) * .09;
+    // 뼈대는 평면이라 궤도를 돌다 보면 옆으로 서서 사라진다. 늘 카메라를 보게 해
+    // 어느 각도에서든 '무슨 모양인지' 읽히게 한다.
+    figure.current?.lookAt(state.camera.position);
   });
   if (!visible.length) return null;
   // 황금각(2.4rad)으로 돌려 별자리가 몇 개든 행성 둘레에 고르게 퍼지게 한다.
-  return <group ref={orbit} position={root} rotation={[.18+(ord%3)*.24, ord*2.39996, .12]}>
+  return <group ref={orbit} rotation={[.18+(ord%3)*.24, ord*2.39996, .12]}>
     <group position={[orbitRadius,0,0]} onClick={(e)=>{e.stopPropagation();onOpen?.(group);}}>
       <mesh visible={false}><sphereGeometry args={[.5,10,10]}/><meshBasicMaterial transparent opacity={0}/></mesh>
-      <line geometry={geometry}><lineBasicMaterial color="#9FB0CE" transparent opacity={.42}/></line>
-      {/* 기록은 하얀 별. 시나리오(마름모)와 한눈에 갈라지도록 색을 섞지 않는다. */}
-      <points geometry={starGeo}>
-        <pointsMaterial
-          color="#ffffff" size={.16} sizeAttenuation transparent opacity={.95}
-          map={starSprite()} depthWrite={false} blending={THREE.AdditiveBlending}
-        />
-      </points>
+      <group ref={figure}>
+        <lineSegments geometry={edgeGeo}><lineBasicMaterial color="#9FB0CE" transparent opacity={.42}/></lineSegments>
+        {/* 기록은 하얀 별. 시나리오(마름모)와 한눈에 갈라지도록 색을 섞지 않는다.
+            별을 Points 하나로 그린다 — 별마다 mesh + pointLight 를 두면 기록이 늘수록
+            드로우콜과 동적 광원이 같이 늘어난다(1년치면 광원만 100개가 넘어 프레임이 무너졌다). */}
+        <points geometry={starGeo}>
+          <pointsMaterial
+            color="#ffffff" size={.16} sizeAttenuation transparent opacity={.95}
+            map={starSprite()} depthWrite={false} blending={THREE.AdditiveBlending}
+          />
+        </points>
+      </group>
     </group>
   </group>;
 }
@@ -256,15 +280,17 @@ function Constellation3D({ group, index, anchorIndex, onOpen }) {
 // "지나온 것"과 "탐색한 미래"가 한 행성 위에서 섞이지 않는다.
 function ScenarioMark({ scenario, index, anchorIndex, onOpen }) {
   const spin = useRef();
-  const root = PLANET_POSITIONS[anchorIndex];
+  const root = useRef();
   useFrame((state,delta)=>{
+    // 별자리와 마찬가지로 행성을 따라간다.
+    if (root.current) planetPositionAt(anchorIndex, state.clock.elapsedTime, root.current.position);
     if (!spin.current) return;
     spin.current.rotation.y += delta * .5;
     spin.current.position.y = Math.sin(state.clock.elapsedTime * .5 + index) * .12;
   });
   const angle = index * 1.9 + .6;
   const radius = 1.62;
-  return <group position={root}>
+  return <group ref={root}>
     <group position={[Math.cos(angle)*radius, 1.15 + (index%2)*.34, Math.sin(angle)*radius]}>
       <mesh ref={spin} onClick={(e)=>{e.stopPropagation();onOpen?.(scenario);}}>
         <octahedronGeometry args={[.135,0]}/>
@@ -275,11 +301,13 @@ function ScenarioMark({ scenario, index, anchorIndex, onOpen }) {
 }
 
 function CameraRig({ selectedKey, planets, controlsRef, resetSignal }) {
-  const { camera } = useThree();
+  const { camera, clock } = useThree();
   const flight = useRef(null);
   useEffect(()=>{
     const index = planets.findIndex((p)=>p.key===selectedKey);
-    const target = index >= 0 ? new THREE.Vector3(...PLANET_POSITIONS[index]) : UNIVERSE_TARGET.clone();
+    // 고정 좌표가 아니라 '지금 그 행성이 있는 자리'로 날아간다 — 행성은 궤도를 돌기 때문에
+    // 출발 좌표를 쓰면 시간이 지날수록 빈 우주를 비춘다.
+    const target = index >= 0 ? planetPositionAt(index, clock.elapsedTime) : UNIVERSE_TARGET.clone();
     // 선택된 행성이 화면 중앙보다 살짝 위에 놓이도록 시선 중심을 아래로 내린다.
     if (index >= 0) target.y -= .9;
     const direction = camera.position.clone().sub(target).normalize();

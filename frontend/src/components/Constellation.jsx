@@ -1,10 +1,14 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { seedFrom, starShapeFor } from "../data/starShapes.js";
 
-// 별자리 = 중심점 극좌표. 요일=각도(월→일), 기분=반지름(좋을수록 바깥) + 색.
-// minju constellationGroups().stars 를 그대로 받는다. 별 클릭 → onSelect(star).
+// 별자리 = 디자인 뼈대(starShapes) 위에 기록 별을 하나씩 앉힌 것.
+// 기분은 별의 색·크기로 읽고, 자리는 모양이 정한다 — 3D 우주에 뜬 그 별자리와 같은 모양이
+// 나와야 눌러서 펼쳤을 때 "아까 그 별자리"로 읽힌다.
+// (전에는 각도=순번·반지름=기분인 극좌표라, 별이 늘수록 선이 서로 넘나들어 실타래가 됐다.)
+// 별 클릭 → onSelect(star).
 
-const W = 200, H = 200, CX = 100, CY = 96;
-const R_MIN = 16, R_SPREAD = 60; // 힘든 날=중심, 좋은 날=바깥
+const W = 200, H = 200, CX = 100, CY = 100;
+const R = 74;   // 뼈대(-1~1) → 화면 반지름
 const COL = ["#E24B4A", "#D85A30", "#EDA100", "#5DCAA5", "#8B6CCF"]; // 기분 1~5 색
 const MOOD_LABEL = ["매우 낮음", "낮음", "보통", "좋음", "매우 좋음"];
 
@@ -27,19 +31,29 @@ function dateLabel(dateKey) {
   return month && day ? `${Number(month)}월 ${Number(day)}일` : dateKey;
 }
 
-function coord(i, s, filled) {
-  const norm = filled ? (level(s) - 1) / 4 : 0; // 빈 날은 중심 근처
-  const r = R_MIN + norm * R_SPREAD;
-  const a = (-90 + i * (360 / 7)) * Math.PI / 180; // 요일마다 360/7°
-  return [CX + r * Math.cos(a), CY + r * Math.sin(a)];
+// 뼈대 좌표(-1~1, y 위쪽이 +) → SVG 좌표(y 아래쪽이 +).
+function place([x, y]) {
+  return [CX + x * R, CY - y * R];
 }
 
-export default function Constellation({ stars = [], onSelect, selectedDate = null, todayDate = null, size = 210 }) {
+// 뼈대보다 별이 많으면(7개 초과 묶음) 남는 별은 바깥 고리에 둘러 놓는다.
+// 자리가 없다고 빼버리면 기록이 조용히 사라진다.
+function overflowPoint(i, extra) {
+  const a = (i / Math.max(1, extra)) * Math.PI * 2 - Math.PI / 2;
+  return [Math.cos(a) * 1.18, Math.sin(a) * 1.18];
+}
+
+export default function Constellation({ stars = [], onSelect, selectedDate = null, todayDate = null, size = 210, seed = null }) {
   const [hovered, setHovered] = useState(null);
+  const shape = useMemo(
+    () => starShapeFor(stars.length, seedFrom(seed ?? stars[0]?.date ?? "")),
+    [stars.length, seed, stars[0]?.date],
+  );
   if (!stars.length) return null;
+  const nodes = shape.points.length;
   const pts = stars.map((s, i) => {
     const filled = !s.empty && (s.mood != null || s.valence != null);
-    const [x, y] = coord(i, s, filled);
+    const [x, y] = place(i < nodes ? shape.points[i] : overflowPoint(i - nodes, stars.length - nodes));
     return { ...s, x, y, filled, lvl: level(s) };
   });
   // 7일 다 기록해 별자리가 완성되면 은은하게 빛난다.
@@ -48,14 +62,15 @@ export default function Constellation({ stars = [], onSelect, selectedDate = nul
   return (
     <div className="relative">
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img"
-      aria-label={`이번 주 ${pts.filter((p) => p.filled).length}일의 기록으로 그린 별자리`}
+      aria-label={`기록 ${pts.filter((p) => p.filled).length}개로 그린 ${shape.name} 모양 별자리`}
       style={{ maxHeight: size, height: size, display: "block" }}>
-      {/* 기록 순서만 가느다랗게 잇는다. 중심 방사선과 두꺼운 원형 점은 제거했다. */}
-      {pts.map((p, i) => {
-        const q = pts[(i + 1) % pts.length];
+      {/* 뼈대가 정한 선만 긋는다 — 순서대로 전부 이으면 선이 서로 넘나들어 실타래가 된다. */}
+      {shape.edges.map(([a, b]) => {
+        const p = pts[a], q = pts[b];
+        if (!p || !q) return null;
         const solid = p.filled && q.filled;
         return (
-          <line key={`ln${i}`} x1={p.x} y1={p.y} x2={q.x} y2={q.y}
+          <line key={`ln${a}-${b}`} x1={p.x} y1={p.y} x2={q.x} y2={q.y}
             stroke="#B8C4DD" strokeWidth={0.55}
             strokeOpacity={solid ? 0.22 : 0.08}
             strokeDasharray={solid ? undefined : "1.5 5"} />
