@@ -8,21 +8,22 @@ import DailySuggest from "../components/DailySuggest.jsx";
 import ExpeditionBoard from "../components/ExpeditionBoard.jsx";
 import ApiStatus from "../components/ApiStatus.jsx";
 import { universeSummary } from "../data/myUniverse.js";
-import { jobChangeRumination } from "../data/diarySignals.js";
+import { domainAlerts } from "../data/diarySignals.js";
 
 // 홈 = 진입 허브. 인사 + 마스코트 + 오늘 기록 + 새 시뮬 + 나의 우주 요약.
 export default function HomeHub() {
   const navigate = useNavigate();
-  const { profile, setChoices, setScenarioTexts } = useResult();
+  const { profile, setChoices, setScenarioTexts, setScenarioDomains } = useResult();
   const universe = universeSummary();
-  // 반복되는 이직 고민을 일기에서 감지하면 → 비교를 먼저 제안(정직: 숫자 아님, 비교 제안일 뿐).
-  // 결과 카드(28일)와 창을 맞춰 숫자가 어긋나 보이지 않게 한다.
-  const rumination = useMemo(() => jobChangeRumination({ windowDays: 28, threshold: 4 }), []);
+  // 삶의 영역별 알림 — 그 영역 일기가 무겁거나 신호어가 잦으면 각각 띄운다.
+  // (전에는 이직 하나만 봐서, 관계·건강이 힘들어도 같은 카드만 떴다.)
+  const alerts = useMemo(() => domainAlerts({ windowDays: 28 }).slice(0, 3), []);
 
-  function startJobCompare() {
-    // 입력칸까지 채워야 넘어간 화면이 비어 보이지 않는다(choices 만 넣으면 빈 칸으로 뜬다).
-    setChoices({ a: "이직", b: "유지" });
-    setScenarioTexts({ a: "이직", b: "현상 유지" });
+  // 알림 → 그 영역의 갈림길로 시뮬레이션을 연다. 영역도 함께 넘겨 결과가 그 행성에 쌓이게.
+  function startCompare(alert) {
+    setChoices({ a: alert.choiceA, b: alert.choiceB });
+    setScenarioTexts({ a: alert.choiceA, b: alert.choiceB });
+    setScenarioDomains({ a: [alert.domain], b: [alert.domain] });
     navigate("/input");
   }
 
@@ -38,25 +39,26 @@ export default function HomeHub() {
         비춰볼까요?
       </h1>
 
-      {/* 반복 고민 넛지 — 일기에서 잡힌 '지금 비교해볼 것'이라 시뮬 버튼보다 먼저 온다.
-          버튼은 빈 시작이고, 이건 이미 이유가 있는 시작이다. */}
-      {rumination.prompt && (
+      {/* 영역별 알림 — 일기에서 문제가 드러난 영역마다 하나씩. 근거(무거웠던 날·신호 일수)를
+          카드에 그대로 적는다. 넘겨짚은 말이 아니라 기록에서 나온 말이어야 한다. */}
+      {alerts.map((alert) => (
         <button
-          onClick={startJobCompare}
-          className="tap mt-4 flex w-full items-center gap-3 rounded-[18px] border border-cyan/40 bg-[#1D1730] px-4 py-3.5 text-left transition-colors hover:bg-[#16264a] lg:max-w-[560px]"
+          key={alert.domain}
+          onClick={() => startCompare(alert)}
+          className="tap mt-2.5 flex w-full items-center gap-3 rounded-[18px] border border-cyan/40 bg-[#1D1730] px-4 py-3.5 text-left transition-colors hover:bg-[#16264a] lg:max-w-[560px]"
         >
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-500/15 text-violet-400">
             <GitCompareArrows size={18} strokeWidth={2} />
           </span>
           <span className="min-w-0 flex-1">
             <span className="block text-[13px] font-semibold text-cyan">
-              최근 {rumination.windowDays}일 동안 이직 고민이 {rumination.count}일 나타났어요
+              {alert.domainLabel} · 최근 {alert.windowDays}일 {alert.reason}
             </span>
-            <span className="block text-[11px] text-sub">이직 vs 현상 유지, 지금 비교해볼까요?</span>
+            <span className="block text-[11px] text-sub">{alert.ask}</span>
           </span>
           <ChevronRight size={18} className="text-violet-400" />
         </button>
-      )}
+      ))}
 
       {/* 새 시뮬 CTA — 이 앱이 하는 일이 첫 화면에 보이도록 그리드 위에 둔다. */}
       <Button

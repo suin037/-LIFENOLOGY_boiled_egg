@@ -15,7 +15,6 @@ import { LEVEL_TITLES, XP_RULES, universeSummary } from "../data/myUniverse.js";
 import { LEVEL_REWARDS } from "../data/unlocks.js";
 import PetMascot from "../components/PetMascot.jsx";
 import PetShop from "../components/PetShop.jsx";
-import { jobChangeRumination } from "../data/diarySignals.js";
 
 const OCCUPATIONS = [
   "연구·공학기술",
@@ -127,17 +126,22 @@ function LevelRule({ label, xp }) {
 
 export default function Settings() {
   const navigate = useNavigate();
-  const { profile, setProfile, setOnboarded, setChoices } = useResult();
+  const { profile, setProfile, setOnboarded, setChoices, setScenarioTexts, setScenarioDomains } = useResult();
   const [prefs, setPrefs] = useState(loadPrefs);
   const [editingAvatar, setEditingAvatar] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
   const [shopOpen, setShopOpen] = useState(false);
   const [profileDraft, setProfileDraft] = useState(null);
   const universe = universeSummary();
-  const rumination = useMemo(() => jobChangeRumination({ windowDays: 28, threshold: 4 }), []);
 
-  function startJobCompare() {
-    setChoices({ a: "이직", b: "유지" });
+  // 돌보미가 제안한 갈림길로 시뮬레이션을 연다 — 영역마다 다른 두 선택지가 온다.
+  // (전에는 어느 돌보미든 "이직 vs 유지"로 고정이었다.)
+  function startCompare(nudge) {
+    const a = nudge?.choiceA || "이직";
+    const b = nudge?.choiceB || "현상 유지";
+    setChoices({ a, b });
+    setScenarioTexts({ a, b });
+    if (nudge?.domain) setScenarioDomains({ a: [nudge.domain], b: [nudge.domain] });
     navigate("/input");
   }
 
@@ -195,7 +199,7 @@ export default function Settings() {
       <div className="lg:grid lg:grid-cols-[minmax(440px,1fr)_minmax(440px,1fr)] lg:items-start lg:gap-x-6 [&>*]:min-w-0">
 
       {/* 생활 관리 친구 — 홈을 방해하지 않도록 설정에서 관리한다. */}
-      <PetMascot rumination={rumination} onCompare={startJobCompare} />
+      <PetMascot onCompare={startCompare} />
 
       <Card>
         <div className="flex items-center justify-between gap-4"><div><div className="text-xs font-semibold text-mut">꾸미기 상점</div><p className="mt-1 text-[10px] leading-relaxed text-sub">배경·소품·간식·행성 스킨을 코인으로 사서 꾸며요.</p></div><button type="button" onClick={()=>setShopOpen(true)} className="tap shrink-0 rounded-xl bg-[#8B6CCF] px-4 text-[11px] font-bold">상점 열기</button></div>
