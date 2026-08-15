@@ -1,19 +1,19 @@
 // 아바타 렌더링. UI 와 분리돼 있어서 어떤 화면에서든 쓸 수 있다.
 //
 // 쓰는 법:
-//   import { avatarDataUri, DEFAULT_TOONHEAD } from ".../renderAvatar.js";
+//   import { avatarDataUri, DEFAULT_AVATAR } from ".../renderAvatar.js";
 //   <img src={avatarDataUri(config)} width={96} height={96} />
 //
-// config 는 DEFAULT_TOONHEAD 모양의 평범한 객체다. 일부만 넘겨도 나머지는 기본값으로 채워진다.
-// 선택지 목록(HAIR_STYLES, EYES, ...)이 필요하면 data/toonHeadOptions.js 에서 가져다 쓰면 된다.
+// config 는 DEFAULT_AVATAR 모양의 평범한 객체다. 일부만 넘겨도 나머지는 기본값으로 채워진다.
+// 선택지 목록(HAIR_STYLES, EYES, ...)이 필요하면 data/avatarOptions.js 에서 가져다 쓰면 된다.
 
 import { createAvatar } from "@dicebear/core";
 import { toonHead } from "@dicebear/collection";
 import {
-  DEFAULT_TOONHEAD,
+  DEFAULT_AVATAR,
   hairStyleById,
   toDicebearOptions,
-} from "../data/toonHeadOptions.js";
+} from "../data/avatarOptions.js";
 import {
   fitBeard,
   overlayCustomHair,
@@ -23,18 +23,18 @@ import {
   replaceFaceShape,
 } from "../data/customParts.js";
 
-export { DEFAULT_TOONHEAD };
+export { DEFAULT_AVATAR };
 
 /**
  * config → SVG 문자열.
  *
- * @param {object} config  아바타 설정(DEFAULT_TOONHEAD 참고). 일부만 넘겨도 된다.
+ * @param {object} config  아바타 설정(DEFAULT_AVATAR 참고). 일부만 넘겨도 된다.
  * @param {object} options DiceBear 옵션을 그대로 덧붙인다.
  *                         size / scale / translateX / translateY / flip / radius 등 전부 쓸 수 있고,
  *                         커스텀 파츠도 같이 변환된다(customParts.insertIntoBody 참고).
  */
 export function renderAvatarSvg(config, options = {}) {
-  const c = { ...DEFAULT_TOONHEAD, ...(config || {}) };
+  const c = { ...DEFAULT_AVATAR, ...(config || {}) };
   const style = hairStyleById(c.hairStyle);
 
   let svg = createAvatar(toonHead, {

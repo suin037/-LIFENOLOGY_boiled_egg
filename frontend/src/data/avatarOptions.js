@@ -90,7 +90,7 @@ export const SKIN_COLORS = ["f2d3b1", "edb98a", "d08b5b", "ae5d29", "8d5524", "6
 export const HAIR_COLORS = ["2c1b18", "0e0e0e", "724133", "a55728", "b58143", "c93305", "d6b370", "e8e1e1"];
 export const CLOTHES_COLORS = ["3c4f5c", "5199e4", "25557c", "929598", "a7ffc4", "ff5c5c", "ffafb9", "ffffb1"];
 
-export const DEFAULT_TOONHEAD = {
+export const DEFAULT_AVATAR = {
   face: "original", // 얼굴형은 customParts.js 의 FACE_SHAPES 에서 온다
   hairStyle: "longParted", // 앞·뒤 조합 프리셋 id
   beard: null, // null = 수염 없음
@@ -110,7 +110,7 @@ export const DEFAULT_TOONHEAD = {
  * 배열로 넘겨야 그 값이 확정되고, *Probability 로 유무를 통제한다.
  */
 export function toDicebearOptions(config) {
-  const c = { ...DEFAULT_TOONHEAD, ...(config || {}) };
+  const c = { ...DEFAULT_AVATAR, ...(config || {}) };
   const style = hairStyleById(c.hairStyle);
   // 커스텀 앞머리(비니 등)는 DiceBear 가 모르므로 빌트인 앞머리를 끄고 나중에 덧그린다.
   const frontHair = style.custom ? null : style.hair;
@@ -149,4 +149,14 @@ export function randomToonHead() {
     hairColor: pick(HAIR_COLORS),
     clothesColor: pick(CLOTHES_COLORS),
   };
+}
+
+// 기존 UI 가 기대하는 이름들. 화면 코드를 안 고치고 갈아끼우려고 유지한다.
+//   Avatar / AvatarBuilder / avatarImage 가 이 두 개를 쓴다.
+export { DEFAULT_AVATAR as DEFAULT_TOONHEAD };
+
+/** 저장된 config 를 항상 완전한 형태로. 예전(react-nice-avatar) 설정이 와도 기본값으로 되돌린다. */
+export function normalizeAvatar(config) {
+  if (!config || typeof config.hairStyle === "undefined") return { ...DEFAULT_AVATAR };
+  return { ...DEFAULT_AVATAR, ...config };
 }
