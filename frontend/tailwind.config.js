@@ -45,9 +45,14 @@ export default {
         driftA: { "50%": { transform: "translateX(-18px)" } },
         driftB: { "50%": { transform: "translateX(18px)" } },
         twinkle: { "50%": { opacity: "0.2" } },
-        cometOrbit: {
-          from: { transform: "translate(-50%, -50%) rotate(0deg)" },
-          to: { transform: "translate(-50%, -50%) rotate(360deg)" },
+        orbit: {
+          from: { transform: "rotate(0deg)" },
+          to: { transform: "rotate(360deg)" },
+        },
+        // 궤도를 도는 동안 A/B 글자가 뒤집히지 않도록 같은 주기로 역회전시킨다.
+        orbitCounter: {
+          from: { transform: "rotate(0deg)" },
+          to: { transform: "rotate(-360deg)" },
         },
         cometGlow: {
           "0%, 100%": { opacity: ".7", transform: "scale(.88)" },
@@ -61,7 +66,8 @@ export default {
         "spin-slow": "spin 3s linear infinite",
         driftA: "driftA 3s ease-in-out infinite",
         driftB: "driftB 3s ease-in-out infinite",
-        "comet-orbit": "cometOrbit 2.4s linear infinite",
+        orbit: "orbit 5s linear infinite",
+        "orbit-counter": "orbitCounter 5s linear infinite",
         "comet-glow": "cometGlow 1.15s ease-in-out infinite",
       },
     },

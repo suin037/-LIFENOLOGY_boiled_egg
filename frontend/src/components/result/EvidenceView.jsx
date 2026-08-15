@@ -11,6 +11,7 @@ export default function EvidenceView({ a, b, dataMode }) {
   const hasRisk = [a, b].some((s) => Object.keys(s.risk_timeline || {}).length);
   const hasReturn = [a, b].some((s) => Object.keys(s.return_timeline || {}).length);
   const hasKoweps = [a, b].some((s) => s.koweps_evidence?.available);
+  const hasDomain = [a, b].some((s) => Object.keys(s.domain_stats || {}).length);
   // 쉬어가기에서 소득 효과는 '복귀한 사람만' 보고 잰 값이라 단독으로 읽으면 안 된다.
   // 접는 제목에서부터 그 짝을 붙여 둔다.
   const causalTitle = hasReturn
@@ -29,7 +30,7 @@ export default function EvidenceView({ a, b, dataMode }) {
       {hasPeople && <Disclosure title="비슷한 사례 보기"><PeopleView a={a} b={b} /></Disclosure>}
       {hasCausal && <Disclosure title={causalTitle}><CausalView a={a} b={b} /></Disclosure>}
       {hasRisk && <Disclosure title="지속 가능성·이탈 가능성 보기"><RiskView a={a} b={b} /></Disclosure>}
-      {!hasPeople && !hasCausal && !hasRisk && !hasReturn && !hasKoweps && <Card><Caption>현재 추가로 보여드릴 상세 분석이 없습니다.</Caption></Card>}
+      {!hasPeople && !hasCausal && !hasRisk && !hasReturn && !hasKoweps && !hasDomain && <Card><Caption>현재 추가로 보여드릴 상세 분석이 없습니다.</Caption></Card>}
     </div>
   );
 }
@@ -44,7 +45,7 @@ function DomainStats({ a, b }) {
   const rows = [];
   for (const [tag, s] of sides) {
     for (const dom of Object.values(s.domain_stats || {})) {
-      if (dom.status === "available" && dom.indicators?.length) rows.push({ tag, ...dom });
+      rows.push({ tag, ...dom });
     }
   }
   if (!rows.length) return null;
@@ -67,6 +68,8 @@ function DomainStats({ a, b }) {
               ))}
             </div> : <p className="mt-1 text-[10px] text-mut">{r.source_note || r.limitation || "현재 연결된 수치 데이터가 없습니다."}</p>}
             {r.indicators?.length > 0 && r.limitation && <p className="mt-1 text-[9px] text-mut">{r.limitation}</p>}
+            {r.source_note && <p className="mt-1 text-[9px] leading-4 text-violet-300/80">사용 근거 · {r.source_note}</p>}
+            {r.outcome_contract?.length > 0 && <p className="mt-1 text-[9px] leading-4 text-mut">확인 대상 · {r.outcome_contract.join(" · ")}</p>}
           </div>
         ))}
       </div>

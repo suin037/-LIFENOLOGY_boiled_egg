@@ -126,8 +126,8 @@ export default function InputScreen() {
       b: { event: intakeB.event, event_label: intakeB.eventLabel, domain: intakeB.domain, answers: prev.b?.answers || {} },
     }));
     setScenarioDomains((prev) => ({
-      a: prev.a?.length ? prev.a : fallback(choices.a),
-      b: prev.b?.length ? prev.b : fallback(choices.b),
+      a: prev.a?.length ? prev.a : prev.b?.length ? prev.b : fallback(choices.a),
+      b: prev.b?.length ? prev.b : prev.a?.length ? prev.a : fallback(choices.b),
     }));
     navigate("/simulate");
   }

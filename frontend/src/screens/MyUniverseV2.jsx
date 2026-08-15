@@ -201,6 +201,26 @@ function Close({ onClick }) { return <button type="button" onClick={onClick} cla
 // 실제로 그날 쓴 문장. 시나리오(미래)와 기록(과거)이 한 행성에서 만나게 하는 부분이다.
 const MOOD_COLORS = ["#E24B4A", "#D85A30", "#EDA100", "#5DCAA5", "#378ADD"];
 
+// 연속 기분 흐름 그래프 — 기록 순서대로 이어지는 SVG polyline (이미지 아님, 데이터로 그림).
+function Sparkline({ series = [], trend }) {
+  if (series.length < 2) return null; // 점 하나짜리 선은 흐름이 아니다
+  const W = 260, H = 40, PAD = 4;
+  const xs = (i) => PAD + (i * (W - 2 * PAD)) / (series.length - 1);
+  const ys = (v) => H - PAD - ((v + 1) / 2) * (H - 2 * PAD);
+  const pts = series.map((p, i) => `${xs(i).toFixed(1)},${ys(p.v).toFixed(1)}`).join(" ");
+  const col = trend == null ? "#8B6CCF" : trend > 0.1 ? "#5DCAA5" : trend < -0.1 ? "#F0736F" : "#8B6CCF";
+  return (
+    <div className="mt-2.5">
+      <div className="mb-1 text-[8.5px] text-mut">기분 흐름 (기록 순서대로 이어짐)</div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 44 }}>
+        <line x1={PAD} y1={H / 2} x2={W - PAD} y2={H / 2} stroke="#28324D" strokeWidth="0.5" strokeDasharray="2 3" />
+        <polyline points={pts} fill="none" stroke={col} strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" />
+        {series.map((p, i) => <circle key={i} cx={xs(i)} cy={ys(p.v)} r="1.6" fill={col} />)}
+      </svg>
+    </div>
+  );
+}
+
 function DomainRecords({ planet, state, entries, recent }) {
   // 1년치가 들어오면 이 셋은 렌더마다 수백 개 기록을 다시 훑는다 — 상태가 바뀔 때만 돌린다.
   const a = useMemo(() => domainAnalysis(planet.key, state), [planet.key, state]);
@@ -224,6 +244,10 @@ function DomainRecords({ planet, state, entries, recent }) {
       </div>
 
       <p className="mt-2 text-[10.5px] leading-relaxed text-sub">{domainReport(a, planet.label)}</p>
+
+      {/* 기분 흐름 — 결과 화면에 있던 그래프를 이리로 옮겼다. 월별 막대는 '언제 많이 썼나'를,
+          이 선은 '기록 순서대로 어떻게 흘렀나'를 보여준다. 둘은 다른 질문에 답한다. */}
+      <Sparkline series={a.series} trend={a.trend} />
 
       {/* 월별 기록량 — 이 영역을 언제 많이 썼는지 */}
       {months.length > 1 && (

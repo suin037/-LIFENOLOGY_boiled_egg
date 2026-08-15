@@ -38,7 +38,7 @@ The A and B outputs are parallel futures of the EXACT SAME PERSON, not siblings,
 or two redesigned avatars. Identity consistency is more important than scene styling.
 
 Future choice: {choice}
-Story to visualize: {narrative[:1200]}
+Story to visualize: {narrative[:700]}
 Scene direction:
 {scene}
 
@@ -62,7 +62,8 @@ def _generate_one(avatar_png, choice, narrative, visual_scene, avatar_spec, seed
         f"{settings.cloudflare_account_id}/ai/run/{model}"
     )
     response = None
-    for attempt in range(3):
+    max_attempts = max(1, settings.cloudflare_image_max_attempts)
+    for attempt in range(max_attempts):
         response = requests.post(
             url,
             headers={"Authorization": f"Bearer {settings.cloudflare_api_token}"},
@@ -75,10 +76,10 @@ def _generate_one(avatar_png, choice, narrative, visual_scene, avatar_spec, seed
             files={"input_image_0": ("avatar.png", avatar_png, "image/png")},
             timeout=(30, 240),
         )
-        if response.status_code < 500 or attempt == 2:
+        if response.status_code < 500 or attempt == max_attempts - 1:
             break
         # Workers AI의 일시적인 5xx/동시 처리 실패는 짧게 기다렸다 재시도한다.
-        time.sleep(1.5 * (attempt + 1))
+        time.sleep(0.5 * (attempt + 1))
     if not response.ok:
         try:
             detail = response.json()

@@ -97,7 +97,7 @@ export function ResultProvider({ children }) {
           b: opts.choiceBDomains ?? scenarioDomains.b,
         },
         narrativeLoading: true,
-        imageLoading: false,
+        imageLoading: true,
       };
       setResult(preview);
       try {
@@ -125,6 +125,27 @@ export function ResultProvider({ children }) {
       return fallback;
     }
 
+    // 이미지와 Claude 서사를 동시에 시작한다. 이미지는 사용자가 쓴 A/B 문장을
+    // 먼저 활용하고, 수동 재생성 때는 완성된 서사를 사용한다.
+    const fastVisualPromise = (async () => {
+      const avatarBlob = await avatarToPngBlob(profile.avatarConfig);
+      return generateSceneImages({
+        avatarBlob,
+        avatarSpec: avatarGenerationSpec(profile.avatarConfig),
+        choiceA,
+        choiceB,
+        narrative: {
+          a: requestArgs.choiceADetail || choiceA,
+          b: requestArgs.choiceBDetail || choiceB,
+          visual_a: {},
+          visual_b: {},
+        },
+      });
+    })().then(
+      (visual) => ({ visual, error: null }),
+      (error) => ({ visual: null, error }),
+    );
+
     // 결과 화면은 수치가 준비되는 즉시 열고, 느린 Claude·이미지는 뒤에서 채운다.
     void (async () => {
       try {
@@ -145,14 +166,8 @@ export function ResultProvider({ children }) {
         setResult(storyResult);
 
         try {
-          const avatarBlob = await avatarToPngBlob(profile.avatarConfig);
-          const visual = await generateSceneImages({
-            avatarBlob,
-            avatarSpec: avatarGenerationSpec(profile.avatarConfig),
-            choiceA,
-            choiceB,
-            narrative,
-          });
+          const { visual, error: imageError } = await fastVisualPromise;
+          if (imageError) throw imageError;
           if (simulationRunRef.current !== runId) return;
           setResult({ ...storyResult, visuals: visual.images, visualModel: visual.model, imageLoading: false });
         } catch (imageError) {

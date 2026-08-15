@@ -51,6 +51,15 @@ const DOMAIN_ACTIONS = {
   ],
 };
 
+// 같은 영역에서도 사용자가 실제로 비교한 행동에 따라 첫 실험을 바꾼다.
+// 결과를 예언하는 규칙이 아니라, 선택 사이의 불확실성을 검증하는 행동 설계다.
+const SCENARIO_ACTIONS = [
+  [/솔직.*대화|대화.*솔직|관계.*변화/, "relationship", "말하고 싶은 사실·감정·요청을 각각 한 문장으로 적기", "대화 전에 사실과 해석을 분리하면 방어적 반응을 줄이고 핵심 요청을 분명히 할 수 있어요.", "implementation"],
+  [/전문가|객관.*의견|주변.*의견|조언/, "relationship", "같은 상황을 설명할 문장과 확인할 질문 2개를 적어 제3자에게 묻기", "조언을 결론으로 받아들이기보다 내가 놓친 정보와 관점을 수집하는 실험으로 사용해요.", "smallExperiment"],
+  [/균형.*크게.*바꾸|생활.*크게.*바꾸/, "lifestyle", "바뀐 뒤의 평일을 30분 단위로 적고 유지하기 어려운 구간 하나 표시하기", "큰 변화의 만족감보다 실제 시간 구조가 지속 가능한지를 먼저 확인해요.", "possibleSelf"],
+  [/일정.*기간|체험|시험|테스트/, "lifestyle", "체험 기간·바꿀 행동·중단 기준·판단 날짜를 한 줄씩 정하기", "기간과 종료 조건이 있는 작은 실험은 되돌릴 수 있어 큰 결정의 불확실성을 줄여요.", "implementation"],
+];
+
 // 일기 신호별 '확인 행동' — 최근 기록에서 드러난 상태를 다음 단계에 반영한다(로컬 규칙, API 0).
 const SIGNAL_ACTIONS = {
   stabilityPreference: ["이직 시 최소 확보돼야 할 안전 조건 3개(급여 하한·고용형태·수습기간) 적기", "막연한 불안을 '확인 가능한 조건'으로 바꿔요.", "implementation"],
@@ -73,6 +82,16 @@ export function actionsFor(choice, domains = [], signals = null) {
       ...COMMON_BASIS[basisKey],
     })),
   );
+  const scenarioList = SCENARIO_ACTIONS
+    .filter(([pattern, domain]) => source.includes(domain) && pattern.test(String(choice || "")))
+    .map(([, domain, text, purpose, basisKey]) => ({
+      id: `scenario:${domain}:${text}`,
+      domain,
+      text,
+      purpose,
+      ...COMMON_BASIS[basisKey],
+      tailored: true,
+    }));
 
   const signalList = [];
   if (signals?.ok) {
@@ -85,7 +104,7 @@ export function actionsFor(choice, domains = [], signals = null) {
   // 신호 행동 최대 2개를 앞에, 나머지는 도메인 행동으로 채워 3개. 같은 문구는 한 번만.
   const merged = [];
   const seen = new Set();
-  for (const a of [...signalList.slice(0, 2), ...domainList]) {
+  for (const a of [...signalList.slice(0, 1), ...scenarioList, ...domainList]) {
     if (seen.has(a.text)) continue;
     seen.add(a.text);
     merged.push(a);

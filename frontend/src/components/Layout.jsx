@@ -8,7 +8,7 @@ import UserGuide from "./UserGuide.jsx";
 const NO_TABBAR = ["/", "/onboarding", "/simulate"];
 // 프로필(설정) 아이콘을 숨기는 경로
 const NO_PROFILE = ["/simulate", "/onboarding"];
-const WIDE_DESKTOP = ["/home", "/input", "/result", "/my", "/archive", "/settings"];
+const WIDE_DESKTOP = ["/home", "/input", "/result", "/my", "/archive", "/settings", "/simulate"];
 const DESKTOP_TABS = [
   ["/my", "홈", Orbit],
   ["/input", "시뮬레이션", Sparkles],
@@ -27,7 +27,7 @@ export default function Layout() {
   const isDesktopWorkspace = ["/home", "/input", "/result", "/my", "/archive", "/settings"].includes(pathname);
   const isUniverseCanvas = pathname === "/my";
   const isOnboarding = pathname === "/onboarding";
-  const useFullDesktop = isDesktopWorkspace || isOnboarding;
+  const useFullDesktop = isDesktopWorkspace || isOnboarding || pathname === "/simulate";
   const [guideOpen, setGuideOpen] = useState(() => {
     try { return localStorage.getItem("pm.guide.seen.v1") !== "1"; } catch { return true; }
   });

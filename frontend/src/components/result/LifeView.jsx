@@ -1,78 +1,13 @@
 import { Card, Caption } from "../ui.jsx";
-import { LIFE_DIMENSIONS, labelOf } from "../../data/prediction.js";
 import ObservedIndicators from "./ObservedIndicators.jsx";
-
-// 생활지표(L1) — 공통 지표는 한 번, 선택지별 지표는 A/B 태그로.
-const DOMAIN_MATCH = {
-  career: ["경제", "직업환경", "고용", "임금", "업무"],
-  education: ["진학/취업", "취업률", "진학률", "교육"],
-  business: ["창업", "생존율", "폐업"],
-  finance: ["경제", "소득", "임금"],
-  health: ["정신건강", "신체건강", "스트레스", "우울", "불안", "수면", "번아웃"],
-  housing: ["주거", "주택", "월세", "전세"],
-  relationship: ["관계", "외로움", "사회적"],
-  lifestyle: ["삶의질", "행복", "만족", "번아웃", "업무스트레스", "수면"],
-  long_term_values: ["삶의질", "계층 상승", "장래", "성장"],
-};
+import IndicatorGapChart from "./IndicatorGapChart.jsx";
 
 export default function LifeView({ a, b, domains = { a: [], b: [] } }) {
-  const key = (it) => it.indicator;
-  const bKeys = new Set(b.life_indicators.map(key));
-  const aKeys = new Set(a.life_indicators.map(key));
-
-  const selectedDomains = [...new Set([...(domains.a || []), ...(domains.b || [])])];
-  const matches = (it) => {
-    if (!selectedDomains.length) return true;
-    const haystack = `${it.dimension} ${it.indicator}`;
-    return selectedDomains.some((domain) => (DOMAIN_MATCH[domain] || []).some((word) => haystack.includes(word)));
-  };
-  const shared = a.life_indicators.filter((it) => bKeys.has(key(it)) && matches(it)).slice(0, 5);
-  const extraA = a.life_indicators.filter((it) => !bKeys.has(key(it)) && matches(it)).slice(0, 3);
-  const extraB = b.life_indicators.filter((it) => !aKeys.has(key(it)) && matches(it)).slice(0, 3);
-  const empty = !shared.length && !extraA.length && !extraB.length;
-  const domainRows = collectDomainIndicators(a, b, selectedDomains);
-
   return (
     <div>
-      {(a.indicator_evidence || b.indicator_evidence) && <EvidenceSummary a={a} b={b} />}
+      <EvidenceSummary a={a} b={b} domains={domains} />
+      <IndicatorGapChart a={a} b={b} domains={domains} />
       <ObservedIndicators a={a} b={b} />
-      <h2 className="mb-1 mt-1 text-base font-semibold">이 선택과 관련된 핵심 지표</h2>
-      <div className="mt-3 space-y-2.5">
-        {empty && !domainRows.length && <Card><Caption>선택한 삶의 영역에 연결된 수치 데이터가 아직 충분하지 않습니다. 임의 점수는 만들지 않았어요.</Caption></Card>}
-        {domainRows.map((row) => <DomainIndicator key={row.key} row={row} />)}
-        {shared.map((it, i) => <Indicator key={`s${i}`} it={it} />)}
-        {extraA.map((it, i) => <Indicator key={`a${i}`} it={it} tag={`A · ${labelOf(a.choice)}`} tagColor="#8B6CCF" />)}
-        {extraB.map((it, i) => <Indicator key={`b${i}`} it={it} tag={`B · ${labelOf(b.choice)}`} tagColor="#F5C86B" />)}
-      </div>
-    </div>
-  );
-}
-
-function collectDomainIndicators(a, b, selectedDomains) {
-  const rows = [];
-  const seen = new Set();
-  for (const [side, result] of [["A", a], ["B", b]]) {
-    for (const [domain, stat] of Object.entries(result.domain_stats || {})) {
-      if (selectedDomains.length && !selectedDomains.includes(domain)) continue;
-      for (const item of stat.indicators || []) {
-        const signature = `${domain}:${item.name}:${item.value}:${item.unit}`;
-        if (seen.has(signature)) continue;
-        seen.add(signature);
-        rows.push({ ...item, key: `${side}:${signature}`, side, domainLabel: stat.label, limitation: stat.limitation });
-      }
-    }
-  }
-  return rows.slice(0, 6);
-}
-
-function DomainIndicator({ row }) {
-  return (
-    <div className="rounded-2xl border border-line bg-card p-3.5">
-      <div className="flex items-start justify-between gap-3">
-        <div><div className="text-[10px] text-violet-300">{row.domainLabel} · 참고 기준</div><div className="mt-1 text-[13px] text-ink">{row.name}</div></div>
-        <div className="whitespace-nowrap text-right"><b className="text-lg text-ink">{row.value}</b><span className="ml-1 text-[10px] text-sub">{row.unit}</span></div>
-      </div>
-      <div className="mt-2 text-[9px] leading-4 text-mut">{row.source}{row.sample_n ? ` · n=${row.sample_n.toLocaleString()}` : ""} · 선택 효과가 아닌 현재 비교 기준입니다.</div>
     </div>
   );
 }
@@ -87,7 +22,56 @@ const EVIDENCE_LABEL = {
   proxy_observation: "부분 관측 근거",
 };
 
-function EvidenceSummary({ a, b }) {
+// 근거 강도 3단계. 채워진 칸 수가 곧 "이 숫자를 얼마나 믿어도 되는가"다.
+//   3 = 개인 조건 인과모델까지 검증  2 = 유사 조건 집단의 실제 관측  1 = 참고 통계(선택 효과 아님)
+const EVIDENCE_STRENGTH = {
+  directional_evidence: 3,
+  matched_observation: 2,
+  observed_group: 2,
+  proxy_observation: 2,
+  user_provided_state: 1,
+  reference_only: 1,
+  insufficient_evidence: 0,
+};
+
+/** 근거 설명에서 내부 컬럼명 나열("· 직접 결과: disposable_income, …")을 잘라낸다. */
+function readableReason(reason) {
+  if (!reason) return "";
+  const cut = reason.split(/\s*·\s*(?:직접 결과|일부 대리지표|미측정)\s*:/)[0];
+  return cut.length > 120 ? `${cut.slice(0, 120)}…` : cut;
+}
+
+/** 범례용 미니 도트 — 강도 n을 회색 톤으로 보여준다. */
+function Dots({ n }) {
+  return (
+    <span className="flex gap-[2px]">
+      {[1, 2, 3].map((i) => (
+        <i
+          key={i}
+          className="h-1 w-2 rounded-full"
+          style={{ background: i <= n ? "rgba(255,255,255,.55)" : "rgba(255,255,255,.12)" }}
+        />
+      ))}
+    </span>
+  );
+}
+
+function StrengthMeter({ level, side }) {
+  const color = side === "A" ? "#8B6CCF" : "#F5C86B";
+  return (
+    <span className="flex shrink-0 gap-[3px]" aria-label={`근거 강도 3단계 중 ${level}단계`}>
+      {[1, 2, 3].map((i) => (
+        <i
+          key={i}
+          className="h-1.5 w-4 rounded-full"
+          style={{ background: i <= level ? color : "rgba(255,255,255,.09)" }}
+        />
+      ))}
+    </span>
+  );
+}
+
+function EvidenceSummary({ a, b, domains }) {
   const defaultOrder = ["경제적안정도", "성장가능성", "삶의질"];
   const preferred = a.personalization?.narrate_order || b.personalization?.narrate_order || [];
   const keys = [...new Set([...preferred, ...defaultOrder])].filter((key) => {
@@ -95,13 +79,34 @@ function EvidenceSummary({ a, b }) {
     const statuses = [a.indicator_evidence?.[key]?.status, b.indicator_evidence?.[key]?.status].filter(Boolean);
     return statuses.some((status) => status !== "insufficient_evidence");
   });
-  if (!keys.length) return null;
+  const selectedDomains = [...new Set([...(domains?.a || []), ...(domains?.b || [])])];
+  const domainEvidence = selectedDomains.map((domain) => {
+    const left = a.domain_stats?.[domain];
+    const right = b.domain_stats?.[domain];
+    if (!left && !right) return null;
+    return { domain, label: left?.label || right?.label || domain, left, right };
+  }).filter(Boolean);
+  if (!keys.length && !domainEvidence.length) return null;
   return (
     <Card className="mb-4">
-      <div className="text-sm font-semibold text-ink">예측 근거 상태</div>
-      <Caption>현재 모델이 실제로 검증한 범위를 표시합니다.</Caption>
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <div className="text-sm font-semibold text-ink">예측 근거 신뢰도</div>
+        <div className="flex items-center gap-2.5 text-[9px] text-mut">
+          <span className="flex items-center gap-1"><Dots n={3} /> 개인모델 검증</span>
+          <span className="flex items-center gap-1"><Dots n={2} /> 집단통계</span>
+          <span className="flex items-center gap-1"><Dots n={1} /> 참고 통계</span>
+        </div>
+      </div>
+      <Caption>칸이 많이 찰수록 이 숫자를 뒷받침하는 근거가 강합니다.</Caption>
       {preferred.length > 0 && <Caption>중요하게 생각하는 기준부터 A와 B의 차이를 설명해요.</Caption>}
       <div className="mt-3 space-y-2">
+        {domainEvidence.map((row) => (
+          <div key={`domain-${row.domain}`} className="rounded-xl border border-violet-400/20 bg-violet-500/[.055] px-3 py-2.5">
+            <div className="mb-1 text-xs font-semibold text-ink">{row.label} 영역</div>
+            <DomainEvidenceSide label="A" item={row.left} />
+            <DomainEvidenceSide label="B" item={row.right} />
+          </div>
+        ))}
         {keys.map((key) => {
           const left = a.indicator_evidence?.[key];
           const right = b.indicator_evidence?.[key];
@@ -119,48 +124,35 @@ function EvidenceSummary({ a, b }) {
   );
 }
 
+function DomainEvidenceSide({ label, item }) {
+  if (!item) return null;
+  const available = item.status === "available";
+  const evidence = item.evidence === "model" ? "개인 조건 모델"
+    : item.evidence === "group_stat" ? "유사 조건 집단통계"
+      : item.evidence === "rag" ? "기록·논문 해석" : "정량 근거 없음";
+  return (
+    <div className="mt-1 flex items-start gap-2 text-[11px] leading-5 text-sub">
+      <b className={label === "A" ? "text-violet-300" : "text-[#F5C86B]"}>{label}</b>
+      <span>{available ? evidence : "현재 연결 가능한 수치 없음"}</span>
+      {available && item.indicators?.length > 0 && <span className="ml-auto whitespace-nowrap text-[9px] text-mut">{item.indicators.length}개 지표</span>}
+    </div>
+  );
+}
+
 function EvidenceSide({ label, item }) {
   if (!item || item.status === "insufficient_evidence") return null;
   const effect = typeof item.effect === "number"
     ? ` · 집단 평균 ${item.effect >= 0 ? "+" : ""}${item.effect.toFixed(1)}%p`
     : "";
+  const reason = readableReason(item.reason);
   return (
-    <div className="mt-1 text-[11px] leading-5 text-sub">
-      <span className="mr-1 font-semibold text-ink">{label}</span>
-      <span>{EVIDENCE_LABEL[item.status] || item.status}</span>{effect}
-      {item.reason && <div className="pl-4 text-[10px] text-mut">{item.reason}</div>}
-    </div>
-  );
-}
-
-function Indicator({ it, tag, tagColor }) {
-  const meta = LIFE_DIMENSIONS[it.dimension] || { icon: "•", color: "#8B6CCF" };
-  return (
-    <div className="rounded-2xl border border-line bg-card p-3.5">
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span className="text-base">{meta.icon}</span>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px]" style={{ color: meta.color }}>{it.dimension}</span>
-              {tag && (
-                <span className="rounded px-1 py-0.5 text-[9px] font-bold" style={{ color: tagColor, background: "#0E1424" }}>
-                  {tag}
-                </span>
-              )}
-            </div>
-            <div className="text-[13px] text-ink">{it.indicator}</div>
-          </div>
-        </div>
-        <div className="whitespace-nowrap text-right">
-          <span className="text-lg font-bold text-ink">{it.value}</span>
-          <span className="ml-0.5 text-[11px] text-sub">{it.unit}</span>
-        </div>
+    <div className="mt-1.5 text-[11px] leading-5 text-sub">
+      <div className="flex items-center gap-2">
+        <b className={`w-3 shrink-0 ${label === "A" ? "text-violet-300" : "text-[#F5C86B]"}`}>{label}</b>
+        <StrengthMeter level={EVIDENCE_STRENGTH[item.status] ?? 0} side={label} />
+        <span className="min-w-0">{EVIDENCE_LABEL[item.status] || item.status}{effect}</span>
       </div>
-      <div className="mt-1.5 flex items-center justify-between text-[10px] text-mut">
-        <span>{it.group}</span>
-        <span>{it.n ? `n=${it.n.toLocaleString()}` : ""}</span>
-      </div>
+      {reason && <div className="mt-0.5 pl-5 text-[10px] leading-4 text-mut">{reason}</div>}
     </div>
   );
 }

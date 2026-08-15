@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     # 첫 생성 지연과 전송량을 낮춘다. 고해상도가 필요하면 .env에서 덮어쓴다.
     cloudflare_image_width: int = 320
     cloudflare_image_height: int = 400
+    cloudflare_image_max_attempts: int = 2
     # preprocess/preprocess_goms.py의 실제 출력 위치와 통일한다.
     goms_clean_path: str = "data/clean/goms_clean.csv"
     artifacts_dir: str = "backend/models/artifacts"

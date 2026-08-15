@@ -11,6 +11,9 @@ const STEPS = [
   { label: "결과 화면 준비하기", icon: Sparkles },
 ];
 
+// 단계당 표시 시간. 4단계 × 1400ms = 최소 5.6초 — 체크되는 항목을 읽을 수 있을 만큼 머문다.
+const STEP_MS = 1400;
+
 export default function Simulate() {
   const navigate = useNavigate();
   const { runSimulation, choices, scenarioTexts } = useResult();
@@ -25,10 +28,10 @@ export default function Simulate() {
       i += 1;
       setDone(Math.min(i, STEPS.length));
       if (i >= STEPS.length) clearInterval(tick);
-    }, 650);
+    }, STEP_MS);
     // 애니메이션(최소 표시시간)과 실제 호출이 모두 끝나면 이동.
-    Promise.all([sim, new Promise((r) => setTimeout(r, STEPS.length * 650))]).finally(() => {
-      if (!cancelled) setTimeout(() => navigate("/result", { replace: true }), 180);
+    Promise.all([sim, new Promise((r) => setTimeout(r, STEPS.length * STEP_MS))]).finally(() => {
+      if (!cancelled) setTimeout(() => navigate("/result", { replace: true }), 400);
     });
     return () => {
       cancelled = true;
@@ -40,42 +43,46 @@ export default function Simulate() {
   const progress = Math.max(8, Math.round((done / STEPS.length) * 100));
 
   return (
-    <div className="flex min-h-full flex-col pb-3 pt-5">
-      <div className="text-center">
+    <div className="relative mx-auto flex min-h-full max-w-[1180px] flex-col pb-3 pt-5 lg:min-h-[calc(100vh-40px)] lg:flex-row lg:items-center lg:px-10 lg:py-10">
+      {/* 모바일에선 display:contents로 기존 세로 스택을 그대로 두고, lg부터 좌/우 2단으로 나눈다. */}
+      <div className="contents lg:block lg:w-[45%] lg:shrink-0 lg:pr-8">
+      <div className="text-center lg:text-left">
         <span className="inline-flex items-center gap-1.5 rounded-full bg-cyan/10 px-3 py-1.5 text-[11px] font-semibold text-cyan">
           <Sparkles size={13} strokeWidth={2.2} />
           미래 비교 중
         </span>
-        <h1 className="mt-4 text-[23px] font-bold leading-tight tracking-[-.025em] text-ink">
-          두 선택의 가능성을<br />차분히 살펴보고 있어요
+        <h1 className="mt-4 text-[23px] font-bold leading-tight tracking-[-.025em] text-ink lg:text-[38px]">
+          두 선택의 가능성을<br className="hidden lg:block" /> 차분히 살펴보고 있어요
         </h1>
         <p className="mt-2 text-[12px] leading-relaxed text-mut">
           입력한 조건과 관련 데이터를 연결해 결과를 준비합니다.
         </p>
       </div>
 
-      <div className="relative mx-auto my-7 h-[150px] w-[250px]" role="img" aria-label="보라색과 주황색 선택 구체가 회전하는 로딩 애니메이션">
-        <i className="absolute left-[34px] top-[22px] h-1 w-1 animate-pulse rounded-full bg-white/60" />
-        <i className="absolute right-[38px] top-[28px] h-1.5 w-1.5 animate-pulse rounded-full bg-violet-300/70 [animation-delay:400ms]" />
-        <i className="absolute bottom-[22px] left-[62px] h-1 w-1 animate-pulse rounded-full bg-white/40 [animation-delay:700ms]" />
-        <div className="absolute left-1/2 top-1/2 h-[104px] w-[206px] -translate-x-1/2 -translate-y-1/2 rounded-[50%] border border-white/[.06]" />
-        <div className="absolute left-1/2 top-1/2 h-[104px] w-[206px] animate-comet-orbit rounded-[50%]">
-          <span className="absolute right-[-8px] top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-[#9B72F2] shadow-[0_0_18px_7px_rgba(139,92,246,.38)]" />
-          <span className="absolute left-[-8px] top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-[#F39A4A] shadow-[0_0_18px_7px_rgba(243,154,74,.34)]" />
+      {/* 궤도는 정원(正圓). inset-[20px]는 구체(40px) 반지름과 같아서 구체가 박스 밖으로 나가지 않는다. */}
+      <div className="relative mx-auto my-6 h-[190px] w-[190px] lg:my-10 lg:scale-[1.25]" role="img" aria-label="선택 A와 B 구체가 중심을 도는 로딩 애니메이션">
+        <i className="absolute left-[26px] top-[18px] h-1 w-1 animate-pulse rounded-full bg-white/60" />
+        <i className="absolute right-[30px] top-[24px] h-1.5 w-1.5 animate-pulse rounded-full bg-violet-300/70 [animation-delay:400ms]" />
+        <i className="absolute bottom-[18px] left-[54px] h-1 w-1 animate-pulse rounded-full bg-white/40 [animation-delay:700ms]" />
+        <div className="absolute inset-[20px] rounded-full border border-white/[.06]" />
+        <div className="absolute inset-[20px] animate-orbit rounded-full">
+          <ChoiceOrb side="A" className="left-0 top-1/2 -translate-x-1/2 -translate-y-1/2" />
+          <ChoiceOrb side="B" className="right-0 top-1/2 translate-x-1/2 -translate-y-1/2" />
         </div>
         <div className="absolute left-1/2 top-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[#171128] shadow-[0_0_34px_rgba(139,108,207,.22)]">
           <GitCompareArrows size={25} className="text-white" strokeWidth={1.8} />
         </div>
-        <ChoiceOrb side="A" className="left-0 top-[53px]" />
-        <ChoiceOrb side="B" className="right-0 top-[53px]" />
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      </div>
+
+      <div className="contents lg:block lg:w-[55%]">
+      <div className="grid grid-cols-2 gap-2 lg:gap-4">
         <ChoiceCard side="A" choice={choices.a} detail={scenarioTexts.a} />
         <ChoiceCard side="B" choice={choices.b} detail={scenarioTexts.b} />
       </div>
 
-      <div className="mt-4 rounded-[18px] bg-card p-4">
+      <div className="mt-4 rounded-[18px] bg-card p-4 lg:rounded-[24px] lg:border lg:border-white/10 lg:p-6">
         <div className="mb-3 flex items-center justify-between">
           <span className="text-[13px] font-semibold text-ink">분석 진행</span>
           <span className="text-[11px] font-semibold tabular-nums text-cyan">{progress}%</span>
@@ -110,17 +117,25 @@ export default function Simulate() {
       </div>
 
       <p className="mt-3 text-center text-[10px] text-mut">잠시만 기다려주세요. 곧 결과 화면으로 이동합니다.</p>
+      </div>
     </div>
   );
 }
 
 function ChoiceOrb({ side, className }) {
   const isA = side === "A";
+  // 바깥 div = 궤도 위 위치(transform은 translate 전용), 안쪽 div = 역회전(글자 수평 유지).
   return (
-    <div className={`absolute flex h-11 w-11 items-center justify-center rounded-full border font-bold shadow-lg ${className} ${
-      isA ? "border-cyan/50 bg-[#132849] text-cyan" : "border-gold/50 bg-[#302313] text-gold"
-    }`}>
-      {side}
+    <div className={`absolute h-10 w-10 ${className}`}>
+      <div
+        className={`flex h-full w-full animate-orbit-counter items-center justify-center rounded-full border text-[15px] font-bold shadow-lg ${
+          isA
+            ? "border-cyan/50 bg-[#132849] text-cyan shadow-[0_0_18px_5px_rgba(139,108,207,.28)]"
+            : "border-gold/50 bg-[#302313] text-gold shadow-[0_0_18px_5px_rgba(243,154,74,.24)]"
+        }`}
+      >
+        {side}
+      </div>
     </div>
   );
 }

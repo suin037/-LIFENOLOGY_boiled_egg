@@ -140,6 +140,15 @@ class LifeIndicator(BaseModel):
     unit: str
     group: str = Field(..., description="이 값이 어떤 집단 기준인지 (예: 성별×연령대, 25-29)")
     source: str
+    domains: list[str] = Field(
+        default_factory=list,
+        description="이 지표를 참고할 삶의 영역 키(9개 domain). 프론트가 지표 이름 문자열로 "
+        "영역을 추측하던 것을 대체한다. '소유'가 아니라 '그 영역을 볼 때 참고할 값인가'.",
+    )
+    lower_is_better: bool = Field(
+        False,
+        description="값이 낮을수록 좋은 지표인가(우울·스트레스·고립도 등). A/B 비교 방향 표시용.",
+    )
 
 
 class TrajectoryPoint(BaseModel):

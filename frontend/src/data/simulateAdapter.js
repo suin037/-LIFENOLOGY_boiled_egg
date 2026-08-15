@@ -29,6 +29,10 @@ function normalizeLifeIndicators(list) {
     group: it.group ?? null,
     source: it.source ?? null,
     n: it.n ?? null,
+    // 백엔드가 붙여 보내는 삶의 영역 태그. 화면이 지표 '이름 문자열'로 영역을
+    // 추측하던 것을 대체한다(예전 방식은 관계에서 15개 중 14개를 버렸다).
+    domains: it.domains || [],
+    lower_is_better: it.lower_is_better ?? false,
   }));
 }
 
