@@ -77,3 +77,6 @@ python
 scp
 # 빌드 산출물(용량) — 필요하면 preprocess/build_psych_cards_db.py 로 재생성
 data/vectordb/
+
+# Claude Code 로컬 설정(권한 등) — 개인 환경이라 공유하지 않음
+.claude/settings.local.json

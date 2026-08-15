@@ -110,3 +110,14 @@ class PredictResponse(BaseModel):
     scenario_trajectories: dict[str, list[TrajectoryPoint]] = Field(default_factory=dict,
         description="선택지 평행우주 — {'유지': 기준경로, '이직': 기준+L3인과효과}. 이직 choice에서만 제공")
     narrative: str = Field("", description="Claude 가 생성한 설명")
+
+
+class AvatarGenerateRequest(BaseModel):
+    """빌더가 만든 SVG 아바타를 구운 PNG + 생성 프롬프트."""
+
+    reference_png: str = Field(..., description="참조 이미지. 'data:image/png;base64,...' 형식")
+    prompt: str = Field(..., min_length=1, description="이미지 생성 프롬프트(영문)")
+
+
+class AvatarGenerateResponse(BaseModel):
+    image: str = Field(..., description="생성된 실사 아바타. PNG dataURL")

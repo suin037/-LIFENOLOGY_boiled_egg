@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     # Claude 모델 (최신 권장)
     claude_model: str = "claude-opus-4-8"
 
+    # 아바타 실사 이미지 생성용. Claude API 는 이미지 생성을 지원하지 않아
+    # 별도 서비스의 키가 필요하다. 비워두면 아바타는 SVG 로만 동작한다.
+    avatar_image_provider: str = ""
+    avatar_image_api_key: str = ""
+
     @property
     def goms_clean_abspath(self) -> Path:
         return ROOT / self.goms_clean_path
