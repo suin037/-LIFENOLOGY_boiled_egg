@@ -44,6 +44,53 @@ export function isCustomHair(id) {
   return Object.prototype.hasOwnProperty.call(CUSTOM_HAIR, id);
 }
 
+/** openIdx 의 <g ...> 와 짝이 맞는 </g> 위치. 없으면 -1. */
+function matchingClose(svg, openIdx) {
+  let depth = 0;
+  const re = /<g[\s>]|<\/g>/g;
+  re.lastIndex = openIdx;
+  let m;
+  while ((m = re.exec(svg))) {
+    depth += m[0] === "</g>" ? -1 : 1;
+    if (depth === 0) return m.index;
+  }
+  return -1;
+}
+
+// 덧그리는 파츠(앞머리·귀·안경)를 '본체와 같은 그룹 안'에 넣는다.
+//
+// DiceBear 출력 구조:
+//   </metadata><mask .../><g mask="url(#viewboxMask)">[<g transform="…">] …본체… [</g>]</g></svg>
+// 안쪽 <g transform> 래퍼는 scale / translateX / translateY / flip 옵션을 줬을 때만 생긴다.
+// 파츠를 </svg> 앞에 붙이면 그 변환을 못 받아서 얼굴만 움직이고 파츠는 제자리에 남는다.
+// (친구 화면에서 '앞머리가 얼굴 사이즈랑 안 맞던' 원인이 이것이다.)
+//
+// 주의: `<g transform=` 을 그냥 찾으면 안 된다. toonHead 본체 자체가
+// `<g transform="translate(0 10)">…뒷머리…</g>` 로 시작해서, 옵션이 없을 때는
+// 그 뒷머리 그룹을 래퍼로 착각하고 파츠를 맨 뒤 레이어에 넣어버린다(얼굴에 가려짐).
+// 그래서 mask 그룹을 기준으로 잡고, '그 바로 안에서 시작해 바로 앞에서 끝나는'
+// transform 그룹만 진짜 래퍼로 인정한다.
+function insertIntoBody(svg, content) {
+  const insertAtEnd = () => {
+    const close = svg.lastIndexOf("</svg>");
+    return close < 0 ? svg : svg.slice(0, close) + content + svg.slice(close);
+  };
+
+  const maskOpen = svg.indexOf('<g mask="url(#viewboxMask)"');
+  if (maskOpen < 0) return insertAtEnd();
+  const maskClose = matchingClose(svg, maskOpen);
+  if (maskClose < 0) return insertAtEnd();
+
+  let at = maskClose;
+  const inner = svg.indexOf(">", maskOpen) + 1;
+  if (/^<g transform="[^"]*">/.test(svg.slice(inner, inner + 200))) {
+    const wrapClose = matchingClose(svg, inner);
+    // 래퍼라면 mask 그룹이 닫히기 바로 앞("</g>" 4글자)에서 끝난다.
+    if (wrapClose === maskClose - 4) at = wrapClose;
+  }
+  return svg.slice(0, at) + content + svg.slice(at);
+}
+
 // 교체 방식의 함정: 대상 문자열이 한 글자라도 다르면 그냥 아무 일도 일어나지 않는다.
 // 기능이 조용히 죽는 걸 막으려고 개발 중에는 콘솔에 경고를 띄운다.
 // (DiceBear 패키지를 올리면 원본 문자열이 바뀔 수 있는데, 그때 여기서 바로 드러난다.)
@@ -82,28 +129,35 @@ const TAIL = "c0 0-39.9 0-51-43Z";
 // 턱선 구간은 반드시 (525.5, 495.5) 에서 시작해 (242.5, 495.5) 로 끝나야 한다.
 // 이 두 점이 좌우 귀 아래 연결부다. 어긋나면 귀 밑에 각진 돌기가 튀어나온다.
 // 상대좌표로 쓰면 계산이 틀어지기 쉬워서 전부 절대좌표(C)로 쓴다.
+// chinY = 턱 끝 y좌표. 수염을 얼굴에 맞출 때 쓴다(fitBeard 참고).
 export const FACE_SHAPES = {
-  original: { label: "기본형", d: null }, // null = 원본 그대로
+  original: { label: "기본형", d: null, chinY: 591 }, // null = 원본 그대로
   oval: {
     label: "계란형",
     // 볼에서 부드럽게 좁아지며 턱이 길어진다.
     d: `${SKULL}C505 560 425 606 384 606C343 606 251 560 242.5 495.5${TAIL}`,
+    chinY: 606,
   },
   square: {
     label: "네모형",
-    // 각을 세게 주면 턱이 넓고 투박해진다. 원본 곡선을 거의 살리고
-    // 턱 밑만 살짝 평평하게 깎았다(평평한 구간 x320~448, 폭 128).
-    d: `${SKULL}C516 545 470 578 448 582C425 586 343 586 320 582C298 578 252 545 242.5 495.5${TAIL}`,
+    // 턱 '길이'는 원본과 같게(590≈591) 두고 각진 느낌은 폭으로만 낸다.
+    // 짧게 만들면(예전 582) 수염과 절대 안 맞는다 — 수염은 가운데로 모이는 모양이라
+    // 세로로 줄여도 넓고 평평한 턱 모서리에 맨살이 남는다.
+    // 길이를 원본에 맞추면 fitBeard 가 아예 손대지 않아 원본 그대로 딱 맞는다.
+    d: `${SKULL}C518 548 474 585 448 590C424 594 344 594 320 590C294 585 250 548 242.5 495.5${TAIL}`,
+    chinY: 591,
   },
   pointed: {
     label: "뾰족한 턱",
     // V라인: 볼 아래부터 급히 모여 턱 끝이 좁고 길다.
     d: `${SKULL}C500 540 424 616 384 620C344 616 268 540 242.5 495.5${TAIL}`,
+    chinY: 620,
   },
   pointedShort: {
     label: "뾰족한 턱 (짧게)",
     // 위와 같은 V라인이지만 턱 끝을 585 까지만 내린다(원본 591 보다도 짧다).
     d: `${SKULL}C502 534 428 582 384 585C340 582 266 534 242.5 495.5${TAIL}`,
+    chinY: 585,
   },
 };
 
@@ -169,6 +223,64 @@ export function replaceBrows(svg, shapeId, thicknessId, color) {
   );
 }
 
+// ── 수염 위치 맞추기 ──────────────────────────────────────────────────────
+// 얼굴형을 바꿔도 수염은 원본 턱 위치(y=591)에 그대로 그려진다. 그래서 턱이 길어진
+// '뾰족한 턱'(620)에서는 수염 아래로 맨 턱이 드러나고, 짧은 '네모형'(582)에서는
+// 수염이 턱 밖으로 삐져나온다.
+//
+// 수염 조각을 <g transform> 으로 감싸 세로로만 늘린다. 원본 파츠는 건드리지 않는다.
+//
+// 축을 광대(y=450)에 두고 가로 배율까지 주면 구레나룻이 망가진다.
+// 구레나룻은 귀(y≈403)에 붙어 있어서, 그보다 아래를 축으로 잡으면 늘릴 때 위로 밀려
+// 얼굴을 벗어나고, 가로 배율은 구레나룻을 귀에서 옆으로 떼어놓는다.
+// 그래서 축을 구레나룻이 시작되는 y=403 에 두고 가로는 건드리지 않는다(sx=1).
+const BEARD_PIVOT_Y = 403; // 구레나룻이 귀와 만나는 높이. 여기는 고정돼야 한다.
+const ORIGINAL_CHIN_Y = 591;
+
+// 각 수염 변형의 시작 좌표. 색과 무관하게 고정이라 앵커로 쓸 수 있다.
+const BEARD_ANCHORS = {
+  moustacheTwirl: "M328.5 507.5c-38.9-8.65",
+  fullBeard: "m543 403.06-1-.06",
+  chin: "M383.5 573.5c-6.15",
+  chinMoustache: "M384 500s-28.5 13.5",
+  longBeard: "m543 403.07-1-.07",
+};
+
+// 수염 바로 다음에 오는 눈의 시작 좌표. 여기까지가 수염 구간이다.
+const EYE_ANCHORS = {
+  happy: "M318.5 380.68",
+  wide: "M321.5 373.47",
+  bow: "m274.5 407.9",
+  humble: "m274.5 400.75",
+  wink: "m274.5 407.9",
+};
+
+/** 수염을 현재 얼굴형의 턱에 맞춘다. beardId 가 없으면 아무것도 하지 않는다. */
+export function fitBeard(svg, beardId, eyesId, faceId) {
+  if (!beardId) return svg;
+  const face = FACE_SHAPES[faceId];
+  if (!face || face.chinY === ORIGINAL_CHIN_Y) return svg; // 기본형이면 손댈 필요 없음
+
+  const beardAnchor = BEARD_ANCHORS[beardId];
+  const eyeAnchor = EYE_ANCHORS[eyesId];
+  if (!beardAnchor || !eyeAnchor) return warnMissing("수염"), svg;
+
+  const at = svg.indexOf(beardAnchor);
+  if (at < 0) return warnMissing("수염"), svg;
+  const start = svg.lastIndexOf("<path", at);
+  const end = svg.indexOf(eyeAnchor, at);
+  if (start < 0 || end < 0) return warnMissing("수염"), svg;
+  const endTag = svg.lastIndexOf("<path", end); // 눈의 첫 path 직전까지가 수염
+  if (endTag <= start) return warnMissing("수염"), svg;
+
+  // 세로만 늘린다. 가로(jawScale)는 구레나룻을 귀에서 떼어놓아 쓰지 않는다.
+  const sy = (face.chinY - BEARD_PIVOT_Y) / (ORIGINAL_CHIN_Y - BEARD_PIVOT_Y);
+  const open =
+    `<g transform="translate(0 ${BEARD_PIVOT_Y}) scale(1 ${sy.toFixed(3)})` +
+    ` translate(0 ${-BEARD_PIVOT_Y})">`;
+  return svg.slice(0, start) + open + svg.slice(start, endTag) + "</g>" + svg.slice(endTag);
+}
+
 // ── 귀 다시 그리기 ────────────────────────────────────────────────────────
 // 커스텀 앞머리는 맨 위에 덧씌우는 방식이라 귀를 가려버린다.
 // 그렇다고 앞머리를 귀 위에서 끊으면 그 아래 두상이 불룩해지는 구간에 빈칸이 생긴다.
@@ -185,13 +297,11 @@ const EAR_SHADE =
 
 /** 머리카락 위에 귀를 다시 그려 앞으로 빼낸다. */
 export function overlayEars(svg, skinColor) {
-  const close = svg.lastIndexOf("</svg>");
-  if (close < 0) return svg;
   const ears =
     `<g fill="${skinColor}" stroke="black" stroke-width="4">` +
     `<path d="${EAR_L}"/><path d="${EAR_R}"/></g>` +
     `<path d="${EAR_SHADE}" fill="black" fill-opacity="0.2"/>`;
-  return svg.slice(0, close) + ears + svg.slice(close);
+  return insertIntoBody(svg, ears);
 }
 
 // ── 안경 ──────────────────────────────────────────────────────────────────
@@ -227,9 +337,7 @@ export const GLASSES_OPTIONS = [
 /** 완성된 SVG 맨 위에 안경을 덧씌운다. */
 export function overlayGlasses(svg, glassesId) {
   if (!glassesId || glassesId === "none") return svg;
-  const close = svg.lastIndexOf("</svg>");
-  if (close < 0) return svg;
-  return svg.slice(0, close) + glassesSvg(glassesId) + svg.slice(close);
+  return insertIntoBody(svg, glassesSvg(glassesId));
 }
 
 /**
@@ -239,7 +347,5 @@ export function overlayGlasses(svg, glassesId) {
 export function overlayCustomHair(svg, hairId, colors) {
   const part = CUSTOM_HAIR[hairId];
   if (!part) return svg;
-  const close = svg.lastIndexOf("</svg>");
-  if (close < 0) return svg;
-  return svg.slice(0, close) + part.svg(colors) + svg.slice(close);
+  return insertIntoBody(svg, part.svg(colors));
 }

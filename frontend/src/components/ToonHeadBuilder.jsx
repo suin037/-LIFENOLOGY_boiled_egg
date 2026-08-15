@@ -1,6 +1,4 @@
 import { useMemo } from "react";
-import { createAvatar } from "@dicebear/core";
-import { toonHead } from "@dicebear/collection";
 import {
   BEARD,
   BROW_SHAPE_ITEMS,
@@ -15,18 +13,10 @@ import {
   MOUTH,
   SKIN_COLORS,
   TOONHEAD_CREDIT,
-  hairStyleById,
   randomToonHead,
-  toDicebearOptions,
 } from "../data/toonHeadOptions.js";
-import {
-  FACE_SHAPES,
-  overlayCustomHair,
-  overlayEars,
-  overlayGlasses,
-  replaceBrows,
-  replaceFaceShape,
-} from "../data/customParts.js";
+import { FACE_SHAPES } from "../data/customParts.js";
+import { avatarDataUri } from "../lib/renderAvatar.js";
 
 // toonHead 부위별 아바타 빌더. 모든 선택지는 화살표로 넘긴다.
 // 앞머리/뒷머리/수염은 "없음"을 포함하고, 나머지는 항상 하나가 선택돼 있다.
@@ -132,29 +122,7 @@ export default function ToonHeadBuilder({ config, onChange }) {
   const c = { ...DEFAULT_TOONHEAD, ...(config || {}) };
   const set = (patch) => onChange({ ...c, ...patch });
 
-  const uri = useMemo(() => {
-    const style = hairStyleById(c.hairStyle);
-    let svg = createAvatar(toonHead, {
-      seed: "me",
-      size: 200,
-      ...toDicebearOptions(c),
-    }).toString();
-
-    // 순서가 중요하다: 얼굴 → 눈 → 눈썹(모두 교체) → 커스텀 머리 → 안경(덧씌움)
-    svg = replaceFaceShape(svg, c.face);
-    svg = replaceBrows(svg, c.eyebrows, c.browThickness, "#" + c.hairColor);
-    if (style.custom) {
-      svg = overlayCustomHair(svg, style.hair, {
-        hair: "#" + c.hairColor,
-        skin: "#" + c.skinColor,
-        clothes: "#" + c.clothesColor,
-      });
-      // 커스텀 앞머리가 귀를 덮으므로 귀만 다시 위에 그려 앞으로 빼낸다.
-      svg = overlayEars(svg, "#" + c.skinColor);
-    }
-    svg = overlayGlasses(svg, c.glasses);
-    return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
-  }, [c]);
+  const uri = useMemo(() => avatarDataUri(c), [c]);
 
   return (
     <div>
