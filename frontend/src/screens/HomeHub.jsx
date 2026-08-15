@@ -7,30 +7,29 @@ import DailySuggest from "../components/DailySuggest.jsx";
 import ExpeditionBoard from "../components/ExpeditionBoard.jsx";
 import ApiStatus from "../components/ApiStatus.jsx";
 import { loadUniverse, universeSummary } from "../data/myUniverse.js";
-import { domainRumination } from "../data/diarySignals.js";
+import { domainAlerts } from "../data/diarySignals.js";
 
 // 홈 = 진입 허브. 인사 + 마스코트 + 오늘 기록 + 새 시뮬 + 나의 우주 요약.
 export default function HomeHub() {
   const navigate = useNavigate();
-  const { profile, setChoices, setScenarioTexts } = useResult();
+  const { profile, setChoices, setScenarioTexts, setScenarioDomains } = useResult();
   const universe = universeSummary();
   const [universeState, setUniverseState] = useState(loadUniverse);
-  const [rumination, setRumination] = useState(() => domainRumination({ windowDays: 28, threshold: 4 }));
+  const [alerts, setAlerts] = useState(() => domainAlerts({ windowDays: 28 }).slice(0, 3));
 
   useEffect(() => {
     const refresh = () => {
-      setRumination(domainRumination({ windowDays: 28, threshold: 4 }));
+      setAlerts(domainAlerts({ windowDays: 28 }).slice(0, 3));
       setUniverseState(loadUniverse());
     };
     window.addEventListener("pm:universe", refresh);
     return () => window.removeEventListener("pm:universe", refresh);
   }, []);
 
-  function startSuggestedCompare() {
-    if (!rumination.compare) return;
-    // 입력칸까지 채워야 넘어간 화면이 비어 보이지 않는다(choices 만 넣으면 빈 칸으로 뜬다).
-    setChoices({ a: rumination.compare.a, b: rumination.compare.b });
-    setScenarioTexts({ a: rumination.compare.a, b: rumination.compare.b });
+  function startCompare(alert) {
+    setChoices({ a: alert.choiceA, b: alert.choiceB });
+    setScenarioTexts({ a: alert.choiceA, b: alert.choiceB });
+    setScenarioDomains({ a: [alert.domain], b: [alert.domain] });
     navigate("/input");
   }
 
@@ -50,25 +49,26 @@ export default function HomeHub() {
         </section>
         <aside className="lg:flex lg:h-full lg:flex-col lg:border-l lg:border-white/[.08] lg:pb-2 lg:pl-8 lg:pt-[174px] xl:pl-10 xl:pt-[202px]">
 
-      {/* 반복 고민 넛지 — 일기에서 잡힌 '지금 비교해볼 것'이라 시뮬 버튼보다 먼저 온다.
-          버튼은 빈 시작이고, 이건 이미 이유가 있는 시작이다. */}
-      {rumination.prompt && (
+      {/* 영역별 알림 — 일기에서 문제가 드러난 영역마다 하나씩. 근거(무거웠던 날·신호 일수)를
+          카드에 그대로 적는다. 넘겨짚은 말이 아니라 기록에서 나온 말이어야 한다. */}
+      {alerts.map((alert) => (
         <button
-          onClick={startSuggestedCompare}
-          className="tap mb-4 flex w-full items-center gap-3 rounded-[18px] border border-violet-400/40 bg-[#1D1730] px-4 py-3.5 text-left transition-colors hover:bg-[#241B3C]"
+          key={alert.domain}
+          onClick={() => startCompare(alert)}
+          className="tap mt-2.5 flex w-full items-center gap-3 rounded-[18px] border border-cyan/40 bg-[#1D1730] px-4 py-3.5 text-left transition-colors hover:bg-[#16264a] lg:max-w-[560px]"
         >
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-500/15 text-violet-300">
             <GitCompareArrows size={18} strokeWidth={2} />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-[13px] font-semibold text-violet-200">
-              최근 {rumination.windowDays}일 동안 {rumination.domain.label} 이야기가 {rumination.count}일 나타났어요
+            <span className="block text-[13px] font-semibold text-cyan">
+              {alert.domainLabel} · 최근 {alert.windowDays}일 {alert.reason}
             </span>
-            <span className="block text-[11px] text-sub">{rumination.compare.action}, 지금 비교해볼까요? · 키워드 기반</span>
+            <span className="block text-[11px] text-sub">{alert.ask}</span>
           </span>
           <ChevronRight size={18} className="text-violet-400" />
         </button>
-      )}
+      ))}
 
       {/* 나의 우주 요약 */}
       <div className="mb-2 mt-4 flex items-center justify-between px-1 lg:mt-0">
