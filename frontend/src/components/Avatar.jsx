@@ -1,22 +1,10 @@
-import NiceAvatar from "react-nice-avatar";
+import { avatarDataUri } from "../lib/renderAvatar.js";
 import { normalizeAvatar } from "../data/avatarOptions.js";
 
-export function AvatarVisual({ config, size = 96 }) {
-  const c = normalizeAvatar(config);
-  const showLeft = c.earringStyle === "double";
-  const showRight = c.earringStyle === "single" || c.earringStyle === "double";
-  const jewel = (side) => <span aria-hidden="true" style={{
-    position: "absolute", top: "58%", [side]: "11%", width: "7%", height: "10%",
-    borderRadius: "999px", border: `${Math.max(1, size * .012)}px solid rgba(255,255,255,.8)`,
-    background: c.earringColor, boxShadow: `0 0 ${Math.max(3, size * .04)}px ${c.earringColor}`,
-  }} />;
-  return <div style={{ position:"relative", width:size, height:size }}>
-    <NiceAvatar style={{ width: `${size}px`, height: `${size}px` }} {...c} shape="circle" />
-    {showLeft && jewel("left")}{showRight && jewel("right")}
-  </div>;
-}
-
+// 기존 화면들이 쓰던 그대로의 API: <Avatar config={...} size={96} ring />
+// 속을 react-nice-avatar 에서 toonHead 로 갈아끼운 것뿐이라 호출부는 손댈 필요가 없다.
 export default function Avatar({ config, size = 96, ring = true }) {
+  const c = normalizeAvatar(config);
   return (
     <div
       style={{
@@ -25,10 +13,16 @@ export default function Avatar({ config, size = 96, ring = true }) {
         borderRadius: "50%",
         overflow: "hidden",
         flexShrink: 0,
-        boxShadow: ring ? "0 0 0 2px rgba(76,145,255,0.45)" : "none",
+        boxShadow: ring ? "0 0 0 2px rgba(139,108,207,0.45)" : "none",
       }}
     >
-      <AvatarVisual config={config} size={size} />
+      <img
+        src={avatarDataUri(c, { size })}
+        alt=""
+        width={size}
+        height={size}
+        style={{ display: "block", width: "100%", height: "100%" }}
+      />
     </div>
   );
 }
