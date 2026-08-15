@@ -22,7 +22,7 @@ const DEFAULT_PROFILE = {
   sex: "2",
   major: "사회", // 전공 계열
   occupation: "사회계열",
-  income: 280, // 만원/월 → 백엔드 monthly_wage
+  income: null, // 온보딩에서 직접 입력 → 백엔드 monthly_wage
   edu_level: 7, // 대졸
   occupation_group: null, // KSCO 직종 대분류 1~9 — 이직 시뮬레이션에서 수집
   employment_status: null, // KLIPS 종사상지위 1~5
@@ -40,6 +40,7 @@ export function ResultProvider({ children }) {
   const [choices, setChoices] = useState({ a: "이직", b: "유지" });
   const [scenarioTexts, setScenarioTexts] = useState({ a: "", b: "" });
   const [scenarioDomains, setScenarioDomains] = useState({ a: [], b: [] });
+  const [scenarioContexts, setScenarioContexts] = useState({ a: {}, b: {} });
   const [diary, setDiary] = useState("");
   const [result, setResult] = useState(() =>
     ({ ...getPredictionPair({ profile: DEFAULT_PROFILE, choiceA: "이직", choiceB: "유지" }), dataMode: "demo" }),
@@ -74,6 +75,8 @@ export function ResultProvider({ children }) {
       choiceBDetail: opts.choiceBDetail ?? scenarioTexts.b,
       choiceADomains: opts.choiceADomains ?? scenarioDomains.a,
       choiceBDomains: opts.choiceBDomains ?? scenarioDomains.b,
+      choiceAContext: opts.choiceAContext ?? scenarioContexts.a,
+      choiceBContext: opts.choiceBContext ?? scenarioContexts.b,
       diary: currentDiary,
     };
     let preview;
@@ -197,11 +200,12 @@ export function ResultProvider({ children }) {
       choices, setChoices,
       scenarioTexts, setScenarioTexts,
       scenarioDomains, setScenarioDomains,
+      scenarioContexts, setScenarioContexts,
       diary, setDiary,
       result, setResult,
       runSimulation, retryVisuals, onboarded, setOnboarded,
     }),
-    [profile, choices, scenarioTexts, scenarioDomains, diary, result, onboarded],
+    [profile, choices, scenarioTexts, scenarioDomains, scenarioContexts, diary, result, onboarded],
   );
 
   return <ResultContext.Provider value={value}>{children}</ResultContext.Provider>;

@@ -133,8 +133,10 @@ export function mapSimulateToPair(sim, { choiceA, choiceB, detailA = "", detailB
   const vp = cmp.validated_predictions || sim.validated_predictions || {};
   const ie = cmp.indicator_evidence || sim.indicator_evidence || {};
   const ke = cmp.koweps_evidence || sim.koweps_evidence || null;
-  const a = buildSide(A, choiceA, detailA, profile, ev.A, dc.A, ds.A, vp.A, ie.A, ke, "A");
-  const b = buildSide(B, choiceB, detailB, profile, ev.B, dc.B, ds.B, vp.B, ie.B, ke, "B");
+  const keA = ke?.comparison_mode === "independent_events" ? ke.side_evidence?.A : ke;
+  const keB = ke?.comparison_mode === "independent_events" ? ke.side_evidence?.B : ke;
+  const a = buildSide(A, choiceA, detailA, profile, ev.A, dc.A, ds.A, vp.A, ie.A, keA, "A");
+  const b = buildSide(B, choiceB, detailB, profile, ev.B, dc.B, ds.B, vp.B, ie.B, keB, "B");
   // 장기 가치는 별도 미래점수가 아니라 어떤 결과를 먼저 읽을지 정하는 개인화 축이다.
   // /compare 미리보기에는 없고 /simulate 최종 응답부터 적용된다.
   a.personalization = sim.personalization || null;

@@ -48,7 +48,15 @@ function unitOf(outcome) {
 }
 
 export default function KowepsTrajectoryView({ a, b }) {
-  const evidence = a.koweps_evidence || b.koweps_evidence;
+  const evidenceA = a.koweps_evidence;
+  const evidenceB = b.koweps_evidence;
+  if (evidenceA?.available && evidenceB?.available && evidenceA.scenario !== evidenceB.scenario) {
+    return <div className="space-y-3">
+      <IndependentTrajectory evidence={evidenceA} tag="A" choice={a.choice} />
+      <IndependentTrajectory evidence={evidenceB} tag="B" choice={b.choice} />
+    </div>;
+  }
+  const evidence = evidenceA || evidenceB;
   if (!evidence?.available) return null;
   const matched = evidence.evidence_level === "personalized_matched_observation";
   const outcomes = priorityFor(evidence.scenario).map((key) => evidence.outcomes?.find((o) => o.key === key)).filter(Boolean);
@@ -91,8 +99,43 @@ export default function KowepsTrajectoryView({ a, b }) {
   );
 }
 
+function IndependentTrajectory({ evidence, tag, choice }) {
+  const outcomes = priorityFor(evidence.scenario)
+    .map((key) => evidence.outcomes?.find((outcome) => outcome.key === key)).filter(Boolean);
+  return <Card>
+    <div className="flex items-start justify-between gap-3">
+      <div><h2 className="text-base font-semibold">{tag} · {choice}</h2><Caption>{evidence.label} · 이 선택의 미발생 유사집단과 비교</Caption></div>
+      <span className="shrink-0 rounded-full bg-violet-500/10 px-2 py-1 text-[9px] font-semibold text-violet-300">독립 기준선</span>
+    </div>
+    <div className="mt-4 grid gap-3 lg:grid-cols-3">
+      {outcomes.map((outcome) => {
+        const rows = (outcome.trajectory || []).map((point) => ({
+          wave: `${point.wave}차 후`, selected: value(point.event), baseline: value(point.comparison),
+          selectedN: point.event?.n, baselineN: point.comparison?.n,
+        }));
+        return <div key={outcome.key} className="rounded-xl border border-line bg-[#0E1424] p-3">
+          <div className="flex items-center justify-between text-[11px]"><span className="font-semibold text-ink">{LABELS[outcome.key] || outcome.key}</span><span className="text-mut">{unitOf(outcome)}</span></div>
+          <div className="mt-2 h-32"><ResponsiveContainer width="100%" height="100%"><LineChart data={rows} margin={{ top: 5, right: 8, left: -18, bottom: 0 }}>
+            <XAxis dataKey="wave" tick={{ fill: "#7F8AA3", fontSize: 9 }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fill: "#7F8AA3", fontSize: 9 }} axisLine={false} tickLine={false} domain={["auto", "auto"]} />
+            <Tooltip contentStyle={{ background: "#11182A", border: "1px solid #28324A", borderRadius: 10, fontSize: 11 }} />
+            <Line type="monotone" dataKey="selected" name={`${tag} 선택 관측`} stroke="#9B7AE5" strokeWidth={2.2} dot={{ r: 2.5 }} connectNulls />
+            <Line type="monotone" dataKey="baseline" name="미발생 유사집단" stroke="#7B879D" strokeWidth={1.6} strokeDasharray="4 3" dot={{ r: 2 }} connectNulls />
+          </LineChart></ResponsiveContainer></div>
+        </div>;
+      })}
+    </div>
+    <Caption>A와 B를 서로의 대조군으로 간주하지 않았습니다. 각 선택을 해당 사건이 발생하지 않은 유사 조건 집단과 따로 비교합니다.</Caption>
+  </Card>;
+}
+
 export function KowepsDetailView({ a, b }) {
-  const evidence = a.koweps_evidence || b.koweps_evidence;
+  const evidenceA = a.koweps_evidence;
+  const evidenceB = b.koweps_evidence;
+  if (evidenceA?.available && evidenceB?.available && evidenceA.scenario !== evidenceB.scenario) {
+    return <div className="space-y-3"><IndependentDetail tag="A" choice={a.choice} evidence={evidenceA} /><IndependentDetail tag="B" choice={b.choice} evidence={evidenceB} /></div>;
+  }
+  const evidence = evidenceA || evidenceB;
   if (!evidence?.available) return null;
   const selectedKeys = priorityFor(evidence.scenario);
   const shown = selectedKeys.map((key) => evidence.outcomes?.find((o) => o.key === key)).filter(Boolean);
@@ -119,6 +162,18 @@ export function KowepsDetailView({ a, b }) {
       <Caption>{matching.score_definition || evidence.claim_limit || "집단 관측 비교이며 개인 예측 또는 인과효과가 아닙니다."}</Caption>
     </Card>
   );
+}
+
+function IndependentDetail({ tag, choice, evidence }) {
+  const matching = evidence.personalization || {};
+  return <Card>
+    <p className="text-[11px] font-bold text-violet-300">{tag} · {choice} 비교 집단</p>
+    <div className="mt-2 grid grid-cols-2 gap-2">
+      <Sample label={`${tag} · ${choice}`} value={matching.event_sample_n || evidence.event_people} note="사건 발생군" />
+      <Sample label="이 선택의 기준선" value={matching.comparison_sample_n || evidence.comparison_people} note="미발생 유사집단" />
+    </div>
+    {matching.applied_features?.length > 0 && <Caption>개인화 조건: {matching.applied_features.join(" · ")}</Caption>}
+  </Card>;
 }
 
 function Sample({ label, value: count, note }) {

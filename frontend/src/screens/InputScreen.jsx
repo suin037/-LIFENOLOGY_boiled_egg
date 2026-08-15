@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useResult } from "../data/ResultContext.jsx";
-import { LIFE_DOMAINS, classifyChoice, detectLifeDomains, domainLabel, labelOf } from "../data/choices.js";
+import { LIFE_DOMAINS, detectLifeDomains, domainLabel, suggestComparePrompts } from "../data/choices.js";
 import { detectEmotions } from "../data/DiaryContext.jsx";
 import { domainRumination } from "../data/diarySignals.js";
+import { DOMAIN_OUTCOMES, questionsForChoice } from "../data/scenarioIntake.js";
 import { Caption } from "../components/ui.jsx";
 import Mascot from "../components/Mascot.jsx";
 import { BriefcaseBusiness, GraduationCap, Sprout, Wallet, HeartPulse, House, Users, Leaf, Compass, ArrowRight, GitCompareArrows } from "lucide-react";
@@ -13,10 +14,6 @@ const DOMAIN_ICONS = {
   career: BriefcaseBusiness, education: GraduationCap, business: Sprout,
   finance: Wallet, health: HeartPulse, housing: House,
   relationship: Users, lifestyle: Leaf, long_term_values: Compass,
-};
-const SUGGESTIONS = {
-  a: ["더 큰 회사로 이직하기", "대학원에 진학하기", "창업 준비 시작하기"],
-  b: ["현재 회사에 남기", "다른 직무를 준비하기", "잠시 쉬어가기"],
 };
 const OCCUPATION_GROUPS = [
   [1, "관리자"], [2, "전문가·관련 종사자"], [3, "사무 종사자"],
@@ -37,6 +34,7 @@ export default function InputScreen() {
   const {
     profile, setProfile, choices, setChoices,
     scenarioTexts, setScenarioTexts, scenarioDomains, setScenarioDomains,
+    scenarioContexts, setScenarioContexts,
     diary, setDiary,
   } = useResult();
   const textA = scenarioTexts.a;
@@ -55,7 +53,7 @@ export default function InputScreen() {
     if (!rumination.compare) return;
     const next = { a: rumination.compare.a, b: rumination.compare.b };
     setScenarioTexts(next);
-    setChoices({ a: classifyChoice(next.a) || "기타", b: classifyChoice(next.b) || "기타" });
+    setChoices(next);
     setScenarioDomains({ a: [rumination.domain.key], b: [rumination.domain.key] });
     setDomainAuto({ a: true, b: true });
     setFocused("a");
@@ -64,7 +62,7 @@ export default function InputScreen() {
   function onText(side, value) {
     const field = side.toLowerCase();
     setScenarioTexts((prev) => ({ ...prev, [field]: value }));
-    setChoices((prev) => ({ ...prev, [field]: classifyChoice(value) || "기타" }));
+    setChoices((prev) => ({ ...prev, [field]: value.trim() || prev[field] }));
     if (domainAuto[field]) {
       setScenarioDomains((prev) => ({ ...prev, [field]: detectLifeDomains(value) }));
     }
@@ -94,27 +92,35 @@ export default function InputScreen() {
 
   const normalizedA = textA.trim().replace(/\s+/g, " ");
   const normalizedB = textB.trim().replace(/\s+/g, " ");
-  const sameCategory = Boolean(normalizedA && normalizedB && choices.a === choices.b);
-  const duplicate = sameCategory && normalizedA === normalizedB;
+  const duplicate = Boolean(normalizedA && normalizedB && normalizedA === normalizedB);
+  const sameCategory = Boolean(normalizedA && normalizedB && !duplicate && scenarioDomains.a.some((key) => scenarioDomains.b.includes(key)));
   const missingDomains = Boolean(normalizedA && normalizedB && (!scenarioDomains.a.length || !scenarioDomains.b.length));
-  const needJobDetails = choices.a === "이직" || choices.b === "이직";
+  const needJobDetails = scenarioDomains.a.includes("career") || scenarioDomains.b.includes("career");
   // 직업정보가 없으면 전체 유사 집단으로 자동 완화한다. 입력 화면 진행을 막지는 않는다.
   const jobDetailsMissing = needJobDetails && profile.occupation_group == null;
   const blocked = !normalizedA || !normalizedB || duplicate;
-  const needMajor = choices.a === "진학" || choices.b === "진학";
+  const needMajor = scenarioDomains.a.includes("education") || scenarioDomains.b.includes("education");
   const emotions = detectEmotions(`${diary} ${textA} ${textB}`);
   const completed = Number(Boolean(normalizedA)) + Number(Boolean(normalizedB));
+  const intakeA = questionsForChoice(textA, scenarioDomains.a);
+  const intakeB = questionsForChoice(textB, scenarioDomains.b);
+
+  function updateContext(side, intake, key, value) {
+    const field = side.toLowerCase();
+    setScenarioContexts((prev) => ({
+      ...prev,
+      [field]: { event: intake.event, event_label: intake.eventLabel, domain: intake.domain, answers: { ...(prev[field]?.answers || {}), [key]: value } },
+    }));
+  }
 
   function startComparison() {
-    const fallback = (choice) => {
-      if (["이직", "유지"].includes(choice)) return ["career"];
-      if (choice === "진학") return ["education"];
-      if (choice === "창업") return ["business"];
-      return ["long_term_values"];
-    };
+    setScenarioContexts((prev) => ({
+      a: { event: intakeA.event, event_label: intakeA.eventLabel, domain: intakeA.domain, answers: prev.a?.answers || {} },
+      b: { event: intakeB.event, event_label: intakeB.eventLabel, domain: intakeB.domain, answers: prev.b?.answers || {} },
+    }));
     setScenarioDomains((prev) => ({
-      a: prev.a?.length ? prev.a : fallback(choices.a),
-      b: prev.b?.length ? prev.b : fallback(choices.b),
+      a: prev.a?.length ? prev.a : ["long_term_values"],
+      b: prev.b?.length ? prev.b : ["long_term_values"],
     }));
     navigate("/simulate");
   }
@@ -149,7 +155,8 @@ export default function InputScreen() {
       <div className="relative mt-3 flex min-h-[400px] flex-col overflow-hidden rounded-[24px] border border-white/10 bg-[#08111F]/70 shadow-[0_20px_50px_rgba(0,0,0,.32)] lg:mt-6 lg:min-h-[430px] lg:flex-row lg:rounded-[30px]">
         <ChoicePanel
           side="A" text={textA} domains={scenarioDomains.a} domainAuto={domainAuto.a}
-          active={focused === "a"} suggestions={SUGGESTIONS.a}
+          active={focused === "a"} suggestions={suggestComparePrompts({ side: "a", recentDomains: rumination.domains, valueRanking: profile.value_ranking, otherText: textB })}
+          suggestionLabel="이런 식으로 시작할 수 있어요"
           onFocus={() => setFocused("a")} onText={(value) => onText("A", value)}
           onSuggestion={(value) => chooseSuggestion("a", value)}
           onDomain={(key) => toggleDomain("A", key)} onRedetect={() => resetDomainDetection("A")}
@@ -163,7 +170,8 @@ export default function InputScreen() {
 
         <ChoicePanel
           side="B" text={textB} domains={scenarioDomains.b} domainAuto={domainAuto.b}
-          active={focused === "b"} suggestions={SUGGESTIONS.b}
+          active={focused === "b"} suggestions={suggestComparePrompts({ side: "b", recentDomains: rumination.domains, valueRanking: profile.value_ranking, otherText: textA })}
+          suggestionLabel={textA.trim() ? "A와 비교할 수 있는 다른 길이에요" : "이런 식으로 시작할 수 있어요"}
           onFocus={() => setFocused("b")} onText={(value) => onText("B", value)}
           onSuggestion={(value) => chooseSuggestion("b", value)}
           onDomain={(key) => toggleDomain("B", key)} onRedetect={() => resetDomainDetection("B")}
@@ -227,6 +235,17 @@ export default function InputScreen() {
         </div>
       )}
 
+      {normalizedA && normalizedB && (
+        <section className="mt-4 rounded-[22px] border border-violet-400/25 bg-[#121126]/90 p-4">
+          <div className="text-[13px] font-bold text-ink">선택별 조건을 조금만 더 알려주세요</div>
+          <p className="mt-1 text-[10px] leading-4 text-mut">영역마다 공통 질문을 사용하고, 구체 사건이 확인되면 필요한 조건만 추가합니다. 비워도 비교는 가능하지만 유사집단 범위가 넓어집니다.</p>
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            <IntakePanel side="A" intake={intakeA} context={scenarioContexts.a} onChange={(key, value) => updateContext("a", intakeA, key, value)} />
+            <IntakePanel side="B" intake={intakeB} context={scenarioContexts.b} onChange={(key, value) => updateContext("b", intakeB, key, value)} />
+          </div>
+        </section>
+      )}
+
       <details className="mt-3 rounded-2xl border border-white/10 bg-[#0B1423]/80 px-3.5 py-3">
         <summary className="cursor-pointer text-[11px] font-semibold text-sub">지금 심정도 덧붙이기 · 선택</summary>
         <input value={diary} onChange={(event) => setDiary(event.target.value)} placeholder="왜 이 선택이 망설여지는지 한 줄로 적어보세요" className="mt-3 w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-xs text-ink outline-none focus:border-cyan" />
@@ -240,6 +259,19 @@ export default function InputScreen() {
   );
 }
 
+function IntakePanel({ side, intake, context, onChange }) {
+  const color = side === "A" ? "#9B72F2" : "#F39A4A";
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/15 p-3">
+      <div className="flex items-center justify-between gap-2"><b className="text-[11px]" style={{ color }}>선택 {side}</b><span className="rounded-full bg-white/[.06] px-2 py-1 text-[9px] text-sub">{intake.eventLabel}</span></div>
+      <div className="mt-3 space-y-3">
+        {intake.questions.map((question) => <label key={question.key} className="block"><span className="mb-1 block text-[10px] text-sub">{question.label}</span><input value={context?.answers?.[question.key] || ""} onChange={(event) => onChange(question.key, event.target.value)} placeholder={question.placeholder} className="w-full rounded-xl border border-line bg-[#0E1424] px-3 py-2.5 text-[11px] text-ink outline-none placeholder:text-mut focus:border-violet-400" /></label>)}
+      </div>
+      <div className="mt-3 border-t border-white/10 pt-2 text-[9px] leading-4 text-mut">결과 변수 · {(DOMAIN_OUTCOMES[intake.domain] || []).join(" / ")}</div>
+    </div>
+  );
+}
+
 function JobField({ label, children }) {
   return (
     <label className="block">
@@ -249,7 +281,7 @@ function JobField({ label, children }) {
   );
 }
 
-function ChoicePanel({ side, text, domains, domainAuto, active, suggestions, onFocus, onText, onSuggestion, onDomain, onRedetect }) {
+function ChoicePanel({ side, text, domains, domainAuto, active, suggestions, suggestionLabel, onFocus, onText, onSuggestion, onDomain, onRedetect }) {
   const [editingDomains, setEditingDomains] = useState(false);
   const isA = side === "A";
   const accentText = isA ? "text-[#8B6CCF]" : "text-[#FFB85C]";
@@ -261,9 +293,9 @@ function ChoicePanel({ side, text, domains, domainAuto, active, suggestions, onF
 
       {!text.trim() && active && (
         <div className="mt-3 min-w-0 overflow-hidden">
-          <div className="mb-2 text-[10px] text-mut">이런 식으로 시작할 수 있어요</div>
+          <div className="mb-2 text-[10px] text-mut">{suggestionLabel}</div>
           <div className="flex min-w-0 flex-wrap gap-1.5">
-            {suggestions.map((item) => <button key={item} type="button" onClick={(event) => { event.stopPropagation(); onSuggestion(item); }} className={`tap max-w-full truncate rounded-full border border-white/10 bg-white/[.06] px-2.5 py-1.5 text-[10px] ${accentText}`}>{item}</button>)}
+            {suggestions.map((item) => <button key={item.key} type="button" onClick={(event) => { event.stopPropagation(); onSuggestion(item.text); }} className={`tap max-w-full truncate rounded-full border border-white/10 bg-white/[.06] px-2.5 py-1.5 text-[10px] ${accentText}`}>{item.text}</button>)}
           </div>
         </div>
       )}

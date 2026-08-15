@@ -33,7 +33,9 @@ function DomainStats({ a, b }) {
   const sides = [["A", a], ["B", b]];
   const rows = [];
   for (const [tag, s] of sides) {
-    for (const dom of Object.values(s.domain_stats || {})) rows.push({ tag, ...dom });
+    for (const dom of Object.values(s.domain_stats || {})) {
+      if (dom.status === "available" && dom.indicators?.length) rows.push({ tag, ...dom });
+    }
   }
   if (!rows.length) return null;
   return (

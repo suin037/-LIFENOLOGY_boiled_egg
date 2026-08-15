@@ -1,67 +1,33 @@
+import { useState } from "react";
 import Avatar from "./Avatar.jsx";
-import {
-  HAIR_PRESETS, FACE_PRESETS, ACC_PRESETS, OUTFIT_PRESETS, BG_COLORS,
-  normalizeAvatar,
-} from "../data/avatarOptions.js";
+import { BG_COLORS, EAR_SIZES, EYE_STYLES, GLASSES_STYLES, HAIR_COLORS, HAIR_STYLES, HAT_COLORS, HAT_STYLES, MOUTH_STYLES, NOSE_STYLES, SHIRT_COLORS, SHIRT_STYLES, SKIN_COLORS, normalizeAvatar } from "../data/avatarOptions.js";
 
-function Arrow({ dir, onClick }) {
-  return (
-    <button type="button" onClick={onClick} aria-label={dir < 0 ? "이전" : "다음"}
-      className="tap flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-violet-400/25 bg-violet-500/10 text-[16px] text-violet-400 active:scale-95">
-      {dir < 0 ? "‹" : "›"}
-    </button>
-  );
+const CATEGORIES = [["hair", "헤어"], ["face", "얼굴"], ["accessory", "액세서리"], ["outfit", "의상"], ["background", "배경"]];
+
+function Options({ label, options, value, onPick, color = false }) {
+  return <div className="mt-4"><p className="mb-2 text-[11px] font-semibold text-sub">{label}</p><div className="flex flex-wrap gap-2">{options.map(([name, option, extra]) => {
+    const active = value === (extra ? `${option}:${extra}` : option);
+    return <button type="button" key={`${name}-${option}`} onClick={() => onPick(option, extra)} title={name} className={`tap !min-h-0 flex h-9 items-center gap-2 rounded-xl border px-3 text-[11px] transition-colors ${active ? "border-violet-400 bg-violet-500/20 text-violet-200" : "border-line bg-[#0B1423] text-sub hover:border-violet-400/40"}`}>{color && <span className="h-4 w-4 rounded-full border border-white/15" style={{ background: option }} />}{name}</button>;
+  })}</div></div>;
 }
 
-function PresetStepper({ label, presets, config, onChange }) {
-  let i = presets.findIndex((p) => Object.entries(p.cfg).every(([k, v]) => config[k] === v));
-  if (i < 0) i = 0;
-  const cur = presets[i];
-  const go = (d) => onChange({ ...config, ...presets[(i + d + presets.length) % presets.length].cfg });
-  return (
-    <div className="mt-2.5 flex items-center gap-2 rounded-2xl border border-line bg-[#0B1423] px-3 py-2">
-      <div className="w-14 shrink-0 text-[12px] font-semibold text-sub">{label}</div>
-      <Arrow dir={-1} onClick={() => go(-1)} />
-      <div className="flex-1 text-center">
-        <div className="text-[12px] font-medium text-ink">{cur.label}</div>
-        <div className="text-[9px] text-mut">{i + 1} / {presets.length}</div>
-      </div>
-      <Arrow dir={1} onClick={() => go(1)} />
-    </div>
-  );
-}
-
-function ColorStepper({ label, colors, value, onChange }) {
-  let i = colors.indexOf(value);
-  if (i < 0) i = 0;
-  const go = (d) => onChange(colors[(i + d + colors.length) % colors.length]);
-  return (
-    <div className="mt-2.5 flex items-center gap-2 rounded-2xl border border-line bg-[#0B1423] px-3 py-2">
-      <div className="w-14 shrink-0 text-[12px] font-semibold text-sub">{label}</div>
-      <Arrow dir={-1} onClick={() => go(-1)} />
-      <div className="flex flex-1 items-center justify-center gap-2">
-        <span className="h-6 w-6 rounded-full border border-line" style={{ background: colors[i] }} />
-        <span className="text-[9px] text-mut">{i + 1} / {colors.length}</span>
-      </div>
-      <Arrow dir={1} onClick={() => go(1)} />
-    </div>
-  );
+function ColorOptions({ label, options, value, onPick }) {
+  return <Options label={label} options={options} value={value} onPick={onPick} color />;
 }
 
 export default function AvatarBuilder({ config, onChange }) {
   const c = normalizeAvatar(config);
-  return (
-    <div>
-      <div className="mb-3 flex flex-col items-center">
-        <Avatar config={c} size={132} />
-        <p className="mt-2 text-[10px] text-mut">화살표로 넘겨 나만의 아바타를 만들어보세요.</p>
-      </div>
-      <PresetStepper label="머리" presets={HAIR_PRESETS} config={c} onChange={onChange} />
-      <PresetStepper label="얼굴" presets={FACE_PRESETS} config={c} onChange={onChange} />
-      <PresetStepper label="액세서리" presets={ACC_PRESETS} config={c} onChange={onChange} />
-      <PresetStepper label="의상" presets={OUTFIT_PRESETS} config={c} onChange={onChange} />
-      <ColorStepper label="배경" colors={BG_COLORS} value={c.bgColor}
-        onChange={(v) => onChange({ ...c, bgColor: v })} />
+  const [category, setCategory] = useState("hair");
+  const patch = (next) => onChange({ ...c, ...next });
+  return <div className="lg:grid lg:grid-cols-[180px_minmax(0,1fr)] lg:gap-6">
+    <div className="flex flex-col items-center"><Avatar config={c} size={148} /><p className="mt-3 text-center text-[10px] leading-relaxed text-mut">카테고리를 고른 뒤 원하는 옵션을 바로 선택하세요.</p></div>
+    <div className="min-w-0">
+      <div className="no-scrollbar mt-4 flex gap-1.5 overflow-x-auto lg:mt-0">{CATEGORIES.map(([key,label])=><button type="button" key={key} onClick={()=>setCategory(key)} className={`tap !min-h-0 shrink-0 rounded-full px-3 py-2 text-[11px] font-semibold ${category===key?"bg-violet-500/25 text-violet-200":"bg-white/[.04] text-mut"}`}>{label}</button>)}</div>
+      {category === "hair" && <><Options label="헤어스타일" options={HAIR_STYLES} value={`${c.hairStyle}:${c.sex}`} onPick={(style,sex)=>patch({hairStyle:style,sex,eyeBrowStyle:sex==="woman"?"upWoman":"up"})} /><ColorOptions label="헤어 색상" options={HAIR_COLORS} value={c.hairColor} onPick={(hairColor)=>patch({hairColor})} /></>}
+      {category === "face" && <><ColorOptions label="피부색" options={SKIN_COLORS} value={c.faceColor} onPick={(faceColor)=>patch({faceColor})} /><Options label="눈" options={EYE_STYLES} value={c.eyeStyle} onPick={(eyeStyle)=>patch({eyeStyle})} /><Options label="입" options={MOUTH_STYLES} value={c.mouthStyle} onPick={(mouthStyle)=>patch({mouthStyle})} /><Options label="코" options={NOSE_STYLES} value={c.noseStyle} onPick={(noseStyle)=>patch({noseStyle})} /><Options label="귀" options={EAR_SIZES} value={c.earSize} onPick={(earSize)=>patch({earSize})} /></>}
+      {category === "accessory" && <><Options label="안경" options={GLASSES_STYLES} value={c.glassesStyle} onPick={(glassesStyle)=>patch({glassesStyle})} /><Options label="모자" options={HAT_STYLES} value={c.hatStyle} onPick={(hatStyle)=>patch({hatStyle})} />{c.hatStyle!=="none"&&<ColorOptions label="모자 색상" options={HAT_COLORS} value={c.hatColor} onPick={(hatColor)=>patch({hatColor})} />}</>}
+      {category === "outfit" && <><Options label="의상 종류" options={SHIRT_STYLES} value={c.shirtStyle} onPick={(shirtStyle)=>patch({shirtStyle})} /><ColorOptions label="의상 색상" options={SHIRT_COLORS} value={c.shirtColor} onPick={(shirtColor)=>patch({shirtColor})} /></>}
+      {category === "background" && <><ColorOptions label="배경색" options={BG_COLORS.map((v,i)=>[`색상 ${i+1}`,v])} value={c.bgColor} onPick={(bgColor)=>patch({bgColor})} /><Options label="배경 효과" options={[["단색",false],["그라데이션",true]]} value={Boolean(c.isGradient)} onPick={(isGradient)=>patch({isGradient})} /></>}
     </div>
-  );
+  </div>;
 }

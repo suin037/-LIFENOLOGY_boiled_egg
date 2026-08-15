@@ -5,7 +5,9 @@
 
 import { buildDisposition } from "./data/psychQuestions.js";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://127.0.0.1:8000";
+// 기본은 Vite의 same-origin /api 프록시. 외부 임시 터널에서도 프론트 URL
+// 하나만 열면 되며, 배포 API가 따로 있을 때만 VITE_API_BASE로 덮어쓴다.
+const API_BASE = import.meta.env.VITE_API_BASE || "/api";
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const availPts = (arr) => (arr || []).filter((p) => p && p.available);
@@ -128,13 +130,13 @@ export function mapSimulateToResult(sim) {
   };
 }
 
-function buildSimulateBody({ profile, choiceA, choiceB, choiceADetail, choiceBDetail, choiceADomains, choiceBDomains, diary }) {
+function buildSimulateBody({ profile, choiceA, choiceB, choiceADetail, choiceBDetail, choiceADomains, choiceBDomains, choiceAContext, choiceBContext, diary }) {
   const body = {
     profile: {
       age: profile.age,
       sex: profile.sex || "1",
       major: profile.major || profile.occupation || "공학",
-      monthly_wage: profile.income ?? profile.monthly_wage ?? null,
+      monthly_wage: Number(profile.income ?? profile.monthly_wage) > 0 ? Number(profile.income ?? profile.monthly_wage) : null,
       edu_level: profile.edu_level ?? 7,
       occupation_group: profile.occupation_group ?? null,
       employment_status: profile.employment_status ?? null,
@@ -147,11 +149,14 @@ function buildSimulateBody({ profile, choiceA, choiceB, choiceADetail, choiceBDe
     choice_a: choiceA,
     choice_b: choiceB,
   };
+  if (profile.value_ranking?.length) body.value_ranking = profile.value_ranking;
   if (choiceADetail?.trim()) body.choice_a_detail = choiceADetail.trim();
   if (choiceBDetail?.trim()) body.choice_b_detail = choiceBDetail.trim();
   // 새 삶의 영역 계약용 필드. 현재 백엔드는 extra 필드를 무시하므로 기존 API와 호환된다.
   if (choiceADomains?.length) body.choice_a_domains = choiceADomains;
   if (choiceBDomains?.length) body.choice_b_domains = choiceBDomains;
+  if (choiceAContext?.event) body.choice_a_context = choiceAContext;
+  if (choiceBContext?.event) body.choice_b_context = choiceBContext;
   if (diary) body.diary = diary;
 
   // 심리 성향 서술(MBTI + 서술형 답변) → disposition_block + 답변 수(확신도).
@@ -191,6 +196,8 @@ export async function runCompareRaw(args) {
       // 삶의 영역(항목3·4) — /compare 도 영역지표·근거수준·그래프 가드를 반환하도록 함께 전송
       ...(body.choice_a_domains ? { choice_a_domains: body.choice_a_domains } : {}),
       ...(body.choice_b_domains ? { choice_b_domains: body.choice_b_domains } : {}),
+      ...(body.choice_a_context ? { choice_a_context: body.choice_a_context } : {}),
+      ...(body.choice_b_context ? { choice_b_context: body.choice_b_context } : {}),
     }),
   });
   if (!res.ok) throw new Error(`compare ${res.status}`);

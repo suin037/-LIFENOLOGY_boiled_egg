@@ -20,12 +20,94 @@ export const LIFE_DOMAINS = [
   { key: "long_term_values", label: "장기 가치", emoji: "🧭", color: "#F5C86B", keywords: ["가치", "의미", "목표", "성장", "안정", "꿈", "미래", "자율", "보람", "장기"] },
 ];
 
+const COMPARE_PROMPTS = {
+  career: { a: "새로운 회사나 역할로 옮기기", b: "현재 자리에서 조건을 조정해보기" },
+  education: { a: "새로운 공부나 교육을 시작하기", b: "지금 방식으로 경험을 더 쌓기" },
+  business: { a: "작게라도 내 일을 시작해보기", b: "준비 기간을 두고 가능성을 확인하기" },
+  finance: { a: "수입을 늘리는 선택에 집중하기", b: "지출과 위험을 줄여 안정부터 만들기" },
+  health: { a: "치료나 회복을 우선하는 생활로 바꾸기", b: "현재 일상을 유지하며 작은 습관부터 바꾸기" },
+  housing: { a: "새로운 지역이나 집으로 이사하기", b: "현재 거주지를 유지하며 조건을 개선하기" },
+  relationship: { a: "관계에 변화를 주고 솔직하게 대화하기", b: "잠시 거리를 두고 내 마음을 살펴보기" },
+  lifestyle: { a: "일과 생활의 균형을 크게 바꾸기", b: "지금 생활에서 작은 변화를 시험해보기" },
+  long_term_values: { a: "지금 중요하게 느끼는 방향을 선택하기", b: "장기적인 안정과 가능성을 더 확인하기" },
+};
+
+// A에 적은 길과 같은 문제를 다른 방식으로 풀 수 있는 B 후보들.
+// 영역마다 하나만 보여주던 기존 방식과 달리, 같은 맥락 안에서 유지·조정·유예·시험을 비교한다.
+const RELATED_ALTERNATIVES = {
+  career: ["현재 직장에 남아 조건을 조정하기", "회사 안에서 직무나 팀을 바꿔보기", "이직을 미루고 필요한 역량부터 준비하기", "휴직이나 근무 형태 변경을 먼저 알아보기"],
+  education: ["현업을 유지하며 공부를 병행하기", "진학을 미루고 단기 과정부터 들어보기", "학위 대신 실무 경험과 자격을 쌓기", "관심 분야 수업 하나로 먼저 시험해보기"],
+  business: ["직장을 유지하며 사이드 프로젝트로 시험하기", "준비 기간을 두고 고객 반응부터 확인하기", "혼자 시작하지 않고 협업할 사람을 찾아보기", "창업 대신 관련 회사에서 경험을 쌓기"],
+  finance: ["수입 확대보다 지출과 위험을 먼저 줄이기", "큰 결정을 미루고 소액으로 시험하기", "현재 계획을 유지하며 비상자금을 더 만들기", "수익보다 안정적인 현금 흐름을 우선하기"],
+  health: ["현재 일상을 유지하며 작은 회복 습관부터 만들기", "혼자 버티기보다 전문가의 도움을 받아보기", "일정을 줄이고 충분히 쉬는 기간을 갖기", "강한 변화 대신 지속 가능한 강도로 조정하기"],
+  housing: ["현재 집에 머물며 불편한 조건을 개선하기", "바로 이사하지 않고 단기로 살아보기", "비용을 더 모은 뒤 이동 시점을 늦추기", "다른 지역보다 현재 생활권 안에서 찾아보기"],
+  relationship: ["바로 결론내리지 않고 솔직하게 대화해보기", "잠시 거리를 두고 내 마음을 확인하기", "관계를 유지하되 경계와 조건을 분명히 하기", "주변이나 전문가에게 객관적인 의견을 구하기"],
+  lifestyle: ["생활을 크게 바꾸지 않고 작은 변화부터 시험하기", "현재 루틴을 유지하며 시간 배분만 조정하기", "일정 기간만 새로운 방식을 체험해보기", "포기할 것과 유지할 것을 나눠 단계적으로 바꾸기"],
+  long_term_values: ["지금의 안정을 유지하며 가능성을 더 확인하기", "결정을 미루고 판단 기준부터 분명히 하기", "가장 중요한 가치 하나만 우선해보기", "되돌릴 수 있는 작은 선택으로 먼저 시험하기"],
+};
+
+const VALUE_TO_DOMAINS = {
+  money: ["finance"], status: ["career"], family: ["relationship"], friends: ["relationship"],
+  growth: ["education", "career"], freedom: ["lifestyle"], meaning: ["long_term_values"],
+  stability: ["health", "finance", "housing"],
+};
+
 export function detectLifeDomains(text) {
   const normalized = (text || "").trim().toLowerCase();
   if (!normalized) return [];
   return LIFE_DOMAINS
     .filter((domain) => domain.keywords.some((keyword) => normalized.includes(keyword)))
     .map((domain) => domain.key);
+}
+
+/** 최근 기록·가치·반대편 입력을 반영하고, 서로 다른 영역 후보를 반환한다. */
+export function suggestComparePrompts({ side = "a", recentDomains = [], valueRanking = [], otherText = "", limit = 4 } = {}) {
+  const otherDomains = new Set(detectLifeDomains(otherText));
+  const recentScore = new Map(
+    (recentDomains || [])
+      .filter((item) => typeof item === "string" || Number(item.count || 0) > 0)
+      .map((item, index) => [item.key || item, typeof item === "string" ? 1 : Number(item.count) - index * .01]),
+  );
+  const valueScore = new Map();
+  (valueRanking || []).forEach((id, index) => {
+    for (const key of VALUE_TO_DOMAINS[id] || []) valueScore.set(key, Math.max(valueScore.get(key) || 0, 1 - index * .08));
+  });
+  const fallbackOrder = side === "a"
+    ? ["career", "relationship", "education", "health", "housing", "lifestyle", "finance", "business", "long_term_values"]
+    : ["lifestyle", "health", "relationship", "housing", "finance", "education", "career", "long_term_values", "business"];
+
+  // B는 A의 감지 영역을 최우선으로 사용한다. 복수 영역이면 각 영역 후보를 번갈아
+  // 구성해 A와 무관한 인기 키워드가 끼어들지 않게 한다.
+  if (side === "b" && otherText.trim() && otherDomains.size) {
+    const rankedDomains = [...otherDomains].sort((left, right) => {
+      const leftScore = (recentScore.get(left) || 0) * 2 + (valueScore.get(left) || 0);
+      const rightScore = (recentScore.get(right) || 0) * 2 + (valueScore.get(right) || 0);
+      return rightScore - leftScore;
+    });
+    const related = [];
+    for (let optionIndex = 0; related.length < limit; optionIndex += 1) {
+      let added = false;
+      for (const key of rankedDomains) {
+        const text = RELATED_ALTERNATIVES[key]?.[optionIndex];
+        if (text && !related.some((item) => item.text === text)) {
+          related.push({ key: `${key}-${optionIndex}`, text, score: 10 - optionIndex });
+          added = true;
+          if (related.length === limit) break;
+        }
+      }
+      if (!added) break;
+    }
+    if (related.length) return related;
+  }
+
+  return fallbackOrder
+    .map((key, fallbackIndex) => ({
+      key,
+      text: COMPARE_PROMPTS[key][side === "b" ? "b" : "a"],
+      score: (recentScore.get(key) || 0) * 4 + (valueScore.get(key) || 0) * 2 + (otherDomains.has(key) ? 1.5 : 0) - fallbackIndex * .01,
+    }))
+    .sort((left, right) => right.score - left.score)
+    .slice(0, limit);
 }
 
 export function domainLabel(key) {

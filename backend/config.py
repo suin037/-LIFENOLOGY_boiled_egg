@@ -20,8 +20,10 @@ class Settings(BaseSettings):
     cloudflare_api_token: str = ""
     cloudflare_reference_model: str = "@cf/black-forest-labs/flux-2-klein-4b"
     # Mobile result cards do not need a large source image. Override in .env when needed.
-    cloudflare_image_width: int = 384
-    cloudflare_image_height: int = 480
+    # 결과 카드 표시 크기에 맞춘 4:5 출력. 기존 384×480보다 픽셀 수를 약 31% 줄여
+    # 첫 생성 지연과 전송량을 낮춘다. 고해상도가 필요하면 .env에서 덮어쓴다.
+    cloudflare_image_width: int = 320
+    cloudflare_image_height: int = 400
     # preprocess/preprocess_goms.py의 실제 출력 위치와 통일한다.
     goms_clean_path: str = "data/clean/goms_clean.csv"
     artifacts_dir: str = "backend/models/artifacts"

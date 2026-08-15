@@ -25,9 +25,9 @@ export default function Simulate() {
       i += 1;
       setDone(Math.min(i, STEPS.length));
       if (i >= STEPS.length) clearInterval(tick);
-    }, 520);
+    }, 650);
     // 애니메이션(최소 표시시간)과 실제 호출이 모두 끝나면 이동.
-    Promise.all([sim, new Promise((r) => setTimeout(r, STEPS.length * 520))]).finally(() => {
+    Promise.all([sim, new Promise((r) => setTimeout(r, STEPS.length * 650))]).finally(() => {
       if (!cancelled) setTimeout(() => navigate("/result", { replace: true }), 180);
     });
     return () => {
@@ -54,17 +54,16 @@ export default function Simulate() {
         </p>
       </div>
 
-      <div className="relative mx-auto my-7 h-[150px] w-[250px]" role="img" aria-label="두 선택 주위를 도는 혜성 로딩 애니메이션">
+      <div className="relative mx-auto my-7 h-[150px] w-[250px]" role="img" aria-label="보라색과 주황색 선택 구체가 회전하는 로딩 애니메이션">
         <i className="absolute left-[34px] top-[22px] h-1 w-1 animate-pulse rounded-full bg-white/60" />
         <i className="absolute right-[38px] top-[28px] h-1.5 w-1.5 animate-pulse rounded-full bg-violet-300/70 [animation-delay:400ms]" />
         <i className="absolute bottom-[22px] left-[62px] h-1 w-1 animate-pulse rounded-full bg-white/40 [animation-delay:700ms]" />
-        <div className="absolute left-1/2 top-1/2 h-[104px] w-[206px] -translate-x-1/2 -translate-y-1/2 rounded-[50%] border border-cyan/20 shadow-[inset_0_0_24px_rgba(139,108,207,.04)]" />
+        <div className="absolute left-1/2 top-1/2 h-[104px] w-[206px] -translate-x-1/2 -translate-y-1/2 rounded-[50%] border border-white/[.06]" />
         <div className="absolute left-1/2 top-1/2 h-[104px] w-[206px] animate-comet-orbit rounded-[50%]">
-          <span className="absolute right-[-5px] top-1/2 h-[11px] w-[11px] -translate-y-1/2 animate-comet-glow rounded-full bg-[#E9DEFF] shadow-[0_0_9px_3px_rgba(187,164,237,.9),0_0_24px_8px_rgba(139,108,207,.45)]" />
-          <span className="absolute right-[3px] top-1/2 h-[5px] w-[42px] origin-right -translate-y-1/2 rounded-full bg-gradient-to-l from-[#D8C8FF]/90 via-[#8B6CCF]/45 to-transparent blur-[1px]" />
+          <span className="absolute right-[-8px] top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-[#9B72F2] shadow-[0_0_18px_7px_rgba(139,92,246,.38)]" />
+          <span className="absolute left-[-8px] top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-[#F39A4A] shadow-[0_0_18px_7px_rgba(243,154,74,.34)]" />
         </div>
-        <div className="absolute left-1/2 top-1/2 h-[132px] w-[132px] -translate-x-1/2 -translate-y-1/2 animate-spin-slow rounded-full border border-dashed border-white/10" />
-        <div className="absolute left-1/2 top-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[#8B6CCF] shadow-[0_0_38px_rgba(139,108,207,.28)]">
+        <div className="absolute left-1/2 top-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[#171128] shadow-[0_0_34px_rgba(139,108,207,.22)]">
           <GitCompareArrows size={25} className="text-white" strokeWidth={1.8} />
         </div>
         <ChoiceOrb side="A" className="left-0 top-[53px]" />

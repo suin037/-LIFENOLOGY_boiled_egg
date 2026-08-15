@@ -298,6 +298,18 @@ _ROUTE_NOTE = {
     "long_term_values": "예측 대상이 아니라 사용자가 중요하게 보는 결과의 정렬·강조 기준",
 }
 
+DOMAIN_OUTCOMES = {
+    "career": ["소득·고용 안정", "직종·고용형태 변화", "직무·삶 만족"],
+    "education": ["학비·소득 공백", "학력·취업 전환", "교육·삶 만족"],
+    "business": ["사업소득·생존", "자영 전환·지속", "직무·건강·삶 만족"],
+    "finance": ["가처분소득·자산·부채", "선택 가능 여력", "재무 스트레스·삶 만족"],
+    "health": ["의료·근로 부담", "활동·기능 변화", "수면·스트레스·주관 건강"],
+    "housing": ["주거비·자산·부채", "통근·생활 기회", "주거·삶 만족"],
+    "relationship": ["가구 재정 변화", "관계 행동 지속", "가족·사회관계 만족·고립"],
+    "lifestyle": ["소득·생활비", "시간 활용 변화", "수면·여가·스트레스"],
+    "long_term_values": ["경제적 감당 가능성", "가치와 선택의 정합성", "장기 만족·후회 신호"],
+}
+
 
 def route_domains(domains, profile: dict, choice: str | None = None) -> dict:
     """domain 리스트 → {domain: {label, evidence, indicators[], source_note}}."""
@@ -323,6 +335,7 @@ def route_domains(domains, profile: dict, choice: str | None = None) -> dict:
                 "insufficient_evidence"
             ),
             "indicators": inds,
+            "outcome_contract": DOMAIN_OUTCOMES.get(d, []),
             "source_note": _ROUTE_NOTE.get(d),
             "limitation": (
                 "현재 조건과 유사한 집단의 참고값이며 이 선택이 만든 개인 효과가 아닙니다."

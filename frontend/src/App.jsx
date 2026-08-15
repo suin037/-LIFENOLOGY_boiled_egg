@@ -15,7 +15,7 @@ import Settings from "./screens/Settings.jsx";
 // "/" 진입점 — 첫 로그인이면 랜딩, 이미 온보딩했으면 홈으로.
 function Entry() {
   const { onboarded } = useResult();
-  return onboarded ? <Navigate to="/home" replace /> : <Landing />;
+  return onboarded ? <Navigate to="/my" replace /> : <Landing />;
 }
 
 export default function App() {

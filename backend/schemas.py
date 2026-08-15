@@ -81,6 +81,8 @@ class CompareRequest(BaseModel):
     choice_b_detail: Optional[str] = Field(
         None, max_length=500, description="B의 업종·규모·지역 등 구체적인 선택 조건"
     )
+    choice_a_context: Optional[dict] = Field(None, description="A의 구조화 사건·영역별 추가 입력")
+    choice_b_context: Optional[dict] = Field(None, description="B의 구조화 사건·영역별 추가 입력")
 
 
 class SimulateRequest(CompareRequest):

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, Caption } from "./ui.jsx";
 import { useDiary, MOODS } from "../data/DiaryContext.jsx";
 import { CHECKIN } from "../data/questions.js";
@@ -7,6 +7,8 @@ import { composeDiary, analyzeEmotion } from "../data/dispositionApi.js";
 import Mascot from "./Mascot.jsx";
 import { Clock3, X } from "lucide-react";
 import HomeCalendar from "./HomeCalendar.jsx";
+import { loadActiveGoal, saveActionResponse } from "../data/actionBridge.js";
+import { logExperiment } from "../data/myUniverse.js";
 
 const GUIDES = [
   { key: "daily", mascot: "nova", name: "노바", topic: "오늘의 일상", color: "#FF9EC0", prompt: "오늘 있었던 일, 나와 같이 돌아볼래요?" },
@@ -28,12 +30,18 @@ export default function DiaryToday() {
   const [activeGuide, setActiveGuide] = useState(null);
   const [checkinOpen, setCheckinOpen] = useState(false);
   const [checkinDone, setCheckinDone] = useState(Boolean(todayEntry?.mood || todayEntry?.energy || todayEntry?.emotion));
+  const [activeGoal] = useState(loadActiveGoal);
+  const [experimentResult, setExperimentResult] = useState(todayEntry?.experimentResult ?? null);
+  const [savedSummary, setSavedSummary] = useState(null);
 
   const tag = `${lastSim.label} 이후 ${daysSince(lastSim.date)}일째`;
 
   const chatHasUser = chatMsgs.some((m) => m.role === "user");
 
-  async function save() {
+  const experimentPrompt = activeGoal ? goalPrompt(activeGoal) : null;
+  const changeSummary = useMemo(() => summarizeChange(entries, mood, energy, activeGoal), [entries, mood, energy, activeGoal]);
+
+  async function save(closeAfter = false) {
     // 챗봇 답변을 '질문 → 답변' 그대로 정리해 일기 본문으로(오늘의질문·건강 대체).
     const qaLines = [];
     for (let i = 0; i < chatMsgs.length; i++) {
@@ -44,7 +52,9 @@ export default function DiaryToday() {
       qaLines.push(q ? `· ${q} → ${ans}` : `· ${ans}`);
     }
     const line = text.trim();
-    const bodyText = [line, ...qaLines].filter(Boolean).join("\n");
+    const experimentLine = experimentPrompt && experimentResult
+      ? `· 진행 중인 선택 점검: ${experimentPrompt} → ${experimentResult}` : "";
+    const bodyText = [line, experimentLine, ...qaLines].filter(Boolean).join("\n");
     // 감정/기분을 안 골랐으면 → 내가 만든 감정모델로 일기에서 추론(우선).
     let finalMood = mood;
     let finalEmotion = emotion;
@@ -68,10 +78,24 @@ export default function DiaryToday() {
       }
     }
     saveToday(finalMood, bodyText, null, { energy, competency, emotion: finalEmotion });
+    if (activeGoal && experimentResult) {
+      const actionId = `checkin:${activeGoal.side || "goal"}:${activeGoal.createdAt || activeGoal.choice}`;
+      saveActionResponse(actionId, experimentResult);
+      logExperiment({ actionId, prompt: experimentPrompt, text: experimentResult });
+    }
+    setCheckinDone(true);
+    setSavedSummary(changeSummary);
+    if (closeAfter) setCheckinOpen(false);
   }
 
   return (
     <Card className="w-full lg:flex lg:h-full lg:flex-col lg:p-5">
+      <div className="mb-4 rounded-[18px] border border-violet-400/20 bg-violet-500/[.07] px-4 py-3">
+        <div className="text-[12px] font-bold text-violet-200">기록은 다음 미래 비교에 이어져요</div>
+        <p className="mt-1 text-[10px] leading-relaxed text-sub">
+          반복되는 고민과 감정 흐름을 파악해 비교 주제 추천·심리 해석·결과 설명을 개인화해요. 예측 숫자를 임의로 바꾸지는 않아요.
+        </p>
+      </div>
       <GuideCarousel onOpen={setActiveGuide} />
       <WeekStrip entries={entries} />
 
@@ -97,6 +121,13 @@ export default function DiaryToday() {
           {mood && <Tag>{MOODS.find((item) => item.v === mood)?.emoji} {MOODS.find((item) => item.v === mood)?.label}</Tag>}
           {energy && <Tag>에너지 {energy}</Tag>}
           {emotion && <Tag>{emotion}</Tag>}
+        </div>
+      )}
+      {(savedSummary || (checkinDone && changeSummary)) && (
+        <div className="mt-3 rounded-2xl border border-violet-400/20 bg-violet-500/[.07] p-3">
+          <div className="text-[10px] font-bold text-violet-300">오늘의 변화</div>
+          <p className="mt-1 text-[11px] leading-relaxed text-sub">{savedSummary || changeSummary}</p>
+          {activeGoal && <p className="mt-1.5 text-[9px] text-mut">진행 중 · {activeGoal.choice}</p>}
         </div>
       )}
 
@@ -164,6 +195,16 @@ export default function DiaryToday() {
                 </div>
               </section>
 
+              {experimentPrompt && (
+                <section className="rounded-[20px] border border-[#8B6CCF]/30 bg-[#8B6CCF]/[.08] p-4">
+                  <div className="text-[10px] font-bold text-violet-300">진행 중인 선택 · {activeGoal.choice}</div>
+                  <div className="mt-2 text-[13px] font-bold text-ink">{experimentPrompt}</div>
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    {["했어요", "조금 했어요", "못 했어요"].map((value) => <button key={value} type="button" onClick={() => setExperimentResult(value)} className={`tap rounded-xl border px-2 py-2.5 text-[11px] font-semibold ${experimentResult === value ? "border-[#8B6CCF] bg-[#241A3B] text-white" : "border-[#2A3549] bg-[#182234] text-sub"}`}>{value}</button>)}
+                  </div>
+                </section>
+              )}
+
               <section>
                 <div className="mb-3 text-[13px] font-bold text-sub">{CHECKIN.energy.q}</div>
                 <div className="flex flex-wrap gap-2">
@@ -202,20 +243,26 @@ export default function DiaryToday() {
             <div className="relative z-20 shrink-0 border-t border-[#26324A] bg-[#111A2A] px-5 pb-[max(20px,env(safe-area-inset-bottom))] pt-4 shadow-[0_-12px_28px_rgba(3,8,18,.72)]">
               <button
                 type="button"
-                onClick={() => { setCheckinDone(true); setCheckinOpen(false); }}
+                onClick={() => save(true)}
                 className="tap w-full rounded-full bg-[#8B6CCF] py-3.5 text-[14px] font-bold text-white shadow-[0_12px_30px_rgba(77,54,126,.34)]"
               >
-                체크인 반영하기
+                오늘의 변화 저장하기
               </button>
-              <p className="mt-2 text-center text-[10px] text-mut">홈의 ‘기록 저장’을 누르면 오늘 기록에 함께 저장돼요.</p>
+              <p className="mt-2 text-center text-[10px] text-mut">저장하면 다음 미래 비교와 진행 중인 선택 점검에 반영돼요.</p>
             </div>
           </div>
         </div>
       )}
 
       {activeGuide && (
-        <div className="fixed inset-0 z-50 bg-[#070B14]/95">
-          <div className="mx-auto flex h-full max-w-phone flex-col px-5 pb-6 pt-5">
+        <div
+          className="fixed inset-0 z-50 bg-[#070B14]/95"
+          onClick={() => setActiveGuide(null)}
+        >
+          <div
+            className="mx-auto flex h-full max-w-phone flex-col px-5 pb-6 pt-5"
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="flex items-center justify-between">
               <button
                 type="button"
@@ -263,6 +310,26 @@ export default function DiaryToday() {
   );
 }
 
+function goalPrompt(goal) {
+  const domains = goal.domains || [];
+  const choice = String(goal.choice || "이 선택");
+  if (domains.includes("relationship")) return /거리/.test(choice) ? "거리를 둔 뒤 내 마음을 살펴봤나요?" : "상대에게 내 마음이나 경계를 표현했나요?";
+  if (domains.includes("career")) return "오늘 이 선택을 확인하기 위한 행동을 하나 했나요?";
+  if (domains.includes("health")) return "오늘 계획한 회복·건강 행동을 실천했나요?";
+  if (domains.includes("education")) return "오늘 배우거나 정보를 확인하는 행동을 했나요?";
+  return "오늘 이 선택에 가까워지는 작은 행동을 했나요?";
+}
+
+function summarizeChange(entries, mood, energy, goal) {
+  const previous = (entries || []).filter((entry) => entry.mood != null).slice(-7);
+  if (mood == null && energy == null) return goal ? "상태를 기록하면 이 선택을 실행한 날의 변화를 비교할 수 있어요." : "상태를 기록하면 최근 흐름과 비교해드려요.";
+  if (previous.length < 2) return `오늘의 기준선을 저장했어요. ${3 - Math.min(previous.length, 2)}번 더 기록하면 최근 흐름과 비교할 수 있어요.`;
+  const avg = previous.reduce((sum, entry) => sum + Number(entry.mood || 0), 0) / previous.length;
+  const diff = mood == null ? 0 : mood - avg;
+  const moodText = Math.abs(diff) < .35 ? "최근과 비슷한 기분이에요" : diff > 0 ? "최근 평균보다 기분이 나아요" : "최근 평균보다 기분이 낮아요";
+  return `${moodText}${energy != null ? ` · 에너지 ${energy}/5` : ""}. ${goal ? "진행 중인 선택과 함께 변화를 이어서 볼게요." : "이 기록은 다음 비교의 현재 상태로 사용돼요."}`;
+}
+
 function GuideCarousel({ onOpen }) {
   const [index, setIndex] = useState(1);
   const trackRef = useRef(null);
@@ -271,7 +338,7 @@ function GuideCarousel({ onOpen }) {
 
   function centerItem(nextIndex, smooth = true) {
     const track = trackRef.current;
-    const item = track?.children[nextIndex];
+    const item = track?.querySelectorAll("[data-guide]")?.[nextIndex];
     if (!track || !item) return;
     const left = item.offsetLeft - (track.clientWidth - item.clientWidth) / 2;
     track.scrollTo({ left, behavior: smooth ? "smooth" : "auto" });
@@ -290,7 +357,7 @@ function GuideCarousel({ onOpen }) {
     const center = track.scrollLeft + track.clientWidth / 2;
     let nearest = 0;
     let distance = Infinity;
-    Array.from(track.children).forEach((item, itemIndex) => {
+    Array.from(track.querySelectorAll("[data-guide]")).forEach((item, itemIndex) => {
       const gap = Math.abs(item.offsetLeft + item.clientWidth / 2 - center);
       if (gap < distance) {
         nearest = itemIndex;
@@ -305,7 +372,7 @@ function GuideCarousel({ onOpen }) {
     if (!track) return;
     const center = track.scrollLeft + track.clientWidth / 2;
 
-    Array.from(track.children).forEach((item) => {
+    Array.from(track.querySelectorAll("[data-guide]")).forEach((item) => {
       const itemCenter = item.offsetLeft + item.clientWidth / 2;
       const distancePx = Math.abs(itemCenter - center);
       const distance = Math.min(1, distancePx / (item.clientWidth * 0.92));
@@ -360,14 +427,16 @@ function GuideCarousel({ onOpen }) {
         }}
         onPointerUp={finishDrag}
         onPointerCancel={finishDrag}
-        className="no-scrollbar relative z-10 flex cursor-grab overflow-x-auto px-[20%] pb-3 pt-2 active:cursor-grabbing"
+        className="no-scrollbar relative z-10 flex cursor-grab snap-x snap-proximity scroll-smooth overflow-x-auto pb-3 pt-2 active:cursor-grabbing"
         style={{ touchAction: "pan-y" }}
       >
+        <span aria-hidden="true" className="w-[34%] shrink-0" />
         {GUIDES.map((item) => {
           return (
             <button
               type="button"
               key={item.key}
+              data-guide
               onClick={() => {
                 if (dragRef.current.moved) {
                   dragRef.current.moved = false;
@@ -376,7 +445,7 @@ function GuideCarousel({ onOpen }) {
                 onOpen(item);
               }}
               aria-label={`${item.name}와 대화하기`}
-              className="tap flex w-[60%] shrink-0 flex-col items-center justify-center py-3 will-change-transform"
+              className="tap flex w-[32%] shrink-0 snap-center flex-col items-center justify-center py-3 will-change-transform transition-[transform,opacity] duration-300 ease-out"
             >
               <span
                 className="flex h-32 w-32 items-center justify-center rounded-full"
@@ -389,6 +458,7 @@ function GuideCarousel({ onOpen }) {
             </button>
           );
         })}
+        <span aria-hidden="true" className="w-[34%] shrink-0" />
         </div>
       </div>
 

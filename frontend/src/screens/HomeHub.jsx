@@ -43,7 +43,7 @@ export default function HomeHub() {
           <h1 className="text-[25px] font-bold leading-[1.22] tracking-[-.02em] lg:text-[42px] xl:text-[48px]">오늘도 어떤 갈림길을<br />비춰볼까요?</h1>
           <div className="mt-5 lg:flex lg:flex-1 lg:mt-7"><DiaryToday /></div>
         </section>
-        <aside className="lg:flex lg:h-full lg:flex-col lg:border-l lg:border-white/[.08] lg:pl-8 xl:pl-10">
+        <aside className="lg:flex lg:h-full lg:flex-col lg:border-l lg:border-white/[.08] lg:pb-2 lg:pl-8 lg:pt-[174px] xl:pl-10 xl:pt-[202px]">
 
       {rumination.prompt && (
         <button

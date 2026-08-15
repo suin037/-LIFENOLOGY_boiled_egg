@@ -523,6 +523,10 @@ def simulate(req: SimulateRequest) -> dict:
         note += f"\n[사용자가 적은 A의 구체적 상황] {req.choice_a_detail}"
     if req.choice_b_detail:
         note += f"\n[사용자가 적은 B의 구체적 상황] {req.choice_b_detail}"
+    if req.choice_a_context:
+        note += "\n[A 구조화 사건·추가 조건] " + json.dumps(req.choice_a_context, ensure_ascii=False)
+    if req.choice_b_context:
+        note += "\n[B 구조화 사건·추가 조건] " + json.dumps(req.choice_b_context, ensure_ascii=False)
     # 삶의 영역(domain) 컨텍스트 — '행동+영역' 구조화 입력의 영역 축을 서사에 알린다.
     _dl = _domain_labels(req.choice_a_domains) + _domain_labels(req.choice_b_domains)
     if _dl:
@@ -541,6 +545,11 @@ def simulate(req: SimulateRequest) -> dict:
     if value_weights:
         note = (note + "\n\n" + personalize.narrative_directive(
             pz, req.choice_a, req.choice_b)).strip()
+    elif req.disposition_block:
+        # 가치 순위를 건너뛰어도 MBTI·서술형 성향 재료는 서사에 전달한다.
+        # 수치와 유사집단 매칭에는 쓰지 않고 표현 방식·주의점에만 사용한다.
+        note = (note + "\n\n" + req.disposition_block +
+                "\n위 성향은 고정 성격이나 예측 피처로 단정하지 말고 설명의 톤과 관점에만 반영할 것.").strip()
 
     note = note.strip()
 

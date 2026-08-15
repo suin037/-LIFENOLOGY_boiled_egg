@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { Bell, Bookmark, Home, Orbit, Sparkles } from "lucide-react";
+import { ArrowLeft, Bell, Bookmark, BookOpen, HelpCircle, Orbit, Sparkles } from "lucide-react";
 import TabBar from "./TabBar.jsx";
+import UserGuide from "./UserGuide.jsx";
 
 // 탭바를 숨기는 경로 (랜딩·온보딩·로딩)
 const NO_TABBAR = ["/", "/onboarding", "/simulate"];
@@ -8,9 +10,9 @@ const NO_TABBAR = ["/", "/onboarding", "/simulate"];
 const NO_PROFILE = ["/simulate", "/onboarding"];
 const WIDE_DESKTOP = ["/home", "/input", "/result", "/my", "/archive", "/settings"];
 const DESKTOP_TABS = [
-  ["/home", "홈", Home],
+  ["/my", "홈", Orbit],
   ["/input", "시뮬레이션", Sparkles],
-  ["/my", "나의 우주", Orbit],
+  ["/home", "일기", BookOpen],
   ["/archive", "보관함", Bookmark],
 ];
 
@@ -22,10 +24,19 @@ export default function Layout() {
   const showProfile = !NO_PROFILE.includes(pathname);
   const useWideDesktop = WIDE_DESKTOP.includes(pathname);
   const isLanding = pathname === "/";
-  const isDesktopWorkspace = ["/home", "/input", "/my", "/archive", "/settings"].includes(pathname);
+  const isDesktopWorkspace = ["/home", "/input", "/result", "/my", "/archive", "/settings"].includes(pathname);
   const isUniverseCanvas = pathname === "/my";
   const isOnboarding = pathname === "/onboarding";
   const useFullDesktop = isDesktopWorkspace || isOnboarding;
+  const [guideOpen, setGuideOpen] = useState(() => {
+    try { return localStorage.getItem("pm.guide.seen.v1") !== "1"; } catch { return true; }
+  });
+  const closeGuide = () => {
+    try { localStorage.setItem("pm.guide.seen.v1", "1"); } catch { /* 저장 불가 환경 */ }
+    setGuideOpen(false);
+  };
+  const showBack = !["/", "/my"].includes(pathname);
+  const goBack = () => window.history.length > 1 ? navigate(-1) : navigate("/my");
 
   return (
     <div
@@ -35,7 +46,7 @@ export default function Layout() {
           "radial-gradient(circle at 50% 12%, rgba(73,112,171,.22), transparent 36%), linear-gradient(145deg, #172033 0%, #0D1422 48%, #182235 100%)",
       }}
     >
-      <div
+      <div id="app-shell"
         className={`relative flex h-screen w-full flex-col overflow-hidden bg-bg ${
           `max-w-phone sm:h-[900px] sm:max-h-[94vh] sm:rounded-[44px] sm:border sm:border-[#52627B]
                md:aspect-[16/10] md:h-auto md:max-h-[calc(100vh-48px)] md:max-w-[calc((100vh-48px)*1.6)] md:rounded-[32px]
@@ -46,13 +57,17 @@ export default function Layout() {
       >
         {/* 서비스 헤더 */}
         {!isLanding && <header className={`z-20 flex h-14 shrink-0 items-center justify-between border-b border-transparent px-5 lg:h-[76px] lg:border-line/70 lg:px-10 xl:px-14 ${useFullDesktop ? "lg:sticky lg:top-0 lg:bg-[#091321]/90 lg:backdrop-blur-xl" : ""}`}>
-          <button onClick={() => navigate("/home")} className="flex items-center gap-2 text-[17px] font-bold tracking-[-.035em] text-ink lg:text-[20px]">
+          <div className="flex items-center gap-2">
+            {showBack && <button type="button" onClick={goBack} aria-label="이전 화면" className="tap flex h-10 w-10 items-center justify-center rounded-full bg-white/[.05] text-sub lg:hidden"><ArrowLeft size={19}/></button>}
+          <button onClick={() => navigate("/my")} className={`${showBack ? "hidden lg:flex" : "flex"} items-center gap-2 text-[17px] font-bold tracking-[-.035em] text-ink lg:text-[20px]`}>
             <Sparkles size={18} className="hidden text-violet-400 lg:block" /> Parallel Me
           </button>
+          </div>
           {isDesktopWorkspace && <nav className="absolute left-1/2 hidden h-full -translate-x-1/2 items-stretch gap-10 lg:flex xl:gap-14">
             {DESKTOP_TABS.map(([to,label,Icon])=><NavLink key={to} to={to} className={({isActive})=>`relative flex min-w-[84px] items-center justify-center gap-2 px-2 text-[14px] transition-colors after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-violet-400 ${isActive?"font-semibold text-violet-300 after:opacity-100":"text-sub hover:text-ink after:opacity-0"}`}><Icon size={15}/>{label}</NavLink>)}
           </nav>}
           <div className="flex items-center gap-3">
+            <button type="button" onClick={() => setGuideOpen(true)} aria-label="Parallel Me 사용 방법" className="tap flex h-10 w-10 items-center justify-center rounded-full text-mut hover:bg-white/[.05]"><HelpCircle size={18}/></button>
             {isDesktopWorkspace && <button type="button" aria-label="알림" className="tap hidden h-10 w-10 items-center justify-center rounded-full text-mut hover:bg-white/[.05] lg:flex"><Bell size={18}/></button>}
             {showProfile && (
               <button
@@ -81,6 +96,8 @@ export default function Layout() {
         </main>
 
         {showTabBar && <TabBar />}
+        {isLanding && <button type="button" onClick={() => setGuideOpen(true)} className="tap absolute right-5 top-5 z-30 flex items-center gap-1.5 rounded-full border border-white/15 bg-black/20 px-3 py-2 text-[11px] font-semibold text-white/80 backdrop-blur-md"><HelpCircle size={15}/> 사용 방법</button>}
+        <UserGuide open={guideOpen} onClose={closeGuide} />
       </div>
     </div>
   );

@@ -30,6 +30,7 @@ export default function LifeView({ a, b, domains = { a: [], b: [] } }) {
   const extraA = a.life_indicators.filter((it) => !bKeys.has(key(it)) && matches(it)).slice(0, 3);
   const extraB = b.life_indicators.filter((it) => !aKeys.has(key(it)) && matches(it)).slice(0, 3);
   const empty = !shared.length && !extraA.length && !extraB.length;
+  const domainRows = collectDomainIndicators(a, b, selectedDomains);
 
   return (
     <div>
@@ -37,11 +38,41 @@ export default function LifeView({ a, b, domains = { a: [], b: [] } }) {
       <ObservedIndicators a={a} b={b} />
       <h2 className="mb-1 mt-1 text-base font-semibold">이 선택과 관련된 핵심 지표</h2>
       <div className="mt-3 space-y-2.5">
-        {empty && <Card><Caption>선택한 삶의 영역에 연결된 수치 데이터가 아직 충분하지 않습니다. 임의 점수는 만들지 않았어요.</Caption></Card>}
+        {empty && !domainRows.length && <Card><Caption>선택한 삶의 영역에 연결된 수치 데이터가 아직 충분하지 않습니다. 임의 점수는 만들지 않았어요.</Caption></Card>}
+        {domainRows.map((row) => <DomainIndicator key={row.key} row={row} />)}
         {shared.map((it, i) => <Indicator key={`s${i}`} it={it} />)}
         {extraA.map((it, i) => <Indicator key={`a${i}`} it={it} tag={`A · ${labelOf(a.choice)}`} tagColor="#8B6CCF" />)}
         {extraB.map((it, i) => <Indicator key={`b${i}`} it={it} tag={`B · ${labelOf(b.choice)}`} tagColor="#F5C86B" />)}
       </div>
+    </div>
+  );
+}
+
+function collectDomainIndicators(a, b, selectedDomains) {
+  const rows = [];
+  const seen = new Set();
+  for (const [side, result] of [["A", a], ["B", b]]) {
+    for (const [domain, stat] of Object.entries(result.domain_stats || {})) {
+      if (selectedDomains.length && !selectedDomains.includes(domain)) continue;
+      for (const item of stat.indicators || []) {
+        const signature = `${domain}:${item.name}:${item.value}:${item.unit}`;
+        if (seen.has(signature)) continue;
+        seen.add(signature);
+        rows.push({ ...item, key: `${side}:${signature}`, side, domainLabel: stat.label, limitation: stat.limitation });
+      }
+    }
+  }
+  return rows.slice(0, 6);
+}
+
+function DomainIndicator({ row }) {
+  return (
+    <div className="rounded-2xl border border-line bg-card p-3.5">
+      <div className="flex items-start justify-between gap-3">
+        <div><div className="text-[10px] text-violet-300">{row.domainLabel} · 참고 기준</div><div className="mt-1 text-[13px] text-ink">{row.name}</div></div>
+        <div className="whitespace-nowrap text-right"><b className="text-lg text-ink">{row.value}</b><span className="ml-1 text-[10px] text-sub">{row.unit}</span></div>
+      </div>
+      <div className="mt-2 text-[9px] leading-4 text-mut">{row.source}{row.sample_n ? ` · n=${row.sample_n.toLocaleString()}` : ""} · 선택 효과가 아닌 현재 비교 기준입니다.</div>
     </div>
   );
 }
@@ -59,7 +90,12 @@ const EVIDENCE_LABEL = {
 function EvidenceSummary({ a, b }) {
   const defaultOrder = ["경제적안정도", "성장가능성", "삶의질"];
   const preferred = a.personalization?.narrate_order || b.personalization?.narrate_order || [];
-  const keys = [...new Set([...preferred, ...defaultOrder])].filter((key) => defaultOrder.includes(key));
+  const keys = [...new Set([...preferred, ...defaultOrder])].filter((key) => {
+    if (!defaultOrder.includes(key)) return false;
+    const statuses = [a.indicator_evidence?.[key]?.status, b.indicator_evidence?.[key]?.status].filter(Boolean);
+    return statuses.some((status) => status !== "insufficient_evidence");
+  });
+  if (!keys.length) return null;
   return (
     <Card className="mb-4">
       <div className="text-sm font-semibold text-ink">예측 근거 상태</div>
@@ -84,7 +120,7 @@ function EvidenceSummary({ a, b }) {
 }
 
 function EvidenceSide({ label, item }) {
-  if (!item) return null;
+  if (!item || item.status === "insufficient_evidence") return null;
   const effect = typeof item.effect === "number"
     ? ` · 집단 평균 ${item.effect >= 0 ? "+" : ""}${item.effect.toFixed(1)}%p`
     : "";

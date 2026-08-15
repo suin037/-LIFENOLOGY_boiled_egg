@@ -263,29 +263,20 @@ def _scenario(text: str, domains: list[str] | None = None) -> str | None:
     return None
 
 
-def evidence_for_request(payload: dict) -> dict:
-    try:
-        report, registry = _data()
-    except (OSError, ValueError) as exc:
-        return {"available": False, "reason": f"KOWEPS 산출물 로드 실패: {type(exc).__name__}"}
+def _build_evidence(key: str, profile: dict | None, report: dict, registry: dict,
+                    event_side: str | None = None, comparison_side: str | None = None) -> dict:
+    """Build one event-vs-non-event evidence object.
 
-    text = " ".join(str(payload.get(key) or "") for key in (
-        "choice_a", "choice_b", "choice_a_detail", "choice_b_detail"
-    ))
-    domains = [*(payload.get("choice_a_domains") or []), *(payload.get("choice_b_domains") or [])]
-    key = _scenario(text, domains)
-    if not key:
-        return {
-            "available": False,
-            "reason": "KOWEPS에서 검증된 구체 사건(이사·자가전환·결혼·가구변화·교육수준상승·직종변경·자영업전환)과 연결되지 않음",
-            "domains": domains,
-        }
+    When A and B are different active events this function is called once per side,
+    so each choice keeps its own comparison cohort instead of borrowing the other
+    choice's cohort.
+    """
     item = report.get("reports", {}).get(key)
     spec = registry.get("scenarios", {}).get(key, {})
     if not item:
         return {"available": False, "scenario": key, "reason": "해당 사건 패널이 아직 생성되지 않음"}
 
-    personalized = _personalized_report(key, payload.get("profile"), registry)
+    personalized = _personalized_report(key, profile, registry)
     followup_source = personalized["followup"] if personalized else item["followup"]
     outcomes = []
     for outcome, meta in registry["outcomes"].items():
@@ -309,21 +300,6 @@ def evidence_for_request(payload: dict) -> dict:
             "outcomes": selected,
         }
 
-    # 어느 선택지가 '사건 발생군'인지 함께 내려준다. 예: 미혼 유지(A) vs
-    # 결혼(B)이면 B=event, A=comparison. 이 정보가 없으면 프론트가 두 선을
-    # 사용자의 A/B 선택에 정확히 대응시킬 수 없다.
-    side_scenarios = {
-        "A": _scenario(" ".join(str(payload.get(k) or "") for k in
-                                  ("choice_a", "choice_a_detail")),
-                       payload.get("choice_a_domains") or []),
-        "B": _scenario(" ".join(str(payload.get(k) or "") for k in
-                                  ("choice_b", "choice_b_detail")),
-                       payload.get("choice_b_domains") or []),
-    }
-    event_side = next((side for side, scenario in side_scenarios.items()
-                       if scenario == key), None)
-    comparison_side = ({"A": "B", "B": "A"}.get(event_side)
-                       if event_side else None)
     return {
         "available": True,
         "scenario": key,
@@ -349,10 +325,65 @@ def evidence_for_request(payload: dict) -> dict:
     }
 
 
+def evidence_for_request(payload: dict) -> dict:
+    try:
+        report, registry = _data()
+    except (OSError, ValueError) as exc:
+        return {"available": False, "reason": f"KOWEPS 산출물 로드 실패: {type(exc).__name__}"}
+
+    side_scenarios = {
+        "A": (payload.get("choice_a_context") or {}).get("event") or _scenario(" ".join(str(payload.get(k) or "") for k in
+                                  ("choice_a", "choice_a_detail")),
+                       payload.get("choice_a_domains") or []),
+        "B": (payload.get("choice_b_context") or {}).get("event") or _scenario(" ".join(str(payload.get(k) or "") for k in
+                                  ("choice_b", "choice_b_detail")),
+                       payload.get("choice_b_domains") or []),
+    }
+    # 행동 실험처럼 패널 레지스트리에 없는 사건은 관측 예측으로 위장하지 않는다.
+    known = set((registry.get("scenarios") or {}).keys())
+    side_scenarios = {side: key if key in known else None for side, key in side_scenarios.items()}
+    found = {side: key for side, key in side_scenarios.items() if key}
+    if not found:
+        return {
+            "available": False,
+            "reason": "KOWEPS에서 검증된 구체 사건과 연결되지 않음",
+            "domains": [*(payload.get("choice_a_domains") or []), *(payload.get("choice_b_domains") or [])],
+        }
+
+    unique = set(found.values())
+    if len(unique) == 1:
+        key = next(iter(unique))
+        event_side = next(side for side, scenario in found.items() if scenario == key)
+        comparison_side = {"A": "B", "B": "A"}[event_side]
+        return _build_evidence(key, payload.get("profile"), report, registry,
+                               event_side, comparison_side)
+
+    # Two active choices are not each other's valid controls. Compare each event to
+    # its own non-event cohort and let the UI show the two evidence panels side by side.
+    side_evidence = {
+        side: _build_evidence(key, payload.get("profile"), report, registry, event_side=side)
+        for side, key in found.items()
+    }
+    return {
+        "available": True,
+        "comparison_mode": "independent_events",
+        "scenario": "independent_events",
+        "label": "각 선택의 유사 조건 기준선 비교",
+        "target_age": report.get("target_age", [25, 35]),
+        "evidence_level": "independent_matched_observations",
+        "evidence_label": "선택별 독립 유사 조건 관측",
+        "claim_limit": report.get("claim_limit"),
+        "side_scenarios": found,
+        "side_evidence": side_evidence,
+    }
+
+
 def indicator_statuses(evidence: dict, side: str) -> dict:
     """KOWEPS 영역 사건의 결과변수 매핑을 공통 3지표 근거 계약으로 변환."""
     if not evidence.get("available"):
         return {}
+    if evidence.get("comparison_mode") == "independent_events":
+        return indicator_statuses((evidence.get("side_evidence") or {}).get(side, {}), side)
     role = "사건 발생군" if evidence.get("event_side") == side else "비교 유지군"
     personalized = evidence.get("evidence_level") == "personalized_matched_observation"
     labels = {"direct": "matched_observation" if personalized else "observed_group", "proxy": "proxy_observation",

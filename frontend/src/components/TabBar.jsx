@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { Home, Orbit, Bookmark } from "lucide-react";
+import { BookOpen, Orbit, Bookmark } from "lucide-react";
 
 function SparkleDiamond({ size = 20, strokeWidth: _strokeWidth, ...props }) {
   return (
@@ -20,9 +20,9 @@ function SparkleDiamond({ size = 20, strokeWidth: _strokeWidth, ...props }) {
 }
 
 const TABS = [
-  { to: "/home", label: "홈", Icon: Home },
+  { to: "/my", label: "홈", Icon: Orbit },
   { to: "/input", label: "시뮬레이션", Icon: SparkleDiamond },
-  { to: "/my", label: "나의 우주", Icon: Orbit },
+  { to: "/home", label: "일기", Icon: BookOpen },
   { to: "/archive", label: "보관함", Icon: Bookmark },
 ];
 

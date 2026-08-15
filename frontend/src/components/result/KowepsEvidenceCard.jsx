@@ -77,6 +77,8 @@ function OutcomeChart({ outcome }) {
 }
 
 export default function KowepsEvidenceCard({ a, b, domains }) {
+  const independent = a.koweps_evidence?.available && b.koweps_evidence?.available
+    && a.koweps_evidence.scenario !== b.koweps_evidence.scenario;
   const embedded = a.koweps_evidence || b.koweps_evidence || null;
   const [state, setState] = useState({ loading: !embedded, data: embedded, error: null });
   const payload = useMemo(() => ({
@@ -99,6 +101,7 @@ export default function KowepsEvidenceCard({ a, b, domains }) {
   }, [payload, embedded]);
 
   if (state.loading) return <div className="mb-3 rounded-2xl border border-white/10 bg-card p-4 text-[11px] text-mut">KOWEPS 관측 근거 확인 중…</div>;
+  if (independent) return null;
   if (state.error || !state.data?.available) return null;
   const data = state.data;
   const matched = data.evidence_level === "personalized_matched_observation";

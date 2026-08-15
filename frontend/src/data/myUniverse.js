@@ -207,12 +207,19 @@ export function resetUniverse() {
 }
 
 // ── 파생 계산 ────────────────────────────────────────────────
+export function hasRecord(c) {
+  if (!c || c.empty) return false;
+  if ((c.text || "").trim() || (c.note || "").trim()) return true;
+  const answers = Array.isArray(c.answers) ? c.answers : Object.values(c.answers || {});
+  return Boolean(c.diaryId) || answers.some((v) => String(v?.a ?? v ?? "").trim());
+}
+
 export function totalStars(s = loadUniverse()) {
-  return s.checkins.length;
+  return s.checkins.filter(hasRecord).length;
 }
 
 export function diaryDays(s = loadUniverse()) {
-  return s.checkins.filter((c) => c.hasDiary).length;
+  return s.checkins.filter(hasRecord).length;
 }
 
 export function hasCheckedInToday(s = loadUniverse()) {
@@ -351,6 +358,27 @@ export function adaptiveGroups(planetKey, s = loadUniverse()) {
 }
 
 // 그 날 그 영역에서 평행우주 시나리오를 만들었음을 기록 → 지구본 ◆. (date,domain) upsert.
+export function starGroupsOf(planetKey, s = loadUniverse()) {
+  const stars = s.checkins
+    .filter((c) => hasRecord(c)
+      && (!planetKey || (Array.isArray(c.domains) && c.domains.includes(planetKey))))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const groups = [];
+  for (let i = 0; i < stars.length; i += STARS_PER_CONSTELLATION) {
+    const chunk = stars.slice(i, i + STARS_PER_CONSTELLATION);
+    groups.push({
+      index: groups.length,
+      domain: planetKey || null,
+      stars: chunk,
+      filled: chunk.length,
+      complete: chunk.length === STARS_PER_CONSTELLATION,
+      weekStart: `${planetKey || "all"}-${chunk[0].date}`,
+      label: `${chunk[0].date.slice(5)}~${chunk[chunk.length - 1].date.slice(5)}`,
+    });
+  }
+  return groups;
+}
+
 export function recordScenario({ domain, title, br = [], date } = {}) {
   const d = date || todayKey();
   return patch((s) => {

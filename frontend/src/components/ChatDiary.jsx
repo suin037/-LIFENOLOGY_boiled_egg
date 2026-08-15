@@ -1,8 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Card, Caption } from "./ui.jsx";
-import { addCheckin, setDomains, todayKey } from "../data/myUniverse.js";
-import { detectLifeDomains } from "../data/choices.js";
-import { composeDiary } from "../data/dispositionApi.js";
+import { addCheckin, setDomains, todayKey, loadUniverse, weekStartKey } from "../data/myUniverse.js";
+import { composeDiary, weeklyComfort, loadSpeech, SPEECH_KEY } from "../data/dispositionApi.js";
 import { todayQuestions } from "../data/questions.js";
 import { useResult } from "../data/ResultContext.jsx";
 import Mascot from "./Mascot.jsx";
@@ -11,28 +10,43 @@ import Mascot from "./Mascot.jsx";
 //  · 영역 3개: 일상 / 성향(매일 랜덤 질문) / 건강. 각 영역의 질문 리스트를 하나씩 묻고 사용자가 답한다.
 //  · embedded=true: 카드/저장버튼 없이 대화만. onMessagesChange 로 부모(체크인)에 올림 → 부모 '기록 저장'이 흡수.
 const AREAS = [
-  { key: "daily", name: "일상", mascot: "nova" },
-  { key: "disposition", name: "성향", mascot: "cosmo" },
-  { key: "health", name: "건강", mascot: "lumi" },
+  { key: "daily", name: "일상", mascot: "nova", role: "오늘 하루의 일상 기록을 함께 되짚는 대화다." },
+  { key: "disposition", name: "성향", mascot: "cosmo", role: "가치관·선택을 돌아보는 성향 기록 대화다." },
+  { key: "health", name: "건강", mascot: "lumi", role: "몸과 마음 상태를 살피는 건강 체크 대화다." },
 ];
-// 질문 = { text, options? }. options 있으면 선택창(칩)으로, 없으면 자유서술.
+
+// 말투(loadSpeech/SPEECH_KEY)는 dispositionApi 에서 온다 — 마스코트가 말하는 화면이
+// 여럿이라(대화·주간 위로·N년 뒤) 한 곳에서 정해야 어긋나지 않는다.
+
+// 질문 ={ p(존댓말), c(반말), options? type? unit? skip? id? }.
+// options 있으면 선택창(칩)으로, type:"number"면 숫자 입력, 없으면 자유서술.
 // 일상 = 구체적 하루 활동 로그. 성향(todayQuestions=가치·성찰 질문)과 겹치지 않게 '한 일/사람/먹은 것'.
 const DAILY_Q = [
-  { text: "오늘 하루, 주로 뭘 하면서 보냈어요?" },
-  { text: "오늘 누구와 함께한 시간이 있었나요?" },
+  { p: "오늘 하루, 주로 뭘 하면서 보냈어요?", c: "오늘 하루, 주로 뭘 하면서 보냈어?" },
+  { p: "오늘 누구와 함께한 시간이 있었나요?", c: "오늘 누구랑 같이 보낸 시간 있었어?" },
   // 고민을 직접 물어야 이직·관계 등 신호를 잡을 수 있다(diarySignals 입력원).
-  { text: "요즘 마음에 걸리는 고민 있어요? 일·관계·건강 뭐든 좋아요. (없으면 넘겨도 돼요)", skip: true },
-  { text: "오늘 먹은 것 중에 맛있었던 게 있어요?" },
+  { p: "요즘 마음에 걸리는 고민 있어요? 일·관계·건강 뭐든 좋아요. (없으면 넘겨도 돼요)",
+    c: "요즘 마음에 걸리는 고민 있어? 일·관계·건강 뭐든 좋아. (없으면 넘겨도 돼)", skip: true },
+  { p: "오늘 먹은 것 중에 맛있었던 게 있어요?", c: "오늘 먹은 것 중에 맛있었던 거 있어?" },
 ];
 // 건강 = 고정 질문(매일 안 바뀜). 선택형(옵션) + 정량 수치(number). 수치는 후에 삼성헬스 자동수신 자리.
 const HEALTH_Q = [
-  { text: "요즘 밤잠은 어땠어?", options: ["잘 잠", "뒤척임", "못 잠"] },
-  { text: "어젯밤 수면 점수는? (알면 숫자로)", type: "number", unit: "점", skip: true },
-  { text: "어제 몇 시간쯤 잤어요?", type: "number", unit: "시간", skip: true },
-  { text: "오늘 걸음수는 얼마였어요?", type: "number", unit: "걸음", skip: true },
-  { text: "오늘 운동은 얼마나 했어요?", type: "number", unit: "분", skip: true },
-  { text: "요즘 스트레스는 얼마나 느껴?", options: ["거의 없음", "보통", "심함"] },
+  { p: "요즘 밤잠은 어떠세요?", c: "요즘 밤잠은 어땠어?", options: ["잘 잠", "뒤척임", "못 잠"] },
+  { p: "어젯밤 수면 점수는요? (알면 숫자로)", c: "어젯밤 수면 점수는? (알면 숫자로)",
+    type: "number", unit: "점", skip: true },
+  { p: "어제 몇 시간쯤 주무셨어요?", c: "어제 몇 시간쯤 잤어?", type: "number", unit: "시간", skip: true },
+  { p: "오늘 걸음수는 얼마였어요?", c: "오늘 걸음수는 얼마였어?", type: "number", unit: "걸음", skip: true },
+  { p: "오늘 운동은 얼마나 하셨어요?", c: "오늘 운동은 얼마나 했어?", type: "number", unit: "분", skip: true },
+  { p: "요즘 스트레스는 얼마나 느끼세요?", c: "요즘 스트레스는 얼마나 느껴?",
+    options: ["거의 없음", "보통", "심함"] },
 ];
+
+// 질문 텍스트 — 고른 말투로. 성향 질문(questions.js)은 원문 하나뿐이라 그대로 쓴다.
+function qText(q, speech) {
+  if (!q) return "";
+  if (q.text) return q.text;
+  return speech === "casual" ? q.c : q.p;
+}
 
 function areaQuestions(key) {
   if (key === "disposition") {
@@ -42,10 +56,38 @@ function areaQuestions(key) {
     } catch {
       /* 로드 실패 시 기본 */
     }
-    return [{ text: "오늘 어떤 선택을 했고, 왜 그렇게 했어?" }];
+    return [{ p: "오늘 어떤 선택을 하셨고, 왜 그렇게 하셨어요?", c: "오늘 어떤 선택을 했고, 왜 그렇게 했어?" }];
   }
   if (key === "health") return HEALTH_Q;
   return DAILY_Q;
+}
+
+// ── 주간 위로 — 답마다 반응하면 말이 많아지니, 한 주치를 읽고 한 번만 건넨다.
+// 리포트(분석·수치·할 거리)와는 별개. 여기는 위로만 한다.
+const COMFORT_KEY = "pm.comfort.v1";
+
+// 지난 주 기록 [{date, text, mood, emotion}] — 이번 주가 아니라 '완결된 저번 주'.
+function lastWeekEntries() {
+  try {
+    const thisWeek = weekStartKey(todayKey());
+    const rows = (loadUniverse().checkins || [])
+      .filter((c) => (c.text || c.note || "").trim() && weekStartKey(c.date) < thisWeek);
+    if (!rows.length) return { week: null, entries: [] };
+    const week = weekStartKey(rows[rows.length - 1].date); // 가장 최근에 끝난 주
+    return {
+      week,
+      entries: rows.filter((c) => weekStartKey(c.date) === week).map((c) => ({
+        date: c.date, text: (c.text || c.note || "").slice(0, 200),
+        mood: c.mood ?? null, emotion: c.keyword || "",
+      })),
+    };
+  } catch {
+    return { week: null, entries: [] };
+  }
+}
+
+function loadComfort() {
+  try { return JSON.parse(localStorage.getItem(COMFORT_KEY) || "null"); } catch { return null; }
 }
 
 // 하루 단위 대화 드래프트 — 챗봇을 닫아도 그날 대화가 유지되고, 날이 바뀌면 새로 시작.
@@ -68,16 +110,21 @@ function saveDraftArea(area, msgs, qi) {
 
 export default function ChatDiary({ onSaved, embedded = false, onMessagesChange, initialArea = "daily", showAreas = true }) {
   const { setProfile } = useResult(); // 성향 답변을 프로필에 반영(모든 시나리오 개인화 재료)
+  const [speech, setSpeech] = useState(loadSpeech);
   const [area, setArea] = useState(initialArea);
   const [qs, setQs] = useState(() => areaQuestions(initialArea));
   // 오늘 저장된 드래프트가 있으면 이어서(챗봇 닫았다 열어도 유지).
   const _init = draftFor(initialArea);
   const [qi, setQi] = useState(() => _init?.qi ?? 0);
   const [msgs, setMsgs] = useState(() =>
-    _init?.msgs?.length ? _init.msgs : [{ role: "bot", text: areaQuestions(initialArea)[0].text }],
+    _init?.msgs?.length
+      ? _init.msgs
+      : [{ role: "bot", text: qText(areaQuestions(initialArea)[0], loadSpeech()) }],
   );
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [thinking, setThinking] = useState(false); // 마스코트가 위로를 만드는 중
+  const [comfort, setComfort] = useState(() => loadComfort()); // {week, speech, text}
   const [saved, setSaved] = useState(null);
   const [editIdx, setEditIdx] = useState(null); // 수정 중인 답변 인덱스
   const [editText, setEditText] = useState("");
@@ -93,15 +140,43 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
     saveDraftArea(area, msgs, qi); // 하루 단위 드래프트로 저장(닫아도 유지)
   }, [msgs, qi, area]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 주간 위로 — 저번 주가 끝나면 한 번만 만든다. 같은 주엔 저장본을 그대로 쓴다.
+  useEffect(() => {
+    const { week, entries } = lastWeekEntries();
+    if (!week || entries.length < 2) return;
+    if (comfort?.week === week && comfort?.speech === speech) return;
+    let alive = true;
+    setThinking(true);
+    weeklyComfort(entries, { persona: mascot, speech })
+      .then((text) => {
+        if (!alive || !text) return;
+        const next = { week, speech, text };
+        setComfort(next);
+        try { localStorage.setItem(COMFORT_KEY, JSON.stringify(next)); } catch { /* 무시 */ }
+      })
+      .finally(() => { if (alive) setThinking(false); });
+    return () => { alive = false; };
+  }, [speech, mascot]); // eslint-disable-line react-hooks/exhaustive-deps
+
   function switchArea(key) {
     const list = areaQuestions(key);
     const dr = draftFor(key);
     setArea(key);
     setQs(list);
     setQi(dr?.qi ?? 0);
-    setMsgs(dr?.msgs?.length ? dr.msgs : [{ role: "bot", text: list[0].text }]);
+    setMsgs(dr?.msgs?.length ? dr.msgs : [{ role: "bot", text: qText(list[0], speech) }]);
     setSaved(null);
     setEditIdx(null);
+  }
+
+  // 말투 전환 — 아직 답을 안 했으면 지금 떠 있는 질문도 그 말투로 바꿔 단다.
+  function toggleSpeech() {
+    const next = speech === "casual" ? "polite" : "casual";
+    setSpeech(next);
+    try { localStorage.setItem(SPEECH_KEY, next); } catch { /* 무시 */ }
+    if (!msgs.some((m) => m.role === "user")) {
+      setMsgs([{ role: "bot", text: qText(qs[0], next) }]);
+    }
   }
 
   // 답변 수정 — 답변 옆 '수정' 버튼 → 인라인 편집 → 반영.
@@ -117,9 +192,14 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
     setEditText("");
   }
 
+  const CLOSING = {
+    polite: "다 답해주셔서 고마워요! 아래 ‘기록 저장’을 누르면 오늘 일기로 정리할게요.",
+    casual: "다 답해줘서 고마워! 아래 ‘기록 저장’을 누르면 오늘 일기로 정리할게.",
+  };
+
   function answer(raw) {
     const v = (raw ?? input).trim();
-    if (!v) return;
+    if (!v || thinking) return;
     // 성향 질문(D2/D1/D4 등 id 있는 것)에 답하면 프로필 psych_answers에 저장
     // → buildDisposition → 모든 시뮬 시나리오 개인화에 반영.
     const cur = qs[qi];
@@ -127,10 +207,9 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
       setProfile((p) => ({ ...p, psych_answers: { ...(p.psych_answers || {}), [cur.id]: v } }));
     }
     const next = qi + 1;
-    const add = [{ role: "user", text: v }];
-    if (next < qs.length) add.push({ role: "bot", text: qs[next].text });
-    else add.push({ role: "bot", text: "다 답해줘서 고마워! 아래 ‘기록 저장’을 누르면 오늘 일기로 정리할게." });
-    setMsgs((m) => [...m, ...add]);
+    const nextText = next < qs.length ? qText(qs[next], speech) : CLOSING[speech];
+    // 답마다 마스코트가 반응하면 말이 너무 많아진다. 위로는 주 1회(주간 위로)로 모은다.
+    setMsgs([...msgs, { role: "user", text: v }, { role: "bot", text: nextText }]);
     setQi(next);
     setInput("");
   }
@@ -142,9 +221,8 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
     try {
       const c = await composeDiary(msgs);
       const today = todayKey();
-      const domains = detectLifeDomains(c.text);
-      addCheckin({ date: today, text: c.text, mood: c.mood, keyword: c.emotion, domains });
-      if (domains.length) setDomains(today, domains);
+      addCheckin({ date: today, text: c.text, mood: c.mood, keyword: c.emotion, domains: c.domains });
+      if (c.domains) setDomains(today, c.domains);
       setSaved(c);
       onSaved?.();
     } finally {
@@ -155,7 +233,16 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
   const inner = (
     <>
       <div className="mb-2 flex items-center justify-between">
-        <div className="flex items-center gap-1.5 text-[13px] font-semibold text-cyan">💬 질문에 답하며 기록</div>
+        <div className="flex items-center gap-1.5 text-[13px] font-semibold text-cyan">
+          💬 질문에 답하며 기록
+          <button
+            onClick={toggleSpeech}
+            className="tap rounded-full border border-line px-2 py-0.5 text-[10px] font-normal text-mut hover:border-cyan hover:text-cyan"
+            title="마스코트 말투 바꾸기"
+          >
+            {speech === "casual" ? "반말" : "존댓말"}
+          </button>
+        </div>
         {showAreas && <div className="flex gap-1">
           {AREAS.map((a) => (
             <button
@@ -171,6 +258,20 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
           ))}
         </div>}
       </div>
+
+      {/* 지난 한 주를 읽고 건네는 말 — 주 1회. 분석·할 거리는 주간 리포트가 따로 한다. */}
+      {comfort?.text && (
+        <div className="mb-2 rounded-2xl border border-[#3A2F55] bg-[#161029] px-3 py-2">
+          <div className="mb-1 flex items-center gap-1.5">
+            <Mascot which={mascot} size={20} />
+            <span className="text-[11px] font-semibold text-[#B79BF0]">지난 한 주를 보고</span>
+          </div>
+          <p className="text-[12.5px] leading-relaxed text-sub">{comfort.text}</p>
+        </div>
+      )}
+      {thinking && !comfort?.text && (
+        <div className="mb-2 text-[11px] text-mut">지난 한 주를 읽고 있어요…</div>
+      )}
 
       <div ref={threadRef} className="flex flex-col gap-2 overflow-y-auto" style={{ maxHeight: 220 }}>
         {msgs.map((m, i) =>
@@ -244,14 +345,19 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
                 {opt}
               </button>
             ))}
-            <input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && answer()}
-              placeholder="직접 +"
-              className="rounded-full border border-line bg-transparent px-2.5 py-1.5 text-[12px] text-sub outline-none focus:border-cyan"
-              style={{ width: 72 }}
-            />
+            <div className="flex items-center gap-1">
+              <input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && input.trim() && answer()}
+                placeholder="직접 +"
+                className="rounded-full border border-line bg-transparent px-2.5 py-1.5 text-[12px] text-sub outline-none focus:border-cyan"
+                style={{ width: 82 }}
+              />
+              <button onClick={() => input.trim() && answer()} disabled={!input.trim()} className="tap rounded-full border border-line px-2.5 py-1.5 text-[12px] text-sub disabled:opacity-40">
+                확인
+              </button>
+            </div>
           </div>
         ) : (
           <div className="mt-2 flex items-center gap-2">
@@ -259,7 +365,7 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && answer()}
-              placeholder="답변을 적어줘"
+              placeholder={speech === "casual" ? "답변을 적어줘" : "답변을 적어주세요"}
               className="flex-1 rounded-xl border border-line bg-[#0E1424] px-3 py-2 text-sm text-ink outline-none focus:border-cyan"
             />
             <button onClick={() => answer()} disabled={!input.trim()} className="tap rounded-xl border border-line px-3 text-[13px] text-sub">

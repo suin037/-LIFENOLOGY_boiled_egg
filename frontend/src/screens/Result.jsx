@@ -59,6 +59,7 @@ export default function Result() {
         <span className="text-mut"> vs </span>
         <span className="font-bold text-gold">{labelOf(b.choice)}</span>
       </p>
+      <EvidenceModeBadge a={a} b={b} domains={result.domains || scenarioDomains} />
 
       <div className="lg:mt-5 lg:grid lg:grid-cols-[minmax(0,.9fr)_minmax(0,1.1fr)] lg:items-start lg:gap-7">
         <section className="lg:sticky lg:top-0">
@@ -153,6 +154,23 @@ export default function Result() {
       )}
     </div>
   );
+}
+
+function EvidenceModeBadge({ a, b, domains }) {
+  const selected = new Set([...(domains?.a || []), ...(domains?.b || [])]);
+  const hasModel = [a, b].some((side) => side.evidence_level === "model" || side.parallel_trajectory?.status === "available");
+  const hasMatched = [a, b].some((side) => side.koweps_evidence?.evidence_level === "personalized_matched_observation");
+  const hasObserved = [a, b].some((side) => side.koweps_evidence?.available || Object.values(side.domain_stats || {}).some((item) => item.status === "available"));
+  const mode = hasModel
+    ? ["개인 조건 모델", "입력 조건을 모델과 유사사례 매칭에 사용했습니다.", "#9B72F2"]
+    : hasMatched
+      ? ["유사 조건 종단 관측", "나와 가까운 조건의 사건 발생군과 미발생군을 비교합니다.", "#7E9EFF"]
+      : hasObserved
+        ? ["집단 관측·참고 통계", "개인의 확정 미래가 아니라 관련 집단의 기준값입니다.", "#65C8B0"]
+        : selected.has("relationship")
+          ? ["관계 행동 시뮬레이션", "예측 점수 대신 실행 단계와 기록할 변화를 제시합니다.", "#F39A4A"]
+          : ["설명 기반 탐색", "검증된 수치가 없는 부분은 서사와 행동 제안만 제공합니다.", "#8791A8"];
+  return <div className="mt-3 flex items-start gap-2 rounded-xl border border-white/10 bg-white/[.035] px-3 py-2.5"><span className="mt-0.5 h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: mode[2] }} /><div><div className="text-[10px] font-bold" style={{ color: mode[2] }}>{mode[0]}</div><div className="mt-0.5 text-[9px] leading-4 text-mut">{mode[1]}</div></div></div>;
 }
 
 // A/B 외의 '제3의 길' — 성향+일기신호로 LLM이 생성 (재구성 제안, 수치 예측 아님)

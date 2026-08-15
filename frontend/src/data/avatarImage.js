@@ -1,8 +1,8 @@
 import { createElement } from "react";
 import { createRoot } from "react-dom/client";
-import NiceAvatar from "react-nice-avatar";
 import html2canvas from "html2canvas";
 import { normalizeAvatar } from "./avatarOptions.js";
+import { AvatarVisual } from "../components/Avatar.jsx";
 
 // 설정의 조합형 아바타 DOM을 Cloudflare 참고 이미지용 PNG로 변환한다.
 // foreignObject SVG를 canvas에 그리면 브라우저가 canvas를 taint하므로,
@@ -23,11 +23,7 @@ export async function avatarToPngBlob(config) {
 
   const root = createRoot(host);
   try {
-    root.render(createElement(NiceAvatar, {
-      ...normalized,
-      shape: "circle",
-      style: { width: "512px", height: "512px" },
-    }));
+    root.render(createElement(AvatarVisual, { config: normalized, size: 512 }));
     // React 렌더와 SVG 레이아웃이 모두 반영된 다음 캡처한다.
     await nextFrame();
     await nextFrame();
