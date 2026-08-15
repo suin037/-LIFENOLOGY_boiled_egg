@@ -116,6 +116,9 @@ export default function DailySuggest() {
               <span className="text-[9px] text-[#8FB4F0]">{SHIFT_LABEL[tracks.shift] || ""}</span>
             )}
           </div>
+          {tracks.genres?.length > 0 && (
+            <p className="mb-1 text-[9.5px] text-mut">내가 적은 곡의 결 · {tracks.genres.join(", ")}</p>
+          )}
           {tracks.seedWhy && (
             <p className="mb-1.5 text-[9.5px] leading-relaxed text-mut">{tracks.seedWhy}</p>
           )}
@@ -136,6 +139,14 @@ export default function DailySuggest() {
                   <span className="block truncate text-[10px] text-sub">
                     {t.artist}{t.year ? ` · ${t.year}` : ""}{t.kind ? ` · ${t.kind}` : ""}
                   </span>
+                  {/* 장르는 Deezer 가 준 사실값 — 판단(why)과 갈라 보이게 칩으로 둔다. */}
+                  {t.genres?.length > 0 && (
+                    <span className="mt-0.5 flex flex-wrap gap-1">
+                      {t.genres.slice(0, 2).map((g) => (
+                        <span key={g} className="rounded-full bg-[#8FB4F0]/15 px-1.5 py-px text-[8.5px] text-[#8FB4F0]">{g}</span>
+                      ))}
+                    </span>
+                  )}
                   {t.why && <span className="mt-0.5 block text-[9.5px] leading-relaxed text-mut">{t.why}</span>}
                 </span>
               </a>
