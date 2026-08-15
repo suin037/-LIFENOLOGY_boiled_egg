@@ -9,6 +9,7 @@ import ExpeditionBoard from "../components/ExpeditionBoard.jsx";
 import ApiStatus from "../components/ApiStatus.jsx";
 import { universeSummary } from "../data/myUniverse.js";
 import { domainAlerts } from "../data/diarySignals.js";
+import { toChoiceDomains } from "../data/choices.js";
 
 // 홈 = 진입 허브. 인사 + 마스코트 + 오늘 기록 + 새 시뮬 + 나의 우주 요약.
 export default function HomeHub() {
@@ -23,7 +24,9 @@ export default function HomeHub() {
   function startCompare(alert) {
     setChoices({ a: alert.choiceA, b: alert.choiceB });
     setScenarioTexts({ a: alert.choiceA, b: alert.choiceB });
-    setScenarioDomains({ a: [alert.domain], b: [alert.domain] });
+    // 결과 화면의 지표 필터는 선택지 영역 어휘를 쓴다 — 행성 key 를 그대로 주면 걸러진다.
+    const ds = toChoiceDomains(alert.domain);
+    setScenarioDomains({ a: ds, b: ds });
     navigate("/input");
   }
 

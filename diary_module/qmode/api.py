@@ -1037,6 +1037,26 @@ def media_tracks(req: MediaReq):
     return MD.tracks(req.records, speech=req.speech, limit=max(1, min(5, req.limit or 3)))
 
 
+class SoftCompareReq(BaseModel):
+    """수치가 없는 영역(관계·건강·일상)의 두 길 비교. KLIPS 예측이 안 맞는 자리다."""
+    choiceA: str = ""
+    choiceB: str = ""
+    domain: Optional[str] = None
+    label: str = ""
+    records: list[dict] = []
+    persona: Optional[str] = None
+    speech: Optional[str] = None
+
+
+@app.post("/compare/soft")
+def compare_soft(req: SoftCompareReq):
+    """두 길을 장면으로 비교한다 — 숫자를 만들지 않고 기록에서만 끌어온다."""
+    from qmode import compare_soft as CS
+    return CS.compare(req.choiceA, req.choiceB, domain=req.domain,
+                      domain_label=req.label, records=req.records,
+                      persona=req.persona, speech=req.speech)
+
+
 class SuggestReq(BaseModel):
     """오늘 해볼 만한 것. 기회(인생 갈림길)와 달리 오늘 크기의 제안이다."""
     records: list[dict] = []          # [{date, text, mood, emotion}] 최근 것부터
