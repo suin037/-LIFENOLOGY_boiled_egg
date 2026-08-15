@@ -328,3 +328,18 @@ class CompareResponse(BaseModel):
     scenarios: dict[str, ScenarioView] = Field(default_factory=dict,
         description="{'A': ScenarioView, 'B': ScenarioView}")
     note: str = Field("", description="비교 해석 주의사항(동일 유형 경고·인과 적용 범위 등)")
+
+
+# ============================================================ /avatar/generate
+# 빌더(ToonHeadBuilder)가 만든 SVG 를 PNG 로 구워 참조 이미지로 넘기면,
+# 그걸 바탕으로 실사 아바타를 만든다. 실패해도 프론트는 SVG 를 계속 쓴다.
+
+class AvatarGenerateRequest(BaseModel):
+    """빌더가 만든 SVG 아바타를 구운 PNG + 생성 프롬프트."""
+
+    reference_png: str = Field(..., description="참조 이미지. 'data:image/png;base64,...' 형식")
+    prompt: str = Field(..., min_length=1, description="이미지 생성 프롬프트(영문)")
+
+
+class AvatarGenerateResponse(BaseModel):
+    image: str = Field(..., description="생성된 실사 아바타. PNG dataURL")

@@ -27,7 +27,10 @@ from schemas import (
     CompareRequest,
     CompareResponse,
     SimulateRequest,
+    AvatarGenerateRequest,
+    AvatarGenerateResponse,
 )
+import avatar_gen
 from core import run_prediction
 from compare import build_comparison
 from choice_classifier import classification_stats
@@ -307,6 +310,21 @@ def _treatment_coverage() -> dict:
 def koweps_evidence(payload: dict = Body(...)) -> dict:
     """선택 문장을 감사된 KOWEPS 사건 패널의 관측분포에 연결한다."""
     return koweps_evidence_for_request(payload)
+
+
+@app.post("/avatar/generate", response_model=AvatarGenerateResponse)
+def avatar_generate(req: AvatarGenerateRequest) -> AvatarGenerateResponse:
+    """빌더 아바타(PNG)를 참조 이미지로 실사 아바타를 생성한다.
+
+    실패해도 프론트는 SVG 아바타를 계속 쓰므로 화면이 깨지지 않는다.
+    503 은 '설정/연동이 아직 안 됨', 400 은 '보낸 이미지가 잘못됨'.
+    """
+    try:
+        return AvatarGenerateResponse(image=avatar_gen.generate(req.reference_png, req.prompt))
+    except avatar_gen.AvatarGenError as e:
+        # 참조 이미지 문제면 클라이언트 잘못, 그 외는 서버 설정 문제.
+        status = 400 if "참조 이미지" in str(e) or "프롬프트" in str(e) else 503
+        raise HTTPException(status_code=status, detail=str(e))
 
 
 @app.get("/health")
