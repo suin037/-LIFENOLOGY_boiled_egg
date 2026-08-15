@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { addCheckin, setDomains, syncDiaryEntries } from "./myUniverse.js";
 import { tagDomain } from "./dispositionApi.js";
+import { LIFE_DOMAINS, detectLifeDomains } from "./choices.js";
 
 // ─────────────────────────────────────────────────────────────
 // 일기(오늘 기록) — 매일 한 줄 + 기분(1~5). localStorage로 영속.
@@ -121,6 +122,10 @@ export function DiaryProvider({ children }) {
   // answers: {qid: 답변} — 질문형 일기(자세히 쓰기). 없으면 빠른 체크인만.
   function saveToday(mood, text, answers = null, extra = {}) {
     const today = iso(new Date());
+    const forTag = [text, ...(answers ? Object.values(answers) : [])]
+      .filter((s) => (s || "").trim())
+      .join(" ");
+    const immediateDomains = detectLifeDomains(forTag);
     // 일기 저장과 나의 우주 별 저장을 같은 사용자 행동으로 동기화한다.
     addCheckin({
       date: today,
@@ -131,15 +136,17 @@ export function DiaryProvider({ children }) {
       note: text,
       text,
       answers,
+      domains: immediateDomains.length ? immediateDomains : null,
       diaryId: `e-${today}`,
     });
     // 영역(행성) 자동 분류 — 저장 후 비동기로 태깅해 그날 체크인에 domains 를 채운다(지구본 렌즈용).
-    const forTag = [text, ...(answers ? Object.values(answers) : [])]
-      .filter((s) => (s || "").trim())
-      .join(" ");
     if (forTag) {
       tagDomain(forTag).then((r) => {
-        if (r && r.domains) setDomains(today, r.domains);
+        const validKeys = new Set(LIFE_DOMAINS.map((domain) => domain.key));
+        // 서버가 구형 5행성 키를 반환해도 9영역 저장값을 덮어쓰지 않는다.
+        const serverDomains = (r?.domains || []).filter((key) => validKeys.has(key));
+        const merged = [...new Set([...immediateDomains, ...serverDomains])];
+        if (merged.length) setDomains(today, merged);
       });
     }
     setEntries((prev) => {

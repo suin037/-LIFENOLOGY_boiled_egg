@@ -51,7 +51,8 @@ WEIGHTS = {
 
 
 def evidence_statuses(kind: str, validated_prediction: dict | None = None,
-                      provided_scores: dict | None = None) -> dict:
+                      provided_scores: dict | None = None,
+                      scenario: dict | None = None) -> dict:
     """3지표 숫자와 근거 수준을 분리한 계약.
 
     legacy 0~1 점수는 화면 호환용일 뿐 검증된 예측으로 승격하지 않는다.
@@ -96,6 +97,38 @@ def evidence_statuses(kind: str, validated_prediction: dict | None = None,
                 "status": "matched_observation" if has_life else "insufficient_evidence", "score": None,
                 "eligible_for_psych_rag": False,
                 "reason": "유사 집단의 만족·행복·건강·웰빙 변화 관측값" if has_life else "반복 검증에서 삶의 질 효과가 안정적이지 않음",
+            },
+        }
+
+    if kind == "창업":
+        scen = scenario or {}
+        raw = scen.get("raw") or {}
+        conf = scen.get("confidence") or {}
+        causal = conf.get("causal_effect_ci") or {}
+        effect = raw.get("causal_effect")
+        has_survival = raw.get("survival_months") is not None
+        return {
+            "경제적안정도": {
+                "status": "directional_evidence" if effect is not None else "insufficient_evidence",
+                "score": None, "effect": effect,
+                "unit": causal.get("unit"),
+                "ci95": ([causal.get("ci95_low"), causal.get("ci95_high")]
+                         if causal.get("ci95_low") is not None else None),
+                "eligible_for_psych_rag": False,
+                "reason": ("KLIPS 임금근로→자영 전환의 신고소득 방향 근거. "
+                           "임금과 사업소득의 개념 차이·생존편의를 포함해 개인 수익 예측으로 해석할 수 없음"),
+            },
+            "성장가능성": {
+                "status": "proxy_observation" if has_survival else "insufficient_evidence",
+                "score": None, "eligible_for_psych_rag": False,
+                "reason": ("KLIPS 자영 상태 지속·이탈 모델은 사업 지속가능성의 부분 대리지표이며 "
+                           "역량·직업성장을 직접 측정하지 않음" if has_survival else
+                           "창업 후 역량·직업성장을 직접 측정한 검증 결과가 없음"),
+            },
+            "삶의질": {
+                "status": "insufficient_evidence", "score": None,
+                "eligible_for_psych_rag": False,
+                "reason": "창업 표본의 선택별 만족도·건강·웰빙 경로가 표본 부족으로 검증되지 않음",
             },
         }
 

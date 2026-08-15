@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, ChevronRight, Compass, Lock, Plus, RotateCcw, Sparkles, Trash2 } from "lucide-react";
+import { Check, ChevronRight, Compass, Lock, Orbit, Plus, RotateCcw, Sparkles, Trash2 } from "lucide-react";
 import { useResult } from "../data/ResultContext.jsx";
 import {
   listUniverses,
@@ -18,7 +18,7 @@ import { LIFE_DOMAINS, domainColor, domainLabel, labelOf } from "../data/choices
 
 // 선택 A/B 색은 입력·로딩 화면과 반드시 같아야 한다(A=파랑, B=주황).
 const SIDE = {
-  A: { color: "#4C91FF", soft: "rgba(76,145,255,.13)", edge: "rgba(76,145,255,.45)" },
+  A: { color: "#9B82E8", soft: "rgba(139,108,207,.16)", edge: "rgba(155,130,232,.48)" },
   B: { color: "#FF9F32", soft: "rgba(255,159,50,.13)", edge: "rgba(255,159,50,.45)" },
 };
 const REFLECT_AFTER_DAYS = 7; // 결정 후 이만큼 지나야 회고를 묻는다
@@ -132,22 +132,27 @@ export default function Archive() {
   }, [items, filter, sort]);
 
   return (
-    <div className="pb-2">
-      <div className="mb-3 mt-1 flex items-start justify-between gap-3">
+    <div className="relative isolate min-h-full w-full overflow-hidden pb-5 lg:px-4 lg:pb-12 xl:px-8">
+      <div className="pointer-events-none absolute inset-x-[-140px] top-[-220px] -z-10 h-[520px] rounded-full bg-[radial-gradient(circle,rgba(139,108,207,.22)_0%,rgba(74,83,170,.08)_44%,transparent_70%)]" />
+      <div className="pointer-events-none absolute inset-0 -z-10 opacity-45 [background-image:radial-gradient(circle,rgba(255,255,255,.55)_0_1px,transparent_1.2px),radial-gradient(circle,rgba(139,108,207,.42)_0_1px,transparent_1.3px)] [background-position:8px_17px,35px_49px] [background-size:79px_79px,113px_113px]" />
+
+      <div className="mb-5 mt-1 flex items-start justify-between gap-3 lg:mb-8">
         <div className="min-w-0">
-          <div className="text-[12px] font-semibold text-[#76A7FF]">보관함</div>
-          <h1 className="mt-0.5 text-[24px] font-bold leading-[1.2] tracking-[-.02em]">
-            내가 내린 결정들
+          <div className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[.12em] text-[#A98DF1]">
+            <Orbit size={14} /> PARALLEL LOG
+          </div>
+          <h1 className="mt-0.5 text-[24px] font-bold leading-[1.2] tracking-[-.02em] lg:text-[34px]">
+            선택의 항해일지
           </h1>
           <p className="mt-1 text-[13px] text-sub">
-            저장한 갈림길에서 마음을 정하고, 한 걸음씩 옮기고, 그 후를 남기는 곳이에요.
+            비교했던 미래와 선택 이후의 발자국을 한곳에 모아요.
           </p>
         </div>
         {/* 새 카드는 시뮬레이션을 거쳐서만 생긴다 → 목록이 길어져도 진입점은 항상 여기 있다. */}
         <button
           type="button"
           onClick={() => navigate("/input")}
-          className="tap mt-0.5 flex shrink-0 items-center gap-1 rounded-full border border-cyan/40 bg-cyan/[.10] px-3 py-2 text-[12px] font-semibold text-cyan transition-colors hover:bg-cyan/[.18]"
+          className="tap mt-0.5 flex shrink-0 items-center gap-1 rounded-full border border-[#9B82E8]/45 bg-[#8B6CCF]/15 px-3 py-2 text-[12px] font-semibold text-[#B8A4F2] transition-colors hover:bg-[#8B6CCF]/25"
         >
           <Plus size={14} strokeWidth={2.4} />새 갈림길
         </button>
@@ -161,7 +166,7 @@ export default function Archive() {
           className={`tap mb-3 flex w-full items-center justify-center gap-2 rounded-[18px] border py-3 text-[13px] font-semibold transition-colors ${
             savedToday
               ? "border-white/10 bg-white/[.04] text-mut"
-              : "border-cyan/45 bg-cyan/[.10] text-cyan hover:bg-cyan/[.16]"
+              : "border-[#9B82E8]/45 bg-[linear-gradient(110deg,rgba(87,112,226,.18),rgba(139,108,207,.2))] text-[#C3B3F5] hover:bg-[#8B6CCF]/25"
           }`}
         >
           <Sparkles size={15} strokeWidth={2.1} />
@@ -173,6 +178,12 @@ export default function Archive() {
         <EmptyState onStart={() => navigate("/input")} />
       ) : (
         <>
+          <div className="mb-5 grid grid-cols-3 gap-2 rounded-[22px] border border-white/[.08] bg-[#0C1627]/70 p-3 shadow-[0_18px_55px_rgba(0,0,0,.22)] backdrop-blur-xl lg:max-w-[760px] lg:p-4">
+            <ArchiveStat label="저장한 우주" value={counts.all} />
+            <ArchiveStat label="탐험 중" value={counts.going} accent />
+            <ArchiveStat label="회고 완료" value={counts.done} />
+          </div>
+
           <div className="no-scrollbar -mx-1 flex items-center gap-1.5 overflow-x-auto px-1 pb-0.5">
             <Chip active={filter === "all"} onClick={() => setFilter("all")} count={counts.all}>
               전체
@@ -213,7 +224,7 @@ export default function Archive() {
           {visible.length === 0 ? (
             <FilterEmpty filter={filter} onShowAll={() => setFilter("all")} />
           ) : (
-            <div className="space-y-2">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {visible.map((u) => (
                 <UniverseCard key={u.id} u={u} onOpen={() => setOpenId(u.id)} />
               ))}
@@ -262,7 +273,7 @@ export default function Archive() {
 }
 
 function Chip({ children, active, onClick, count, accent }) {
-  const color = accent || "#4C91FF";
+  const color = accent || "#9B82E8";
   return (
     <button
       type="button"
@@ -275,6 +286,18 @@ function Chip({ children, active, onClick, count, accent }) {
       {children}
       <span className={`text-[10px] tabular-nums ${active ? "" : "text-mut"}`}>{count}</span>
     </button>
+  );
+}
+
+function ArchiveStat({ label, value, accent = false }) {
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-white/[.07] bg-white/[.025] px-3 py-3">
+      {accent && <span className="absolute -right-3 -top-4 h-12 w-12 rounded-full bg-[#8B6CCF]/25 blur-xl" />}
+      <div className="text-[10px] text-mut">{label}</div>
+      <div className={`mt-1 text-[20px] font-bold tabular-nums ${accent ? "text-[#B8A4F2]" : "text-ink"}`}>
+        {value}<span className="ml-0.5 text-[10px] font-medium text-mut">개</span>
+      </div>
+    </div>
   );
 }
 
@@ -294,9 +317,10 @@ function UniverseCard({ u, onOpen }) {
     <button
       type="button"
       onClick={onOpen}
-      className="tap relative block w-full overflow-hidden rounded-[20px] border border-white/10 bg-[#101A2A]/75 py-3.5 pl-4 pr-3 text-left shadow-[0_14px_40px_rgba(0,0,0,.22)] backdrop-blur-xl transition-colors hover:border-white/20 hover:bg-[#13203292]"
+      className="tap group relative block w-full overflow-hidden rounded-[24px] border border-white/10 bg-[linear-gradient(145deg,rgba(18,29,49,.92),rgba(13,20,36,.82))] py-4 pl-5 pr-4 text-left shadow-[0_18px_45px_rgba(0,0,0,.25)] backdrop-blur-xl transition-all hover:-translate-y-0.5 hover:border-[#9B82E8]/35"
     >
-      <span className="absolute left-0 top-0 h-full w-[5px]" style={{ background: stripe }} />
+      <span className="absolute left-0 top-0 h-full w-[4px]" style={{ background: stripe }} />
+      <span className="pointer-events-none absolute -right-10 -top-12 h-28 w-28 rounded-full border border-white/[.05] bg-[#8B6CCF]/[.06] transition-transform group-hover:scale-110" />
 
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1.5">
@@ -339,7 +363,7 @@ function UniverseCard({ u, onOpen }) {
             </span>
           </span>
         )}
-        <ChevronRight size={16} className="ml-auto shrink-0 text-mut" />
+        <ChevronRight size={16} className="ml-auto shrink-0 text-mut transition-transform group-hover:translate-x-0.5" />
       </div>
     </button>
   );
@@ -420,11 +444,11 @@ function DetailSheet({ u, onClose, onDecide, onToggleAction, onSaveNote, onReope
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex animate-backdrop-in items-end justify-center bg-[#02050C]/70 backdrop-blur-[4px]"
+      className="fixed inset-0 z-[70] flex animate-backdrop-in items-end justify-center overflow-hidden bg-[#02050C]/75 backdrop-blur-[5px] md:items-center md:px-8 md:py-[88px]"
       onClick={onClose}
     >
       <div
-        className="mb-[68px] flex max-h-[calc(100dvh-88px)] w-full max-w-phone animate-sheet-up flex-col overflow-hidden rounded-t-[34px] border border-white/10 bg-[#0D1727] shadow-[0_-24px_70px_rgba(0,0,0,.55)]"
+        className="mb-[76px] flex h-[min(780px,calc(100dvh-96px))] min-h-0 w-full max-w-phone animate-sheet-up flex-col overflow-hidden rounded-t-[34px] border border-white/10 bg-[radial-gradient(circle_at_85%_0%,rgba(139,108,207,.16),transparent_34%),#0D1727] shadow-[0_-24px_70px_rgba(0,0,0,.55)] md:mb-0 md:h-[min(720px,calc(100dvh-176px))] md:max-w-[820px] md:rounded-[30px]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="shrink-0 px-5 pb-3 pt-3">
@@ -442,7 +466,7 @@ function DetailSheet({ u, onClose, onDecide, onToggleAction, onSaveNote, onReope
                   </span>
                 ))}
               </div>
-              <h2 className="mt-2 flex items-baseline gap-2 text-[19px] font-bold tracking-[-.02em]">
+              <h2 className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[19px] font-bold tracking-[-.02em]">
                 <ChoiceLabel side="A" text={u.choiceA} dim={u.decision === "B"} />
                 <span className="shrink-0 text-[12px] font-medium text-mut">vs</span>
                 <ChoiceLabel side="B" text={u.choiceB} dim={u.decision === "A"} />
@@ -460,7 +484,7 @@ function DetailSheet({ u, onClose, onDecide, onToggleAction, onSaveNote, onReope
           </div>
         </div>
 
-        <div className="no-scrollbar min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-5 pb-10">
+        <div className="no-scrollbar min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-5 pb-8 md:grid md:grid-cols-2 md:content-start md:gap-3 md:space-y-0 md:px-6">
           {u.headline && (
             <p className="rounded-2xl border border-white/[.07] bg-white/[.03] px-3.5 py-3 text-[13px] leading-relaxed text-sub">
               {u.headline}
@@ -468,7 +492,7 @@ function DetailSheet({ u, onClose, onDecide, onToggleAction, onSaveNote, onReope
           )}
 
           <Step n={1} title="이 갈림길, 지금 마음은?">
-            <div className="flex gap-1.5">
+            <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
               <DecisionBtn on={u.decision === "A"} tone={SIDE.A} onClick={() => onDecide("A")}>
                 {labelOf(u.choiceA)}
               </DecisionBtn>
@@ -540,7 +564,7 @@ function DetailSheet({ u, onClose, onDecide, onToggleAction, onSaveNote, onReope
             />
           </Step>
 
-          <div className="flex gap-2 pt-1">
+          <div className="flex flex-wrap gap-2 pt-1 md:col-span-2">
             <button
               type="button"
               onClick={onReopen}
@@ -558,7 +582,7 @@ function DetailSheet({ u, onClose, onDecide, onToggleAction, onSaveNote, onReope
             </button>
           </div>
 
-          <div className="mt-1 rounded-2xl border border-white/[.07] px-3.5 py-3">
+          <div className="mt-1 rounded-2xl border border-white/[.07] px-3.5 py-3 md:col-span-2">
             {confirmDelete ? (
               <div className="flex items-center justify-between gap-3">
                 <span className="text-[12px] text-sub">이 기록을 삭제할까요? 되돌릴 수 없어요.</span>
@@ -598,14 +622,14 @@ function DetailSheet({ u, onClose, onDecide, onToggleAction, onSaveNote, onReope
 function Step({ n, title, children, locked = false, lockedText, lockedAction }) {
   return (
     <section
-      className={`rounded-[20px] border px-4 py-3.5 transition-colors ${
+      className={`rounded-[22px] border px-4 py-3.5 transition-colors ${
         locked ? "border-white/[.06] bg-white/[.015]" : "border-white/10 bg-white/[.035]"
       }`}
     >
       <div className="flex items-center gap-2">
         <span
           className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
-            locked ? "bg-white/[.07] text-mut" : "bg-cyan/15 text-cyan"
+            locked ? "bg-white/[.07] text-mut" : "bg-[#8B6CCF]/20 text-[#B8A4F2]"
           }`}
         >
           {n}
@@ -682,7 +706,7 @@ function FilterEmpty({ filter, onShowAll }) {
 
 function EmptyState({ onStart }) {
   return (
-    <div className="rounded-[24px] border border-white/10 bg-[#101A2A]/70 px-5 py-9 text-center backdrop-blur-xl">
+    <div className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_50%_25%,rgba(139,108,207,.16),transparent_40%),rgba(16,26,42,.78)] px-5 py-9 text-center shadow-[0_22px_65px_rgba(0,0,0,.28)] backdrop-blur-xl">
       <svg viewBox="0 0 120 120" className="mx-auto h-[112px] w-[112px]" aria-hidden="true">
         <ellipse cx="60" cy="60" rx="52" ry="20" fill="none" stroke="rgba(255,255,255,.10)" strokeDasharray="3 5" />
         <ellipse cx="60" cy="60" rx="38" ry="46" fill="none" stroke="rgba(76,145,255,.22)" strokeDasharray="3 5" />
@@ -697,7 +721,7 @@ function EmptyState({ onStart }) {
       <button
         type="button"
         onClick={onStart}
-        className="tap mt-5 inline-flex items-center gap-1.5 rounded-full border border-cyan/40 bg-cyan/[.12] px-5 py-2.5 text-[13px] font-semibold text-cyan transition-colors hover:bg-cyan/[.18]"
+        className="tap mt-5 inline-flex items-center gap-1.5 rounded-full border border-[#9B82E8]/45 bg-[#8B6CCF]/20 px-5 py-2.5 text-[13px] font-semibold text-[#C3B3F5] transition-colors hover:bg-[#8B6CCF]/30"
       >
         <Sparkles size={15} strokeWidth={2.1} />첫 갈림길 비교하기
       </button>

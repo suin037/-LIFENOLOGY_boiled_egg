@@ -17,6 +17,7 @@ import AvatarComparison from "../components/result/AvatarComparison.jsx";
 import DiarySignalCard from "../components/result/DiarySignalCard.jsx";
 import JobAnalysisView from "../components/result/JobAnalysisView.jsx";
 import RelationshipView from "../components/result/RelationshipView.jsx";
+import KowepsEvidenceCard from "../components/result/KowepsEvidenceCard.jsx";
 
 export default function Result() {
   const navigate = useNavigate();
@@ -85,6 +86,7 @@ export default function Result() {
 
       {/* 3층: ① 통계(아래 탭) · ② 내 기록 기반 상태 · ③ 개인화 해석 */}
       <DiarySignalCard />
+      <KowepsEvidenceCard a={a} b={b} domains={result.domains || scenarioDomains} />
       <PersonaScenario a={a} b={b} />
       <ThirdPath a={a} b={b} />
         </section>

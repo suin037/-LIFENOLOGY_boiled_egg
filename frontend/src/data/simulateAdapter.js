@@ -45,7 +45,7 @@ function pickTrajectory(raw, choice) {
 const maxYear = (rows, fallback) =>
   Array.isArray(rows) && rows.length ? Math.max(...rows.map((p) => p.year ?? 0)) : fallback;
 
-function buildSide(scenario, choice, detail, profile, evidence, domainCov, domainStats, validatedPrediction, indicatorEvidence) {
+function buildSide(scenario, choice, detail, profile, evidence, domainCov, domainStats, validatedPrediction, indicatorEvidence, kowepsEvidence, side) {
   const raw = scenario?.raw || {};
   const { rows: trajectory, isBaseline } = pickTrajectory(raw, choice);
   const wellbeing = raw.wellbeing_trajectory || [];
@@ -104,6 +104,10 @@ function buildSide(scenario, choice, detail, profile, evidence, domainCov, domai
     observed_outcomes: validatedPrediction?.observed_outcomes || null,
     // 각 지표의 숫자와 그 숫자를 뒷받침하는 근거 수준을 분리한다.
     indicator_evidence: indicatorEvidence || null,
+    // KOWEPS 사건군/유지군 종단 관측. 개인 예측이 아니라 선택과 대응되는
+    // 집단의 1·3·5·10차 실제 분포이며 변화 흐름·상세 분석에서 사용한다.
+    koweps_evidence: kowepsEvidence?.available ? kowepsEvidence : null,
+    koweps_role: kowepsEvidence?.event_side === side ? "event" : "comparison",
   };
 }
 
@@ -128,8 +132,9 @@ export function mapSimulateToPair(sim, { choiceA, choiceB, detailA = "", detailB
   const ds = cmp.domain_stats || sim.domain_stats || {};
   const vp = cmp.validated_predictions || sim.validated_predictions || {};
   const ie = cmp.indicator_evidence || sim.indicator_evidence || {};
-  const a = buildSide(A, choiceA, detailA, profile, ev.A, dc.A, ds.A, vp.A, ie.A);
-  const b = buildSide(B, choiceB, detailB, profile, ev.B, dc.B, ds.B, vp.B, ie.B);
+  const ke = cmp.koweps_evidence || sim.koweps_evidence || null;
+  const a = buildSide(A, choiceA, detailA, profile, ev.A, dc.A, ds.A, vp.A, ie.A, ke, "A");
+  const b = buildSide(B, choiceB, detailB, profile, ev.B, dc.B, ds.B, vp.B, ie.B, ke, "B");
 
   // 실데이터가 하나라도 있으면 실수치 모드. 연차별 궤적이 비어도(관측범위 밖/표본부족)
   // 이웃·인과·기대임금·지표 같은 실측이 있으면 목업으로 되돌리지 않는다.
@@ -138,6 +143,7 @@ export function mapSimulateToPair(sim, { choiceA, choiceB, detailA = "", detailB
     (s.neighbors && s.neighbors.length) ||
     s.causal_effect != null || s.expected_wage != null || s.survival_months != null ||
     s.parallel_trajectory?.status === "available" ||
+    s.koweps_evidence?.available ||
     (s.life_indicators && s.life_indicators.length);
   if (!hasReal(a) && !hasReal(b)) return null;
   return { a, b };

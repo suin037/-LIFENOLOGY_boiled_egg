@@ -4,6 +4,7 @@ import { DEFAULT_AVATAR } from "./avatarOptions.js";
 import { generateSceneImages, runCompareRaw, runSimulateRaw } from "../api.js";
 import { mapSimulateToPair } from "./simulateAdapter.js";
 import { avatarToPngBlob } from "./avatarImage.js";
+import { avatarGenerationSpec } from "./avatarOptions.js";
 import { initDemoFromUrl, noteSimulationRun, recordScenario, loadUniverse } from "./myUniverse.js";
 import { toPlanetKey } from "./choices.js";
 
@@ -215,7 +216,13 @@ export function ResultProvider({ children }) {
 
         try {
           const avatarBlob = await avatarToPngBlob(profile.avatarConfig);
-          const visual = await generateSceneImages({ avatarBlob, choiceA, choiceB, narrative });
+          const visual = await generateSceneImages({
+            avatarBlob,
+            avatarSpec: avatarGenerationSpec(profile.avatarConfig),
+            choiceA,
+            choiceB,
+            narrative,
+          });
           if (simulationRunRef.current !== runId) return;
           setResult({ ...storyResult, visuals: visual.images, visualModel: visual.model, imageLoading: false });
         } catch (imageError) {
@@ -240,6 +247,7 @@ export function ResultProvider({ children }) {
       const avatarBlob = await avatarToPngBlob(profile.avatarConfig);
       const visual = await generateSceneImages({
         avatarBlob,
+        avatarSpec: avatarGenerationSpec(profile.avatarConfig),
         choiceA: result.a.choice,
         choiceB: result.b.choice,
         narrative,

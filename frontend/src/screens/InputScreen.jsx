@@ -1,14 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useResult } from "../data/ResultContext.jsx";
 import { LIFE_DOMAINS, classifyChoice, detectLifeDomains, domainLabel, labelOf } from "../data/choices.js";
 import { detectEmotions } from "../data/DiaryContext.jsx";
+import { domainRumination } from "../data/diarySignals.js";
 import { Caption } from "../components/ui.jsx";
 import ValueDeepTest from "../components/ValueDeepTest.jsx";
 import JobPostingInput from "../components/JobPostingInput.jsx";
 import RelationshipInput from "../components/RelationshipInput.jsx";
 import Mascot from "../components/Mascot.jsx";
-import { BriefcaseBusiness, GraduationCap, Sprout, Wallet, HeartPulse, House, Users, Leaf, Compass, ArrowRight } from "lucide-react";
+import { BriefcaseBusiness, GraduationCap, Sprout, Wallet, HeartPulse, House, Users, Leaf, Compass, ArrowRight, GitCompareArrows } from "lucide-react";
 
 const MAJOR_FIELDS = ["공학", "자연", "사회", "인문", "교육", "예체능", "의약"];
 const DOMAIN_ICONS = {
@@ -54,6 +55,23 @@ export default function InputScreen() {
   const textB = scenarioTexts.b;
   const [domainAuto, setDomainAuto] = useState({ a: true, b: true });
   const [focused, setFocused] = useState(textA && !textB ? "b" : "a");
+  const [rumination, setRumination] = useState(() => domainRumination({ windowDays: 28, threshold: 4 }));
+
+  useEffect(() => {
+    const refresh = () => setRumination(domainRumination({ windowDays: 28, threshold: 4 }));
+    window.addEventListener("pm:universe", refresh);
+    return () => window.removeEventListener("pm:universe", refresh);
+  }, []);
+
+  function applySuggestedCompare() {
+    if (!rumination.compare) return;
+    const next = { a: rumination.compare.a, b: rumination.compare.b };
+    setScenarioTexts(next);
+    setChoices({ a: classifyChoice(next.a) || "기타", b: classifyChoice(next.b) || "기타" });
+    setScenarioDomains({ a: [rumination.domain.key], b: [rumination.domain.key] });
+    setDomainAuto({ a: true, b: true });
+    setFocused("a");
+  }
 
   function onText(side, value) {
     const field = side.toLowerCase();
@@ -122,32 +140,33 @@ export default function InputScreen() {
   }
 
   return (
-    <div className="-mx-5 -mt-1 min-h-full bg-[linear-gradient(180deg,#111D39_0%,#0B1325_46%,#171511_100%)] px-5 pb-7 pt-3 lg:mx-auto lg:rounded-[28px] lg:px-8 lg:py-7">
+    <div className="-mx-5 -mt-1 min-h-full bg-[linear-gradient(180deg,#111D39_0%,#0B1325_46%,#171511_100%)] px-5 pb-7 pt-3 lg:mx-auto lg:bg-none lg:px-10 lg:pb-12 lg:pt-4 xl:px-14">
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-[12px] font-semibold text-[#8B6CCF]">시뮬레이션</div>
-          <h1 className="mt-0.5 text-[22px] font-bold tracking-[-.035em]">두 미래를 나란히 놓아볼까요?</h1>
+          <div className="text-[12px] font-semibold text-[#8B6CCF] lg:text-[13px]">시뮬레이션</div>
+          <h1 className="mt-0.5 text-[22px] font-bold tracking-[-.035em] lg:text-[32px]">두 미래를 나란히 놓아볼까요?</h1>
         </div>
         <span className="rounded-full border border-[#6F55A7] bg-[#211832] px-3 py-1 text-[11px] font-bold text-[#8B6CCF]">
           {completed} / 2
         </span>
       </div>
 
-      <div className="mt-3 h-1 overflow-hidden rounded-full bg-white/10">
+      <div className="mt-3 h-1 overflow-hidden rounded-full bg-white/10 lg:mt-5">
         <div className="h-full rounded-full bg-[#8B6CCF] transition-all duration-300" style={{ width: `${completed * 50}%` }} />
       </div>
+      {rumination.prompt && (
+        <button type="button" onClick={applySuggestedCompare} className="tap mt-3 flex w-full items-center gap-3 rounded-[18px] border border-cyan/40 bg-[#1D1730] px-4 py-3.5 text-left transition-colors hover:bg-[#16264a] lg:mt-5 lg:max-w-[720px] lg:px-5 lg:py-4">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-500/15 text-violet-400">
+            <GitCompareArrows size={18} strokeWidth={2} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[13px] font-semibold text-cyan">최근 {rumination.windowDays}일 동안 {rumination.domain.label} 이야기가 {rumination.count}일 나타났어요</span>
+            <span className="block text-[11px] text-sub">{rumination.compare.action}을 추천해요 · 누르면 선택지가 채워져요</span>
+          </span>
+        </button>
+      )}
 
-      <div className="mt-4 flex items-center gap-3 rounded-[18px] border border-white/10 bg-white/[.055] px-3.5 py-3 backdrop-blur">
-        <Mascot which="cosmo" size={42} />
-        <div>
-          <div className="text-[11px] font-bold text-[#8B6CCF]">코스모 · 고민과 선택</div>
-          <p className="mt-0.5 text-[12px] text-sub">
-            {!normalizedA ? "먼저 마음에 떠오르는 첫 번째 길을 적어보세요." : !normalizedB ? "좋아요. 반대편에 놓을 두 번째 길은 무엇인가요?" : "두 갈림길이 준비됐어요. 같은 기준으로 비교해볼게요."}
-          </p>
-        </div>
-      </div>
-
-      <div className="relative mt-3 flex min-h-[400px] flex-col overflow-hidden rounded-[24px] border border-white/10 bg-[#08111F]/70 shadow-[0_20px_50px_rgba(0,0,0,.32)] lg:min-h-[350px] lg:flex-row">
+      <div className="relative mt-3 flex min-h-[400px] flex-col overflow-hidden rounded-[24px] border border-white/10 bg-[#08111F]/70 shadow-[0_20px_50px_rgba(0,0,0,.32)] lg:mt-6 lg:min-h-[430px] lg:flex-row lg:rounded-[30px]">
         <ChoicePanel
           side="A" text={textA} domains={scenarioDomains.a} domainAuto={domainAuto.a}
           active={focused === "a"} suggestions={SUGGESTIONS.a}
@@ -249,10 +268,9 @@ export default function InputScreen() {
         {emotions.length > 0 && <Caption>감정은 결과 설명의 말투와 맥락에 반영됩니다.</Caption>}
       </details>
 
-      <button type="button" disabled={blocked} onClick={startComparison} className={`tap mt-4 flex w-full items-center justify-center gap-2 rounded-full py-4 text-[15px] font-bold transition-all ${blocked ? "bg-white/10 text-mut" : "bg-[#F4F0FF] text-[#08101D] shadow-[0_14px_34px_rgba(139,108,207,.25)]"}`}>
+      <button type="button" disabled={blocked} onClick={startComparison} className={`tap mt-4 flex w-full items-center justify-center gap-2 rounded-full py-4 text-[15px] font-bold transition-all lg:ml-auto lg:max-w-[420px] lg:py-4.5 ${blocked ? "bg-white/10 text-mut" : "bg-[#F4F0FF] text-[#08101D] shadow-[0_14px_34px_rgba(139,108,207,.25)]"}`}>
         두 미래 비교 시작하기 <ArrowRight size={17} />
       </button>
-      <p className="mt-2 text-center text-[10px] text-mut">두 길을 채우면 코스모가 같은 조건으로 결과를 비교해요.</p>
     </div>
   );
 }
@@ -337,9 +355,9 @@ function ChoicePanel({ side, text, domains, domainAuto, active, suggestions, onF
   const accentText = isA ? "text-[#8B6CCF]" : "text-[#FFB85C]";
 
   return (
-    <section onClick={onFocus} className={`relative min-h-0 min-w-0 flex-1 basis-0 overflow-hidden px-4 py-4 transition-[opacity,background-color] duration-300 ease-out lg:px-6 lg:py-5 ${isA ? "bg-[radial-gradient(circle_at_15%_10%,rgba(69,116,225,.19),transparent_48%)]" : "bg-[radial-gradient(circle_at_85%_90%,rgba(211,137,49,.15),transparent_48%)]"} ${active ? "opacity-100" : "opacity-75"}`}>
+    <section onClick={onFocus} className={`relative min-h-0 min-w-0 flex-1 basis-0 overflow-hidden px-4 py-4 transition-[opacity,background-color] duration-300 ease-out lg:px-9 lg:py-8 xl:px-11 ${isA ? "bg-[radial-gradient(circle_at_15%_10%,rgba(69,116,225,.19),transparent_48%)]" : "bg-[radial-gradient(circle_at_85%_90%,rgba(211,137,49,.15),transparent_48%)]"} ${active ? "opacity-100" : "opacity-75"}`}>
       <div className={`text-[11px] font-black tracking-[.12em] ${accentText}`}>CHOICE {side}</div>
-      <textarea value={text} onFocus={onFocus} onChange={(event) => onText(event.target.value)} rows={2} maxLength={100} placeholder={isA ? "첫 번째 길을 적어주세요" : "두 번째 길을 적어주세요"} className="mt-2 block max-h-[72px] min-h-[58px] w-full min-w-0 max-w-full resize-none overflow-y-auto break-words border-b border-white/15 bg-transparent pb-2 text-[18px] font-bold leading-[1.3] tracking-[-.025em] text-ink outline-none placeholder:text-white/25 lg:text-[20px]" />
+      <textarea value={text} onFocus={onFocus} onChange={(event) => onText(event.target.value)} rows={2} maxLength={100} placeholder={isA ? "첫 번째 길을 적어주세요" : "두 번째 길을 적어주세요"} className="mt-2 block max-h-[96px] min-h-[58px] w-full min-w-0 max-w-full resize-none overflow-y-auto break-words border-b border-white/15 bg-transparent pb-2 text-[18px] font-bold leading-[1.3] tracking-[-.025em] text-ink outline-none placeholder:text-white/25 lg:mt-4 lg:min-h-[82px] lg:text-[24px]" />
 
       {!text.trim() && active && (
         <div className="mt-3 min-w-0 overflow-hidden">

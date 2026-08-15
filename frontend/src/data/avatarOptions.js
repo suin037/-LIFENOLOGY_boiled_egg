@@ -117,4 +117,33 @@ export function randomAvatar() {
   return out;
 }
 
+// 이미지 생성 모델은 참고 PNG만 보고 머리·성별 표현을 임의로 다시 해석할 수 있다.
+// 선택한 조합을 텍스트 제약으로도 함께 보내 A/B 장면에서 같은 캐릭터를 유지한다.
+//
+// 모델이 읽는 값이라 내부 id 대신 사람이 읽는 라벨을 보낸다("longParted" 가 아니라
+// "긴 생머리 · 가르마"). toonHead 로 갈아타면서 필드가 통째로 바뀌었으므로,
+// 예전 react-nice-avatar 필드명(faceColor·shirtStyle 등)은 더 이상 쓰지 않는다.
+function labelOf(key, id) {
+  const axis = AXES.find((a) => a.key === key);
+  return axis?.values.find((v) => v.id === id)?.label ?? id;
+}
+
+export function avatarGenerationSpec(config) {
+  const c = normalizeAvatar(config);
+  return {
+    characterType: "gender-neutral illustrated avatar",
+    hairStyle: labelOf("hairStyle", c.hairStyle),
+    hairColor: `#${c.hairColor}`,
+    skinTone: `#${c.skinColor}`,
+    faceShape: labelOf("face", c.face),
+    eyeStyle: labelOf("eyes", c.eyes),
+    eyebrowStyle: labelOf("eyebrows", c.eyebrows),
+    mouthStyle: labelOf("mouth", c.mouth),
+    glassesStyle: labelOf("glasses", c.glasses),
+    beardStyle: c.beard ? labelOf("beard", c.beard) : "none",
+    outfitStyle: labelOf("clothes", c.clothes),
+    outfitColor: `#${c.clothesColor}`,
+  };
+}
+
 export { NONE };

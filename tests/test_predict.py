@@ -10,7 +10,7 @@ import sys
 import types
 from pathlib import Path
 
-BACKEND = Path(__file__).resolve().parent / "backend"
+BACKEND = Path(__file__).resolve().parents[1] / "backend"
 sys.path.insert(0, str(BACKEND))
 
 # narrative(Claude API) 스텁 — 실제 API 호출 없이 테스트.

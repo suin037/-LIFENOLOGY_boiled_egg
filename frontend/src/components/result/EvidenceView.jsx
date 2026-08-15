@@ -2,21 +2,24 @@ import { Card, Caption } from "../ui.jsx";
 import PeopleView from "./PeopleView.jsx";
 import CausalView from "./CausalView.jsx";
 import RiskView from "./RiskView.jsx";
+import { KowepsDetailView } from "./KowepsEvidenceView.jsx";
 
 export default function EvidenceView({ a, b, dataMode }) {
   const hasPeople = [a, b].some((s) => s.neighbors?.length);
   const hasCausal = [a, b].some((s) => s.causal_effect != null);
   const hasRisk = [a, b].some((s) => Object.keys(s.risk_timeline || {}).length);
+  const hasKoweps = [a, b].some((s) => s.koweps_evidence?.available);
   return (
     <div>
       <h2 className="mb-1 text-base font-semibold">분석 상세</h2>
       <Caption>원하면 비슷한 사례와 효과 추정을 더 자세히 볼 수 있어요.</Caption>
       {dataMode === "demo" && <Card className="border-danger/40"><p className="text-[12px] font-semibold text-danger">현재 숫자와 그래프는 데모 데이터입니다.</p><Caption>로컬 예측모델 파일이 연결되기 전에는 실제 개인 예측으로 해석하면 안 됩니다.</Caption></Card>}
       <DomainStats a={a} b={b} />
+      {hasKoweps && <KowepsDetailView a={a} b={b} />}
       {hasPeople && <Disclosure title="비슷한 사례 보기"><PeopleView a={a} b={b} /></Disclosure>}
       {hasCausal && <Disclosure title="이직의 소득 효과 추정 보기"><CausalView a={a} b={b} /></Disclosure>}
       {hasRisk && <Disclosure title="지속 가능성·이탈 가능성 보기"><RiskView a={a} b={b} /></Disclosure>}
-      {!hasPeople && !hasCausal && !hasRisk && <Card><Caption>현재 추가로 보여드릴 상세 분석이 없습니다.</Caption></Card>}
+      {!hasPeople && !hasCausal && !hasRisk && !hasKoweps && <Card><Caption>현재 추가로 보여드릴 상세 분석이 없습니다.</Caption></Card>}
     </div>
   );
 }

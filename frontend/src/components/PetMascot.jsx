@@ -39,7 +39,7 @@ export default function PetMascot({ rumination, onCompare }) {
   const pattedToday = !canPatToday(pet);
   const checkedIn = hasCheckedInToday();
   const guideMessage = rumination?.prompt
-    ? `최근 ${rumination.windowDays}일 동안 이직 고민이 ${rumination.count}일 반복됐어요. 이제 기록만 하기보다 두 선택을 비교해볼까요?`
+    ? `최근 ${rumination.windowDays}일 동안 ${rumination.domain.label} 이야기가 ${rumination.count}일 반복됐어요. 이제 기록만 하기보다 ${rumination.compare.action}을 비교해볼까요?`
     : checkedIn
       ? "오늘 상태는 기록했어요. 무리해서 결정하지 말고, 떠오른 갈림길을 한 줄로 남겨두세요."
       : "아직 오늘 상태를 모르겠어요. 30초 체크인을 하면 오늘에 맞는 다음 행동을 같이 정해볼게요.";

@@ -88,12 +88,12 @@ export default function MyUniverseV2() {
   }
 
   return (
-    <div className="relative h-full min-h-[620px] overflow-hidden rounded-[26px] border border-white/10 bg-[#030712]">
-      <div className="pointer-events-none absolute left-8 top-6 z-20">
+    <div className="relative h-full min-h-[620px] overflow-hidden rounded-[26px] border border-white/10 bg-[#030712] lg:h-[calc(100vh-76px)] lg:min-h-[calc(100vh-76px)] lg:rounded-none lg:border-0">
+      <div className="pointer-events-none absolute left-8 top-6 z-20 lg:left-12 lg:top-9 xl:left-16">
         <h1 className="text-[25px] font-bold tracking-[-.03em]">나의 우주</h1>
         <p className="mt-1 text-[11px] text-sub">당신의 기록이 별이 되고, 별들이 연결되어 우주가 됩니다.</p>
       </div>
-      <div className="absolute right-6 top-5 z-30 flex flex-wrap justify-end gap-1.5">
+      <div className="absolute right-6 top-5 z-30 flex flex-wrap justify-end gap-1.5 lg:right-12 lg:top-8 xl:right-16">
         {[['6w','6주'],['1y','1년'],['eunwoo','은우'],['clear','비우기']].map(([key,label])=><button key={key} type="button" onClick={()=>runDemo(key)} className="tap rounded-full border border-white/10 bg-black/25 px-3 py-1.5 text-[9px] font-semibold text-white/60 backdrop-blur hover:border-[#8B6CCF]/50 hover:text-[#C7B5F2]">{label}</button>)}
         <button type="button" onClick={() => navigate("/archive")} className="tap flex items-center gap-2 rounded-full border border-white/10 bg-black/25 px-3 text-[10px] text-sub backdrop-blur"><Archive size={13} /> 보관함</button>
       </div>

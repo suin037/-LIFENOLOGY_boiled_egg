@@ -1,68 +1,68 @@
-# Python
-__pycache__/
-*.py[cod]
+# Secrets and local environments
+.env
+.env.*
+!.env.example
+!frontend/.env.production.example
 .venv/
 venv/
-.env
 
-# Data (대용량 원본 / 산출물)
-data/raw/*.SAV
-data/raw/*.sav
+# Python caches and test output
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Frontend dependencies and generated output
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.vite-dev*.log
+*.log
+
+# Local temporary files
+tmp/
+*.tmp
+*.bak
+
+# Private/raw datasets and generated tables
+data/raw/
+data/clean/
 data/processed/*.csv
 data/goms_clean.csv
-
-# Model artifacts
-backend/models/artifacts/*.pkl
-
-# ── 개인 단위 데이터 확실 차단 (개인정보/재배포 금지) ──
-# .gitignore 구멍 방지: data/clean·data/raw 전체를 무시(개인단위 패널·원본 설문).
-# 공개 집계표는 data/dgroup·data/lanollab 에만 두고 그건 추적 유지.
-data/clean/
-data/raw/
-*.pkl
-*.sas7bdat
-# 위 두 디렉터리 밖에 떨어져 있는 KLIPS 개인단위 산출물 — 어떤 패턴에도 안 걸려서
-# `git add .` 한 번이면 공개 레포로 올라간다. 파일명으로 직접 막는다.
 data/klips_clean.csv
 data/klips_survival.csv
-
-# Node / frontend
-node_modules/
-frontend/dist/
-
-# OS / editor
-.DS_Store
-.vscode/
-.idea/
-
-# ── 원자료(raw) 미포함 정책 (README 6절) ──
-# 사회통합실태조사 원자료 (개인 단위 데이터 — 재배포 금지)
-*사회통합실태조사_데이터*.xlsx
-*사회통합실태조사*.SAV
 *.sav
-
-# 보고서 PDF 원문 (재배포 이슈)
-*.pdf
-
-# 설문지·개요서 원본
+*.SAV
+*.sas7bdat
+*.pkl
+*_2025*.csv
+*_2026*.csv
+*.xlsx
 *.hwp
 *.hwpx
+*.pdf
 
-# KOSIS/KEDI 원본 다운로드 파일 (팀 판단으로 포함 시 이 두 줄 삭제)
-*_2026*.csv
-*_2025*.csv
+# Generated model/vector artifacts
+backend/models/artifacts/*.pkl
+data/vectordb/chroma.sqlite3
+data/vectordb/*-*-*-*-*/
+data/vectordb/psychology/*_preview.json
+data/vectordb/psychology/*_preview.txt
 
-# ── 일반 ──
-.DS_Store
-Thumbs.db
-~$*.xlsx
-
+# Backend scratch requests and local encryption key
 backend/req*.json
 backend/resp*.json
 backend/smoke_check.py
-
-# 백엔드 at-rest 암호화 키 (DB와 분리, 절대 커밋 금지)
 diary_module/qmode/.pm_at_rest.key
+
+# OS and editors
+.DS_Store
+Thumbs.db
+~$*.xlsx
+.vscode/
+.idea/
 
 # ── 벡터DB 런타임 산출물 (Chroma — 재생성 가능한 바이너리) ──
 # data/vectordb/psychology/ 는 추적 유지(팀 공유 카드 DB), 런타임 인덱스만 제외.

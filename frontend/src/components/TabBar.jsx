@@ -28,7 +28,7 @@ const TABS = [
 
 export default function TabBar() {
   return (
-    <nav className="z-30 mx-3 mb-2 flex rounded-[22px] border border-line bg-[#111B2AF2] px-1 pb-[env(safe-area-inset-bottom)] shadow-[0_12px_36px_rgba(0,0,0,.35)] backdrop-blur-xl lg:mx-auto lg:mb-4 lg:w-[min(720px,calc(100%-48px))] lg:rounded-full lg:px-3 lg:py-1">
+    <nav className="z-30 mx-3 mb-2 flex rounded-[22px] border border-line bg-[#111B2AF2] px-1 pb-[env(safe-area-inset-bottom)] shadow-[0_12px_36px_rgba(0,0,0,.35)] backdrop-blur-xl lg:hidden">
       {TABS.map(({ to, label, Icon }) => (
         <NavLink
           key={to}

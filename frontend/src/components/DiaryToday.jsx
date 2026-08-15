@@ -71,7 +71,7 @@ export default function DiaryToday() {
   }
 
   return (
-    <Card>
+    <Card className="w-full lg:flex lg:h-full lg:flex-col lg:p-5">
       <GuideCarousel onOpen={setActiveGuide} />
       <WeekStrip entries={entries} />
 

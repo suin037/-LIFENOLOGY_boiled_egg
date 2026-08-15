@@ -230,25 +230,41 @@ export default function Onboarding() {
   ];
 
   return (
-    <div>
-      <Eyebrow>나를 알려주세요 · {Math.min(visibleThrough + 1, steps.length)}/{steps.length}</Eyebrow>
-      <div className="mb-8 flex gap-1.5">
-        {steps.map((label, index) => (
-          <b key={label} className={`h-1 flex-1 rounded-full ${index <= visibleThrough ? "bg-[#8B6CCF] shadow-[0_0_8px_rgba(139,108,207,.22)]" : "bg-[#1E2740]"}`} />
-        ))}
-      </div>
+    <div className="lg:grid lg:min-h-[calc(100vh-140px)] lg:grid-cols-[330px_minmax(0,1fr)] lg:items-start lg:gap-14 xl:grid-cols-[380px_minmax(0,1fr)] xl:gap-20">
+      <aside className="hidden lg:sticky lg:top-[112px] lg:block">
+        <p className="text-[12px] font-bold tracking-[.16em] text-violet-300">START YOUR UNIVERSE</p>
+        <h1 className="mt-4 text-[38px] font-bold leading-[1.18] tracking-[-.04em]">당신의 선택을<br />더 잘 이해하기 위해</h1>
+        <p className="mt-4 max-w-[310px] text-[13px] leading-6 text-sub">입력한 정보는 두 미래를 같은 기준으로 비교하고 결과를 개인화하는 데 사용됩니다.</p>
+        <ol className="mt-9 space-y-2">
+          {steps.map((label, index) => {
+            const current = index === visibleThrough;
+            const complete = index < visibleThrough;
+            return <li key={label} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-[12px] transition-colors ${current ? "bg-violet-500/15 font-semibold text-violet-200" : complete ? "text-sub" : "text-mut"}`}><span className={`flex h-7 w-7 items-center justify-center rounded-full border text-[10px] font-bold ${current ? "border-violet-400 bg-violet-500/20" : complete ? "border-violet-400/30 bg-violet-500/10 text-violet-300" : "border-white/10"}`}>{complete ? "✓" : index + 1}</span>{label}</li>;
+          })}
+        </ol>
+      </aside>
 
-      <div className="space-y-5">
-        {stepContent.slice(0, visibleThrough + 1).map((content, index) => (
-          <section key={steps[index]} className="animate-fade">
-            {content}
-          </section>
-        ))}
-      </div>
+      <main className="min-w-0 lg:max-w-[760px] lg:rounded-[28px] lg:border lg:border-white/[.07] lg:bg-[#0C1727]/70 lg:p-8 lg:shadow-[0_24px_70px_rgba(0,0,0,.24)] lg:backdrop-blur-xl xl:p-10">
+        <Eyebrow>나를 알려주세요 · {Math.min(visibleThrough + 1, steps.length)}/{steps.length}</Eyebrow>
+        <h2 className="mb-5 hidden text-[26px] font-bold tracking-[-.03em] lg:block">나만의 평행우주 준비하기</h2>
+        <div className="mb-8 flex gap-1.5">
+          {steps.map((label, index) => (
+            <b key={label} className={`h-1 flex-1 rounded-full ${index <= visibleThrough ? "bg-[#8B6CCF] shadow-[0_0_8px_rgba(139,108,207,.22)]" : "bg-[#1E2740]"}`} />
+          ))}
+        </div>
 
-      {visibleThrough >= steps.length - 1 && (
-        <Button className="mb-2 mt-8" onClick={finish}>저장하고 시작하기</Button>
-      )}
+        <div className="space-y-5 lg:space-y-6">
+          {stepContent.slice(0, visibleThrough + 1).map((content, index) => (
+            <section key={steps[index]} className="animate-fade lg:rounded-[18px] lg:border lg:border-white/[.055] lg:bg-black/10 lg:p-5">
+              {content}
+            </section>
+          ))}
+        </div>
+
+        {visibleThrough >= steps.length - 1 && (
+          <Button className="mb-2 mt-8 lg:ml-auto lg:max-w-[320px]" onClick={finish}>저장하고 시작하기</Button>
+        )}
+      </main>
     </div>
   );
 }

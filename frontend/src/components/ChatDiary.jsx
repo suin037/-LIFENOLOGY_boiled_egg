@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Card, Caption } from "./ui.jsx";
 import { addCheckin, setDomains, todayKey } from "../data/myUniverse.js";
+import { detectLifeDomains } from "../data/choices.js";
 import { composeDiary, chatTurn, chatClosing } from "../data/dispositionApi.js";
 import { buildChatContext, needsComfort, markEventsAsked, closeEvents } from "../data/chatContext.js";
 import { todayQuestions } from "../data/questions.js";
@@ -198,8 +199,9 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
     try {
       const c = await composeDiary(msgs);
       const today = todayKey();
-      addCheckin({ date: today, text: c.text, mood: c.mood, keyword: c.emotion, domains: c.domains });
-      if (c.domains) setDomains(today, c.domains);
+      const domains = detectLifeDomains(c.text);
+      addCheckin({ date: today, text: c.text, mood: c.mood, keyword: c.emotion, domains });
+      if (domains.length) setDomains(today, domains);
       setSaved(c);
       onSaved?.();
     } finally {
