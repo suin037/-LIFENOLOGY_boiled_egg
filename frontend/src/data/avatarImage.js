@@ -1,66 +1,39 @@
-import { createElement } from "react";
-import { createRoot } from "react-dom/client";
-import NiceAvatar from "react-nice-avatar";
-import html2canvas from "html2canvas";
-import { normalizeAvatar } from "./avatarOptions.js";
+import { avatarSvg, normalizeAvatar } from "./avatarOptions.js";
 
-// 설정의 조합형 아바타 DOM을 Cloudflare 참고 이미지용 PNG로 변환한다.
-// foreignObject SVG를 canvas에 그리면 브라우저가 canvas를 taint하므로,
-// html2canvas로 실제 DOM 레이어를 직접 캡처한다.
+// 선택한 아바타를 Cloudflare 참고 이미지용 PNG로 변환한다.
+// DiceBear 가 만든 SVG 는 외부 리소스를 참조하지 않고 Blob URL 로 읽으므로
+// canvas 가 taint 되지 않는다 — toBlob 이 그대로 성공한다.
+const SIZE = 480;
+
 export async function avatarToPngBlob(config) {
-  const normalized = normalizeAvatar(config);
-  const host = document.createElement("div");
-  host.style.cssText = [
-    "position:fixed",
-    "left:-10000px",
-    "top:0",
-    "width:512px",
-    "height:512px",
-    "overflow:hidden",
-    "pointer-events:none",
-  ].join(";");
-  document.body.appendChild(host);
+  const c = normalizeAvatar(config);
+  const svg = avatarSvg(c);
+  const img = await loadSvg(svg);
 
-  const root = createRoot(host);
-  try {
-    root.render(createElement(NiceAvatar, {
-      ...normalized,
-      shape: "circle",
-      style: { width: "512px", height: "512px" },
-    }));
-    // React 렌더와 SVG 레이아웃이 모두 반영된 다음 캡처한다.
-    await nextFrame();
-    await nextFrame();
+  const canvas = document.createElement("canvas");
+  canvas.width = SIZE;
+  canvas.height = SIZE;
+  const ctx = canvas.getContext("2d");
 
-    const rendered = await html2canvas(host, {
-      backgroundColor: null,
-      width: 512,
-      height: 512,
-      scale: 1,
-      logging: false,
-      useCORS: false,
-    });
+  // 생성 모델이 인물을 잘라 해석하지 않도록 배경을 채우고 여백을 남긴다.
+  // 아바타 자체는 배경이 투명하다(빌더에 배경색 축이 없다). 참조 이미지로 보낼 때만
+  // 중립적인 밝은 회색을 깔아 인물 윤곽이 배경과 뭉개지지 않게 한다.
+  ctx.fillStyle = "#f3f0ea";
+  ctx.fillRect(0, 0, SIZE, SIZE);
+  const pad = Math.round(SIZE * 0.05);
+  ctx.drawImage(img, pad, pad, SIZE - pad * 2, SIZE - pad * 2);
 
-    // 얼굴과 머리 전체가 함께 들어오도록 자른다. 너무 좁게 자르면 긴 머리·모자·안경이
-    // 사라져 생성 모델이 사용자를 다른 인물로 해석하기 쉽다.
-    // Cloudflare reference input 제한에 맞춰 결과는 512px보다 작게 유지한다.
-    const canvas = document.createElement("canvas");
-    canvas.width = 480;
-    canvas.height = 480;
-    const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "#f3f0ea";
-    ctx.fillRect(0, 0, 480, 480);
-    ctx.drawImage(rendered, 64, 24, 384, 384, 20, 20, 440, 440);
-
-    return await canvasToBlob(canvas);
-  } finally {
-    root.unmount();
-    host.remove();
-  }
+  return canvasToBlob(canvas);
 }
 
-function nextFrame() {
-  return new Promise((resolve) => requestAnimationFrame(resolve));
+function loadSvg(svg) {
+  const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("아바타 SVG 렌더 실패")); };
+    img.src = url;
+  });
 }
 
 function canvasToBlob(canvas) {
