@@ -124,9 +124,32 @@ def _ask_json(client, system, user, max_tokens=900):
 
 
 def _artist_id(name):
-    d = _get("/search/artist", q=name, limit=1)
-    rows = (d or {}).get("data") or []
-    return rows[0]["id"] if rows else None
+    """이름 → 아티스트 id. 팬 수가 가장 많은 항목을 고른다.
+
+    1순위를 그냥 쓰면 안 된다 — 'Coldplay' 검색 1순위가 팬 74명짜리 껍데기 계정이고
+    진짜 Coldplay(팬 1,834만)는 2순위였다. 껍데기는 관련 아티스트도 대표곡도 없어
+    후보가 통째로 비었다(외국 아티스트에서 특히 잦다).
+    """
+    d = _get("/search/artist", q=name, limit=8)
+    rows = [r for r in ((d or {}).get("data") or []) if r.get("id")]
+    if not rows:
+        return None
+    # 이름이 정확히 같은 것 우선, 그 안에서 팬 수 최대.
+    key = lambda r: (r.get("name", "").strip().lower() == name.strip().lower(),  # noqa: E731
+                     r.get("nb_fan") or 0)
+    return max(rows, key=key)["id"]
+
+
+def _artist_genres(artist_id):
+    """그 아티스트의 장르 — 앨범에 붙은 값이라 사실이다(추론이 아니다)."""
+    alb = _get("/artist/%d/albums" % artist_id, limit=3)
+    names = []
+    for a in ((alb or {}).get("data") or [])[:2]:
+        full = _get("/album/%d" % a["id"])
+        for g in (((full or {}).get("genres") or {}).get("data") or []):
+            if g.get("name") and g["name"] not in names:
+                names.append(g["name"])
+    return names[:3]
 
 
 def _newest_album(artist_id):
@@ -141,14 +164,15 @@ def _newest_album(artist_id):
 _MIN_RANK = 90_000
 
 
-def _tracks_for(artist_id, artist_name, want_new=True):
+def _tracks_for(artist_id, artist_name, want_new=True, genres=None):
     """그 아티스트의 대표곡 + (가능하면) 최신 앨범 수록곡. 전부 실재하는 값이다."""
     out = []
+    gs = genres if genres is not None else _artist_genres(artist_id)
     top = _get("/artist/%d/top" % artist_id, limit=2)
     for t in ((top or {}).get("data") or []):
         if (t.get("rank") or 0) < _MIN_RANK:
             continue
-        out.append({"title": t.get("title"), "artist": artist_name,
+        out.append({"title": t.get("title"), "artist": artist_name, "genres": gs,
                     "link": t.get("link"), "cover": (t.get("album") or {}).get("cover_medium"),
                     "year": None, "kind": "대표곡"})
     if want_new:
@@ -157,7 +181,7 @@ def _tracks_for(artist_id, artist_name, want_new=True):
             full = _get("/album/%d" % alb["id"])
             year = (alb.get("release_date") or "")[:4]
             for t in ((full or {}).get("tracks") or {}).get("data", [])[:2]:
-                out.append({"title": t.get("title"), "artist": artist_name,
+                out.append({"title": t.get("title"), "artist": artist_name, "genres": gs,
                             "link": t.get("link"), "cover": alb.get("cover_medium"),
                             "year": year, "album": alb.get("title"), "kind": "최근 앨범"})
     return out
@@ -171,7 +195,7 @@ def _candidates(seeds, fallback, limit_artists=4):
     "Upbeat Indie Pop — David G. Steele" 같은 저작권프리 라이브러리 음원이 올라온다.
     아티스트를 먼저 실재 확인하고 그 사람의 곡을 가져와야 실제로 듣는 노래가 나온다.
     """
-    pool, seen = [], set()
+    pool, seen, seed_genres = [], set(), []
 
     def push(rows):
         for t in rows:
@@ -186,8 +210,12 @@ def _candidates(seeds, fallback, limit_artists=4):
             aid = _artist_id(name)
             if not aid:
                 continue      # 실재 확인 실패 — 조용히 버린다
+            gs = _artist_genres(aid)
             if tag_own:
-                push(_tracks_for(aid, name, want_new=False))   # 씨앗 본인 곡(아는 결)
+                for g in gs:
+                    if g not in seed_genres:
+                        seed_genres.append(g)      # 취향 장르 = 씨앗 아티스트의 장르(사실값)
+                push(_tracks_for(aid, name, want_new=False, genres=gs))   # 씨앗 본인 곡
             rel = _get("/artist/%d/related" % aid, limit=limit_artists)
             for ar in ((rel or {}).get("data") or [])[:limit_artists]:
                 push(_tracks_for(ar["id"], ar.get("name") or "?"))
@@ -195,7 +223,7 @@ def _candidates(seeds, fallback, limit_artists=4):
     harvest((seeds or [])[:2])
     if not pool:
         harvest(fallback or [])
-    return pool
+    return pool, seed_genres
 
 
 def _recency_score(t):
@@ -239,7 +267,7 @@ def tracks(records, speech="polite", limit=3):
     shift = seed.get("shift") or "stay"
 
     # 2단계 — 실재하는 후보를 모은다.
-    pool = _candidates(artists, fallback)
+    pool, seed_genres = _candidates(artists, fallback)
     if not pool:
         return {"ok": False, "reason": "지금은 어울리는 곡을 찾지 못했어요. 며칠 뒤 다시 볼게요."}
     pool.sort(key=_recency_score, reverse=True)
@@ -271,6 +299,6 @@ def tracks(records, speech="polite", limit=3):
             break
     if not items:      # 고르기가 실패해도 실재하는 후보는 있다 — 최신순 앞에서 채운다
         items = [{**t, "why": ""} for t in pool[:limit]]
-    return {"ok": True, "items": items, "shift": shift,
+    return {"ok": True, "items": items, "shift": shift, "genres": seed_genres,
             "seeds": artists, "moodNow": seed.get("moodNow") or "",
             "seedWhy": str(seed.get("why") or "").strip()}
