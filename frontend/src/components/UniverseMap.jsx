@@ -121,11 +121,13 @@ function Galaxy({ reduced }) {
   }, [reduced]);
   useFrame((_, delta) => { if (ref.current) ref.current.rotation.y += delta * .012; });
   const core = useMemo(() => makeSoftTexture([[0,"rgba(255,247,217,.95)"],[.12,"rgba(255,219,162,.45)"],[.42,"rgba(147,112,214,.12)"],[1,"rgba(0,0,0,0)"]]), []);
+  // 배치는 그대로 둔다(뒤로 밀면 은하가 작고 밋밋해진다). 대신 밝기를 낮춰
+  // 별자리·행성이 그 위에 묻히지 않게 한다 — 겹침은 위치가 아니라 대비 문제였다.
   return <group rotation={[-.36, 0, .12]} position={[0,-.3,-3]}>
     <points ref={ref} geometry={geometry}>
-      <pointsMaterial size={reduced ? .025 : .034} vertexColors transparent opacity={.72} sizeAttenuation depthWrite={false} blending={THREE.AdditiveBlending}/>
+      <pointsMaterial size={reduced ? .024 : .032} vertexColors transparent opacity={.5} sizeAttenuation depthWrite={false} blending={THREE.AdditiveBlending}/>
     </points>
-    <sprite scale={[5.2,5.2,1]}><spriteMaterial map={core} transparent opacity={.68} depthWrite={false} blending={THREE.AdditiveBlending}/></sprite>
+    <sprite scale={[4.6,4.6,1]}><spriteMaterial map={core} transparent opacity={.42} depthWrite={false} blending={THREE.AdditiveBlending}/></sprite>
     <pointLight color="#ffe3ba" intensity={7} distance={12}/>
   </group>;
 }
