@@ -16,6 +16,7 @@ import { LEVEL_REWARDS } from "../data/unlocks.js";
 import PetMascot from "../components/PetMascot.jsx";
 import PetShop from "../components/PetShop.jsx";
 import { Bell, ChevronRight, LockKeyhole, Palette, UserRound, LogOut } from "lucide-react";
+import { toChoiceDomains } from "../data/choices.js";
 
 const OCCUPATIONS = [
   "연구·공학기술",
@@ -148,7 +149,7 @@ export default function Settings() {
     const b = nudge?.choiceB || "현상 유지";
     setChoices({ a, b });
     setScenarioTexts({ a, b });
-    if (nudge?.domain) setScenarioDomains({ a: [nudge.domain], b: [nudge.domain] });
+    if (nudge?.domain) { const ds = toChoiceDomains(nudge.domain); setScenarioDomains({ a: ds, b: ds }); }
     navigate("/input");
   }
 

@@ -146,6 +146,25 @@ export function classifyChoice(text) {
   return null;
 }
 
+/**
+ * 행성 key → 선택지 영역 key(들). toPlanetKey 의 반대 방향.
+ *
+ * 두 어휘가 따로 있다 — 화면(행성)은 5개, 선택지 분류는 9개. 홈 알림은 행성 key 로
+ * 말하는데 결과 화면의 지표 필터는 선택지 key 로 거른다. 그대로 넘기면 relation·
+ * growth·life 가 사전에 없어 "연결된 수치 데이터가 없습니다" 로 빠진다.
+ */
+export const PLANET_TO_DOMAINS = {
+  career: ["career", "finance", "business"],
+  growth: ["education", "long_term_values"],
+  health: ["health"],
+  relation: ["relationship"],
+  life: ["housing", "lifestyle"],
+};
+
+export function toChoiceDomains(planetKey) {
+  return PLANET_TO_DOMAINS[planetKey] || [];
+}
+
 // ── 삶의 영역(LIFE_DOMAINS) → 나의 우주 행성(PLANETS) 키 ──────────────
 // 두 키 체계가 다르다. 시뮬레이션 분류는 9개(career·education·business…),
 // 행성은 5개(career·life·relation·health·growth). 시나리오를 올바른 행성에

@@ -18,14 +18,27 @@ import DiarySignalCard from "../components/result/DiarySignalCard.jsx";
 import KowepsEvidenceCard from "../components/result/KowepsEvidenceCard.jsx";
 import JobAnalysisView from "../components/result/JobAnalysisView.jsx";
 import RelationshipView from "../components/result/RelationshipView.jsx";
+import SoftCompareView from "../components/result/SoftCompareView.jsx";
+import { softDomainOf } from "../data/softCompare.js";
+import { DOMAIN_LABEL } from "../data/diarySignals.js";
 
 export default function Result() {
   const navigate = useNavigate();
   const { result, profile, scenarioDomains, retryVisuals, jobAnalyses, postings, relResults, talks } = useResult();
   const { a, b } = result;
 
+  // 진로가 아닌 영역(관계·건강·일상·성장)은 KLIPS 수치가 맞지 않는다.
+  // 그대로 두면 지표 필터에 하나도 안 걸려 '핵심 지표'가 빈 화면이 된다(관계가 그랬다).
+  // 그 자리를 기록 기반 장면 비교로 바꾸고, 수치 탭은 뒤로 물린다.
+  const softPlanet = softDomainOf([...(result.domains?.a || scenarioDomains?.a || []),
+                                   ...(result.domains?.b || scenarioDomains?.b || [])]);
+
   const tabs = [
-    { key: "indicators", label: "핵심 지표", View: LifeView },
+    ...(softPlanet
+      ? [{ key: "soft", label: "두 길의 하루",
+           View: (p) => <SoftCompareView {...p} planet={softPlanet} planetLabel={DOMAIN_LABEL[softPlanet] || ""} /> }]
+      : []),
+    { key: "indicators", label: softPlanet ? "참고 지표" : "핵심 지표", View: LifeView },
     { key: "change", label: "변화 흐름", View: ChangeView },
     { key: "evidence", label: "분석 상세", View: EvidenceView },
     { key: "next", label: "다음 단계", View: ActionView },
@@ -39,7 +52,7 @@ export default function Result() {
       : []),
   ];
 
-  const [tab, setTab] = useState("indicators");
+  const [tab, setTab] = useState(softPlanet ? "soft" : "indicators");
   const Active = (tabs.find((t) => t.key === tab) || tabs[0]).View;
 
   // 보관함 저장 — 화면에 보이는 A/B 그대로 담는다. 같은 비교를 같은 날 두 번 담지 않는다.
