@@ -24,3 +24,7 @@ export const ART_BY_MONTH = Object.fromEntries(ZODIAC_ART.map((z) => [z.month, z
 
 /** 그 달 별자리 일러스트의 원본 좌표계(512 기준). */
 export const ART_VIEWBOX = 512;
+
+// 월별 별 개수 — 원은 <star> + <glow> 쌍으로 들어 있어 원 개수의 절반이다.
+// 그달 일기 비율만큼 앞에서부터 켜는 데 쓴다(4개짜리면 25%마다 하나).
+export const ART_STAR_COUNT = {1: 12, 2: 14, 3: 14, 4: 11, 5: 14, 6: 12, 7: 14, 8: 15, 9: 13, 10: 15, 11: 14, 12: 11};
