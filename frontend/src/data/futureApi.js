@@ -4,10 +4,7 @@ import { loadUniverse, hasRecord } from "./myUniverse.js";
 import { listUniverses } from "./savedUniverses.js";
 import { doneExpeditions } from "./expeditions.js";
 import { domainAnalysis } from "./diarySignals.js";
-function localPersonaBlock(profile = {}) {
-  const values = Array.isArray(profile.value_ranking) ? profile.value_ranking.slice(0, 4) : [];
-  return [profile.mbti ? `MBTI: ${profile.mbti}` : "", values.length ? `중요 가치: ${values.join(" > ")}` : ""].filter(Boolean).join("\n");
-}
+import { localPersonaBlock } from "./jobAnalysis.js";
 import { API_BASE } from "./apiBase.js";
 
 const BASE = API_BASE;

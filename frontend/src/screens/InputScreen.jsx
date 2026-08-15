@@ -6,6 +6,9 @@ import { detectEmotions } from "../data/DiaryContext.jsx";
 import { domainRumination } from "../data/diarySignals.js";
 import { DOMAIN_OUTCOMES, questionsForChoice } from "../data/scenarioIntake.js";
 import { Caption } from "../components/ui.jsx";
+import ValueDeepTest from "../components/ValueDeepTest.jsx";
+import JobPostingInput from "../components/JobPostingInput.jsx";
+import RelationshipInput from "../components/RelationshipInput.jsx";
 import Mascot from "../components/Mascot.jsx";
 import { BriefcaseBusiness, GraduationCap, Sprout, Wallet, HeartPulse, House, Users, Leaf, Compass, ArrowRight, GitCompareArrows } from "lucide-react";
 
@@ -35,8 +38,17 @@ export default function InputScreen() {
     profile, setProfile, choices, setChoices,
     scenarioTexts, setScenarioTexts, scenarioDomains, setScenarioDomains,
     scenarioContexts, setScenarioContexts,
-    diary, setDiary,
+    diary, setDiary, postings, setPostings, analyzePostings,
+    talks, setTalks, analyzeTalks,
   } = useResult();
+  // 두 선택지 중 하나라도 '관계'로 잡히면 관계 상담 흐름으로 전환한다.
+  // 선택지가 어느 영역인지에 따라 아래에 뜨는 입력이 통째로 바뀐다.
+  // 관계면 대화·연락 내역을, 직업이면 직업 정보·공고·가치관 검사를 한 묶음으로.
+  // 단, choices 기본값이 {이직, 유지}라 아무것도 안 썼을 때 직업으로 오인된다 —
+  // 실제로 무언가 적었을 때만 영역 입력을 편다.
+  const typed = Boolean(scenarioTexts.a?.trim() || scenarioTexts.b?.trim());
+  const allDomains = [...(scenarioDomains.a || []), ...(scenarioDomains.b || [])];
+  const isRelationship = typed && allDomains.includes("relationship");
   const textA = scenarioTexts.a;
   const textB = scenarioTexts.b;
   const [domainAuto, setDomainAuto] = useState({ a: true, b: true });
@@ -95,7 +107,12 @@ export default function InputScreen() {
   const duplicate = Boolean(normalizedA && normalizedB && normalizedA === normalizedB);
   const sameCategory = Boolean(normalizedA && normalizedB && !duplicate && scenarioDomains.a.some((key) => scenarioDomains.b.includes(key)));
   const missingDomains = Boolean(normalizedA && normalizedB && (!scenarioDomains.a.length || !scenarioDomains.b.length));
-  const needJobDetails = scenarioDomains.a.includes("career") || scenarioDomains.b.includes("career");
+  // 직업 영역은 넓게 잡는다 — 좁게 걸면 '다른 직무 준비하기', '대학원 진학' 처럼
+  // 사실상 커리어 결정인데도 입력이 안 뜨는 일이 생긴다. 못 보여주는 쪽이 더 손해라서,
+  // '관계만' 잡힌 경우를 빼고는 직업 묶음을 열어둔다.
+  const onlyRelationship = allDomains.length > 0 && allDomains.every((d) => d === "relationship");
+  const isCareer = typed && !onlyRelationship;
+  const needJobDetails = isCareer;
   // 직업정보가 없으면 전체 유사 집단으로 자동 완화한다. 입력 화면 진행을 막지는 않는다.
   const jobDetailsMissing = needJobDetails && profile.occupation_group == null;
   const blocked = !normalizedA || !normalizedB || duplicate;
@@ -118,6 +135,8 @@ export default function InputScreen() {
       if (["이직", "유지"].includes(choice)) return ["career"];
       if (choice === "진학") return ["education"];
       if (choice === "창업") return ["business"];
+      // 쉬어가기는 일만의 결정이 아니다 — 대개 건강·소진이 같이 걸려 있어
+      // 두 영역을 함께 켠다(9영역 근거가 한쪽만 붙으면 판단 재료가 반쪽이 된다).
       if (choice === "휴식") return ["career", "health"];
       return ["long_term_values"];
     };
@@ -129,6 +148,9 @@ export default function InputScreen() {
       a: prev.a?.length ? prev.a : prev.b?.length ? prev.b : fallback(choices.a),
       b: prev.b?.length ? prev.b : prev.a?.length ? prev.a : fallback(choices.b),
     }));
+    // 담아둔 재료는 시뮬레이션과 함께 분석을 시작한다(결과 화면에서 확인).
+    if (isRelationship) analyzeTalks(talks);
+    if (isCareer) analyzePostings(postings, textA || choices.a);
     navigate("/simulate");
   }
 
@@ -253,6 +275,21 @@ export default function InputScreen() {
         </section>
       )}
 
+      {/* 지원하려는 공고가 있으면 붙여넣기 → 요구역량 + 내 성향과의 접점·마찰점.
+          공고 수집은 약관 문제가 커서 크롤링 대신 붙여넣기로 받는다. */}
+      {/* 선택지가 어느 영역인지에 따라 담는 재료가 달라진다.
+          관계면 그 관계의 대화를, 그 밖이면 지원하려는 공고를. */}
+      {/* 관계면 대화·연락 내역 하나만. */}
+      {isRelationship && <RelationshipInput talks={talks} setTalks={setTalks} />}
+
+      {/* 직업이면 공고 담기 + 직업가치관검사가 함께 뜬다(위의 직업 정보와 한 묶음). */}
+      {isCareer && (
+        <>
+          <JobPostingInput postings={postings} setPostings={setPostings} />
+          <ValueTestSection profile={profile} setProfile={setProfile} />
+        </>
+      )}
+
       <details className="mt-3 rounded-2xl border border-white/10 bg-[#0B1423]/80 px-3.5 py-3">
         <summary className="cursor-pointer text-[11px] font-semibold text-sub">지금 심정도 덧붙이기 · 선택</summary>
         <input value={diary} onChange={(event) => setDiary(event.target.value)} placeholder="왜 이 선택이 망설여지는지 한 줄로 적어보세요" className="mt-3 w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-xs text-ink outline-none focus:border-cyan" />
@@ -275,6 +312,70 @@ function IntakePanel({ side, intake, context, onChange }) {
         {intake.questions.map((question) => <label key={question.key} className="block"><span className="mb-1 block text-[10px] text-sub">{question.label}</span><input value={context?.answers?.[question.key] || ""} onChange={(event) => onChange(question.key, event.target.value)} placeholder={question.placeholder} className="w-full rounded-xl border border-line bg-[#0E1424] px-3 py-2.5 text-[11px] text-ink outline-none placeholder:text-mut focus:border-violet-400" /></label>)}
       </div>
       <div className="mt-3 border-t border-white/10 pt-2 text-[9px] leading-4 text-mut">결과 변수 · {(DOMAIN_OUTCOMES[intake.domain] || []).join(" / ")}</div>
+    </div>
+  );
+}
+
+// 직업가치관검사 단독 섹션 — 공고 없이도 검사만 할 수 있게. 결과는 프로필에 남아
+// 이후 공고 분석·시뮬레이션 서사가 계속 쓴다.
+function ValueTestSection({ profile, setProfile }) {
+  const [open, setOpen] = useState(false);
+  const done = (profile?.career_values || []).length > 0;
+
+  return (
+    <details className="mt-3 rounded-2xl border border-white/10 bg-[#0B1423]/80 px-3.5 py-3">
+      <summary className="cursor-pointer text-[11px] font-semibold text-sub">
+        직업가치관검사 · 선택 {done && <span className="ml-1 text-[10px] text-[#C7B5F2]">완료</span>}
+      </summary>
+      {done && !open ? (
+        <div className="mt-2 rounded-xl border border-[#8B6CCF]/25 bg-[#8B6CCF]/[.07] px-3 py-2.5">
+          <p className="text-[11px] leading-relaxed text-sub">
+            {(profile.career_values || []).slice(0, 3).map((v) => v.name).join(" > ")} 순으로 나왔어요.
+            공고 분석과 결과 서사에 반영됩니다.
+          </p>
+          <div className="mt-1.5 flex gap-2.5">
+            <button onClick={() => setOpen(true)} className="tap text-[10px] text-mut">다시 하기</button>
+            {profile.career_values_report && (
+              <a href={profile.career_values_report} target="_blank" rel="noreferrer" className="tap text-[10px] text-mut">
+                공식 결과지 ↗
+              </a>
+            )}
+          </div>
+        </div>
+      ) : open ? (
+        <div className="mt-2">
+          <ValueDeepTest
+            onDone={(data) => {
+              setProfile((prev) => ({ ...prev, career_values: data.ranking, career_values_report: data.report_url }));
+              setOpen(false);
+            }}
+            onClose={() => setOpen(false)}
+          />
+        </div>
+      ) : (
+        <>
+          <p className="mt-2 text-[10px] leading-relaxed text-mut">
+            커리어넷(한국직업능력연구원) 직업가치관검사 28문항 · 10분. 두 가치 중 하나씩 고르면
+            8개 가치의 우선순위가 나오고, 공고 분석·결과 서사에 반영됩니다.
+          </p>
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="tap mt-2 w-full rounded-xl border border-[#8B6CCF]/40 bg-[#8B6CCF]/[.08] py-2.5 text-[12px] font-bold text-[#C7B5F2]"
+          >
+            검사 시작하기
+          </button>
+        </>
+      )}
+    </details>
+  );
+}
+
+function JobBlock({ title, tone = "#8B6CCF", children }) {
+  return (
+    <div className="rounded-xl border border-white/[.07] bg-black/15 px-3 py-2.5">
+      <p className="text-[10px] font-bold" style={{ color: tone }}>{title}</p>
+      <ul className="mt-1.5 space-y-1.5">{children}</ul>
     </div>
   );
 }

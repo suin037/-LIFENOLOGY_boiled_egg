@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Archive, CalendarDays, ChevronRight, Plus, X } from "lucide-react";
 import UniverseMap from "../components/UniverseMap.jsx";
 import Constellation from "../components/Constellation.jsx";
@@ -12,7 +12,7 @@ import { expeditionsFor, startExpedition } from "../data/expeditions.js";
 import { shapeOf, shapeLineFor, DOMAIN_THEME, MIN_RECORDS_TO_NAME, HONESTY_NOTE } from "../data/constellationRules.js";
 import { useResult } from "../data/ResultContext.jsx";
 import { clearSavedReports, REPORT_UID, loadSpeech } from "../data/dispositionApi.js";
-import { planetSkin } from "../data/planetShop.js";
+import { planetSkin } from "../data/petShop.js";
 
 const DESCRIPTIONS = {
   career: "나의 진로와 커리어에 대한 고민, 선택, 방향성을 기록해요.",
@@ -46,7 +46,19 @@ export default function MyUniverseV2() {
   const [cluster, setCluster] = useState(null);
   const [skin,setSkin]=useState(planetSkin);
   useEffect(() => { const refresh = () => setState(loadUniverse()); window.addEventListener("pm:universe", refresh); return () => window.removeEventListener("pm:universe", refresh); }, []);
-  useEffect(()=>{const refresh=()=>setSkin(planetSkin());window.addEventListener("pm:planet-shop",refresh);return()=>window.removeEventListener("pm:planet-shop",refresh);},[]);
+  useEffect(()=>{const refresh=()=>setSkin(planetSkin());window.addEventListener("pm:pet-shop",refresh);return()=>window.removeEventListener("pm:pet-shop",refresh);},[]);
+
+  // /my?planet=career 로 들어오면 그 행성을 바로 펼친다. 결과 화면의 "기록 전체 보기"가
+  // 여기로 보낸다 — 3D 지도에서 행성을 다시 찾아 누르게 하면 링크가 아니라 안내문이 된다.
+  // 한 번 열고 주소에서 지운다. 안 지우면 모달을 닫고 새로고침할 때마다 다시 열린다.
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    const key = params.get("planet");
+    if (!key) return;
+    const found = PLANETS.find((item) => item.key === key);
+    if (found) { setPlanet(found); setCluster(null); }
+    setParams({}, { replace: true });
+  }, [params, setParams]);
 
   // 기회 카드를 누르면 그 갈림길이 채워진 채로 시뮬레이션이 열린다 —
   // 다시 타이핑하게 하면 '길을 내밀었다'는 의미가 없다. 영역도 그 행성으로 넘겨
@@ -220,7 +232,6 @@ function Sparkline({ series = [], trend }) {
     </div>
   );
 }
-
 function DomainRecords({ planet, state, entries, recent }) {
   // 1년치가 들어오면 이 셋은 렌더마다 수백 개 기록을 다시 훑는다 — 상태가 바뀔 때만 돌린다.
   const a = useMemo(() => domainAnalysis(planet.key, state), [planet.key, state]);
@@ -248,7 +259,6 @@ function DomainRecords({ planet, state, entries, recent }) {
       {/* 기분 흐름 — 결과 화면에 있던 그래프를 이리로 옮겼다. 월별 막대는 '언제 많이 썼나'를,
           이 선은 '기록 순서대로 어떻게 흘렀나'를 보여준다. 둘은 다른 질문에 답한다. */}
       <Sparkline series={a.series} trend={a.trend} />
-
       {/* 월별 기록량 — 이 영역을 언제 많이 썼는지 */}
       {months.length > 1 && (
         <div className="mt-3">

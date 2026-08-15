@@ -7,8 +7,12 @@ import UserGuide from "./UserGuide.jsx";
 // 탭바를 숨기는 경로 (랜딩·온보딩·로딩)
 const NO_TABBAR = ["/", "/onboarding", "/simulate"];
 // 프로필(설정) 아이콘을 숨기는 경로
-const NO_PROFILE = ["/simulate", "/onboarding"];
-const WIDE_DESKTOP = ["/home", "/input", "/result", "/my", "/archive", "/settings", "/simulate"];
+const NO_PROFILE = ["/simulate", "/onboarding", "/settings"];
+// PC 에서 넓게 쓰는 화면. /company 는 재무표·공시 목록이라 좁으면 읽기 나쁘다.
+// (/checkin 은 오늘 하나를 적는 화면이라 일부러 좁게 둔다.)
+// /simulate 는 useFullDesktop 인데 여기 빠져 있어 컨테이너가 450px(max-w-phone)로
+// 잡혔고, 그 안에서 lg 2단 레이아웃이 겹쳤다.
+const WIDE_DESKTOP = ["/home", "/input", "/result", "/my", "/archive", "/settings", "/company", "/simulate"];
 const DESKTOP_TABS = [
   ["/my", "홈", Orbit],
   ["/input", "시뮬레이션", Sparkles],
@@ -48,6 +52,8 @@ export default function Layout() {
     >
       <div id="app-shell"
         className={`relative flex h-screen w-full flex-col overflow-hidden bg-bg ${
+          // 폰·태블릿에서는 기기 프레임처럼 보이게 두고,
+          // PC(lg 이상)에서는 테두리·둥근 모서리·비율 제한을 전부 걷어 화면을 꽉 채운다.
           `max-w-phone sm:h-[900px] sm:max-h-[94vh] sm:rounded-[44px] sm:border sm:border-[#52627B]
                md:aspect-[16/10] md:h-auto md:max-h-[calc(100vh-48px)] md:max-w-[calc((100vh-48px)*1.6)] md:rounded-[32px]
                lg:max-w-[1240px] sm:ring-1 sm:ring-white/10
@@ -89,7 +95,18 @@ export default function Layout() {
         <main
           key={pathname}
           className={`no-scrollbar relative z-10 flex-1 ${isLanding ? "overflow-hidden p-0 [&>*]:h-full [&>*]:w-full [&>*]:max-w-none" : `overflow-y-auto px-5 pb-7 pt-1 lg:px-9 lg:pb-8 lg:pt-8 [&>*]:mx-auto [&>*]:w-full ${useFullDesktop ? "lg:overflow-visible xl:px-14" : ""} ${isUniverseCanvas ? "lg:!overflow-hidden lg:!p-0" : ""}`} ${
-            isLanding ? "" : isUniverseCanvas ? "[&>*]:max-w-none" : isOnboarding ? "[&>*]:max-w-[1280px]" : isDesktopWorkspace ? "[&>*]:max-w-[1440px]" : useWideDesktop ? "[&>*]:max-w-[1120px]" : "[&>*]:max-w-phone"
+            isLanding
+              ? ""
+              : isUniverseCanvas
+                ? "[&>*]:max-w-none"
+                : isOnboarding
+                  ? "[&>*]:max-w-[1280px]"
+                  : isDesktopWorkspace
+                    ? "[&>*]:max-w-[1440px]"
+                    // PC 에서는 프레임과 함께 본문도 넓힌다 — 배치는 그대로 두고 폭만 늘린다.
+                    : useWideDesktop
+                      ? "[&>*]:max-w-[1120px] xl:[&>*]:max-w-[1320px] 2xl:[&>*]:max-w-[1500px]"
+                      : "[&>*]:max-w-phone"
           }`}
         >
           <Outlet />

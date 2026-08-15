@@ -34,6 +34,11 @@ KIND_TREATMENT = {"이직": "move", "창업": "startup", "휴식": "break"}
 # 만족도 분기는 인과모델이 없어도 가능하다(관측 하위집단만 있으면 됨).
 KIND_SATIS_BRANCH = {"이직": "move", "창업": "startup",
                      "진학": "enroll", "유지": "stay"}
+# 커리어 밖 생활사건 — KOWEPS 처치효과는 있으나 임금·근속 레이어는 해당 없음.
+# `KIND_TREATMENT` 에 넣지 않는 이유: 그 매핑은 KLIPS 로 학습한 econml/lifelines
+# artifact 를 켜는 스위치인데, 이 선택들엔 그 artifact 가 없다(있어도 임금 결과라
+# 질문이 다르다). 넣으면 없는 모델을 찾다가 조용히 빈 값이 흐른다.
+LIFE_EVENT_KINDS = {"결혼", "주택", "이사"}
 
 
 def new_profile_cache() -> dict:
@@ -243,6 +248,16 @@ def _coverage(kind: str, layers: list[str], survival, effect, wb_meta: dict,
         parts.append("관측 기준 궤적 — 선택 인과효과는 적용하지 않음(기준선 그 자체)")
     elif kind == "기타":
         parts.append("해당 선택의 전용 예측모델 없음 — 집단 생활지표만 제공")
+    elif kind in LIFE_EVENT_KINDS:
+        # 커리어 밖 선택(결혼·주택·이사). KOWEPS 종단 처치효과는 있지만 커리어
+        # 레이어(L2 유사인물·L3 임금인과·L4 근속생존·L5 소득궤적)는 이 질문에
+        # 해당하지 않는다. 아무 말도 안 하면 '왜 비었는지' 를 화면이 설명하지
+        # 못하므로(기타는 그 문구가 있는데 이 유형들은 없었다) 여기서 밝힌다.
+        parts.append(
+            f"커리어 예측(L2·L3·L5) 미적용 — {kind}은 임금·근속 경로의 선택이 아님. "
+            "KOWEPS 종단 처치효과(만족·건강·정신건강)로 답하며 "
+            "근거는 artifacts/koweps_life_effects.json"
+        )
     elif kind == "창업":
         if survival is not None:
             parts.append("후회 리스크 = KLIPS 자영 스펠 이탈확률(개인단위). "

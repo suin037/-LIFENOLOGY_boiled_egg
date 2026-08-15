@@ -238,11 +238,11 @@ function Constellation3D({ group, index, anchorIndex, onOpen }) {
   return <group ref={orbit} position={root} rotation={[.18+(ord%3)*.24, ord*2.39996, .12]}>
     <group position={[orbitRadius,0,0]} onClick={(e)=>{e.stopPropagation();onOpen?.(group);}}>
       <mesh visible={false}><sphereGeometry args={[.5,10,10]}/><meshBasicMaterial transparent opacity={0}/></mesh>
-      <line geometry={geometry}><lineBasicMaterial color="#B9C4DD" transparent opacity={.15}/></line>
+      <line geometry={geometry}><lineBasicMaterial color="#9FB0CE" transparent opacity={.42}/></line>
       {/* 기록은 하얀 별. 시나리오(마름모)와 한눈에 갈라지도록 색을 섞지 않는다. */}
       <points geometry={starGeo}>
         <pointsMaterial
-          color="#F4F6FF" size={.085} sizeAttenuation transparent opacity={.86}
+          color="#ffffff" size={.16} sizeAttenuation transparent opacity={.95}
           map={starSprite()} depthWrite={false} blending={THREE.AdditiveBlending}
         />
       </points>
@@ -343,7 +343,7 @@ export default function UniverseMap({ planets, groups=[], scenarios=[], selected
   const [resetSignal,setResetSignal]=useState(0);
   const reduced = typeof window!=="undefined" && (window.innerWidth<760 || (navigator.hardwareConcurrency||8)<=4);
   return <div className="relative h-[calc(100dvh-112px)] min-h-[540px] w-full overflow-hidden bg-[#01040c] md:h-[calc(100dvh-104px)] md:min-h-[600px]">
-    <Canvas dpr={reduced?[1,1.25]:[1,1.75]} camera={{position:INITIAL_CAMERA.toArray(),fov:45,near:.1,far:100}} gl={{antialias:!reduced,powerPreference:"high-performance"}} onPointerMissed={()=>onPlanetSelect?.(null)}>
+    <Canvas dpr={reduced?[1,1.25]:[1,1.75]} camera={{position:INITIAL_CAMERA.toArray(),fov:48,near:.1,far:100}} gl={{antialias:!reduced,powerPreference:"high-performance"}} onPointerMissed={()=>onPlanetSelect?.(null)}>
       <Suspense fallback={null}><Scene planets={planets} groups={groups} scenarios={scenarios} selectedKey={selectedKey} onPlanetSelect={onPlanetSelect} onConstellationOpen={onConstellationOpen} onScenarioOpen={onScenarioOpen} resetSignal={resetSignal} reduced={reduced} skin={skin}/></Suspense>
     </Canvas>
     <div className="pointer-events-none absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full border border-white/10 bg-[#050914]/70 px-4 py-2 text-[9px] tracking-[.08em] text-white/55 backdrop-blur">왼쪽 드래그 회전 · Shift+드래그/오른쪽 드래그 이동 · 휠/핀치 접근</div>

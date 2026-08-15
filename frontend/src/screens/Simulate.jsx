@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Check, GitCompareArrows, Search, Sparkles, TrendingUp } from "lucide-react";
 import { useResult } from "../data/ResultContext.jsx";
 import { labelOf } from "../data/prediction.js";
+import Stars from "../components/Stars.jsx";
 
 const STEPS = [
   { label: "입력한 선택 이해하기", icon: Search },
@@ -44,6 +45,14 @@ export default function Simulate() {
 
   return (
     <div className="relative mx-auto flex min-h-full max-w-[1180px] flex-col pb-3 pt-5 lg:min-h-[calc(100vh-40px)] lg:flex-row lg:items-center lg:px-10 lg:py-10">
+      {/* 우주 배경. 음수 inset으로 main의 패딩까지 덮고, app-shell의 overflow-hidden이 잘라준다. */}
+      <div className="pointer-events-none absolute -inset-x-6 -inset-y-5 -z-10 overflow-hidden" aria-hidden="true">
+        <div className="absolute left-[-10%] top-[-15%] h-[70%] w-[75%] animate-nebula-drift rounded-full bg-[#8B6CCF] opacity-[.13] blur-[90px]" />
+        <div className="absolute bottom-[-20%] right-[-12%] h-[65%] w-[70%] animate-nebula-drift rounded-full bg-[#FF9F32] opacity-[.09] blur-[100px] [animation-delay:-7s]" />
+        <div className="absolute left-1/2 top-1/2 h-[45%] w-[55%] -translate-x-1/2 -translate-y-1/2 animate-nebula-drift rounded-full bg-[#3E7BD4] opacity-[.10] blur-[80px] [animation-delay:-3.5s]" />
+        <Stars count={54} twinkle glow />
+      </div>
+
       {/* 모바일에선 display:contents로 기존 세로 스택을 그대로 두고, lg부터 좌/우 2단으로 나눈다. */}
       <div className="contents lg:block lg:w-[45%] lg:shrink-0 lg:pr-8">
       <div className="text-center lg:text-left">
@@ -64,7 +73,10 @@ export default function Simulate() {
         <i className="absolute left-[26px] top-[18px] h-1 w-1 animate-pulse rounded-full bg-white/60" />
         <i className="absolute right-[30px] top-[24px] h-1.5 w-1.5 animate-pulse rounded-full bg-violet-300/70 [animation-delay:400ms]" />
         <i className="absolute bottom-[18px] left-[54px] h-1 w-1 animate-pulse rounded-full bg-white/40 [animation-delay:700ms]" />
+        {/* 중심에서 번지는 빛 — 궤도가 별 주위를 도는 것처럼 보이게 한다. */}
+        <div className="absolute left-1/2 top-1/2 h-[150px] w-[150px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#8B6CCF] opacity-20 blur-[38px]" />
         <div className="absolute inset-[20px] rounded-full border border-white/[.06]" />
+        <div className="absolute inset-[20px] rounded-full shadow-[inset_0_0_26px_rgba(139,108,207,.14)]" />
         <div className="absolute inset-[20px] animate-orbit rounded-full">
           <ChoiceOrb side="A" className="left-0 top-1/2 -translate-x-1/2 -translate-y-1/2" />
           <ChoiceOrb side="B" className="right-0 top-1/2 translate-x-1/2 -translate-y-1/2" />

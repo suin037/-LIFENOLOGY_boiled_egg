@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Card, Caption } from "./ui.jsx";
 import { addCheckin, setDomains, todayKey, loadUniverse, weekStartKey } from "../data/myUniverse.js";
+import { detectLifeDomains } from "../data/choices.js";
 import { composeDiary, weeklyComfort, loadSpeech, SPEECH_KEY } from "../data/dispositionApi.js";
 import { todayQuestions } from "../data/questions.js";
 import { useResult } from "../data/ResultContext.jsx";

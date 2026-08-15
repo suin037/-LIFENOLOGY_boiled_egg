@@ -6,7 +6,7 @@
 //   · 통계 결과를 "내 기준"으로 해석하는 재료로만 쓴다.
 // 키워드 기반이라 정밀 측정이 아니라 "기록에서 드러난" 수준임을 화면에서도 그대로 밝힌다.
 // ─────────────────────────────────────────────────────────────
-import { loadUniverse, todayKey } from "./myUniverse.js";
+import { loadUniverse, todayKey, hasRecord } from "./myUniverse.js";
 import { CARD_BY_ID } from "./valueCards.js";
 import { LIFE_DOMAINS, detectLifeDomains } from "./choices.js";
 
@@ -224,8 +224,9 @@ export function detectRelationSubtype(text) {
 function _domainStars(planetKey, s, subtype) {
   // planetKey 없으면(null/"all") 전체 기록 — '별자리 만들기(전체 일기 평가)'용.
   const all = !planetKey || planetKey === "all";
+  // hasRecord — 별 개수와 분석 대상이 어긋나지 않게 myUniverse 와 같은 규칙을 쓴다.
   let stars = s.checkins.filter(
-    (c) => !c.empty && _val(c) != null && (all || (Array.isArray(c.domains) && c.domains.includes(planetKey))),
+    (c) => hasRecord(c) && (all || (Array.isArray(c.domains) && c.domains.includes(planetKey))),
   );
   // 관계 하위유형 필터 — 그 유형 키워드가 있는 기록만(있을 때만 적용, 없으면 전체 유지).
   if (subtype && RELATION_SUBTYPES[subtype]) {
