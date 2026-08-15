@@ -1,16 +1,31 @@
 import { useMemo } from "react";
 import { zodiacOf, zodiacPoints, zodiacLines } from "../data/zodiac.js";
-import { ART_BY_MONTH, ART_VIEWBOX } from "../data/zodiacArt.js";
+import { ART_BY_MONTH, ART_VIEWBOX, ART_STAR_COUNT } from "../data/zodiacArt.js";
 
 // 512 좌표계로 그려진 별자리 일러스트를 원하는 위치·크기로 얹는다.
-function ZodiacArt({ month, cx, cy, size }) {
+function ZodiacArt({ month, cx, cy, size, litCircles = 0 }) {
   const art = ART_BY_MONTH[month];
   if (!art) return null;
   const k = size / ART_VIEWBOX;
+  // data-lit = 앞에서부터 켤 원 개수(별 하나당 star+glow 두 개). CSS 가 이 값으로 켠다.
   return (
-    <g className="zart" transform={`translate(${cx - size / 2} ${cy - size / 2}) scale(${k})`}
+    <g className="zart" data-lit={litCircles}
+       transform={`translate(${cx - size / 2} ${cy - size / 2}) scale(${k})`}
        dangerouslySetInnerHTML={{ __html: art.inner }} />
   );
+}
+
+/** 그 달 일기 비율 → 켤 별 수. 별 12개짜리 달에 절반을 썼으면 6개가 켜진다. */
+function litStarsFor(monthKey, records) {
+  const num = parseInt(monthKey.slice(5), 10);
+  const total = ART_STAR_COUNT[num] || 0;
+  const [y, m] = monthKey.split("-").map(Number);
+  const days = new Date(y, m, 0).getDate();          // 그 달의 날짜 수
+  if (!total || !days) return { lit: 0, total, pct: 0 };
+  const pct = Math.min(1, (records || 0) / days);
+  // 하루라도 썼으면 최소 한 개는 켠다 — 0.4개를 반올림해 0 이 되면 쓴 보람이 없다.
+  const lit = records > 0 ? Math.max(1, Math.round(pct * total)) : 0;
+  return { lit: Math.min(total, lit), total, pct };
 }
 
 const COL=["#E24B4A","#D85A30","#EDA100","#5DCAA5","#378ADD"];
@@ -31,22 +46,6 @@ const lit=(n)=>(n>0 ? Math.min(1,.55+glow(n)*.45) : .22);
 // 하얀 별은 기록 그 자체라 그림보다 밝게 시작한다.
 const litStar=(n)=>(n>0 ? Math.min(1,.78+glow(n)*.22) : .26);
 
-// 별 하나씩 따로 반짝이게 하는 규칙. 11칸(소수)으로 나눠 그림마다 배분이 어긋나게 하고,
-// 칸마다 서로 안 맞아떨어지는 주기·시작 시각을 준다 → 같이 깜박이는 티가 안 난다.
-const ZART_TWINKLE = (() => {
-  const rules = [];
-  for (let i = 0; i < 11; i += 1) {
-    if (i % 11 >= 7) continue;                 // 11칸 중 7칸만 — 나머지는 가만히 있는 별
-    const dur = (2.3 + rng(i * 5 + 1) * 2.8).toFixed(2);
-    const delay = (rng(i * 9 + 4) * 4.2).toFixed(2);
-    const dip = (0.22 + rng(i * 3 + 7) * 0.34).toFixed(2);   // 얼마나 어두워지는지도 다르게
-    rules.push(
-      `.zart circle:nth-child(11n+${i + 1}){animation:zart-tw ${dur}s ease-in-out ${delay}s infinite;--dip:${dip}}`,
-    );
-  }
-  return `@keyframes zart-tw{0%,100%{opacity:1}50%{opacity:var(--dip,.35)}}\n${rules.join("\n")}\n`
-    + `@media (prefers-reduced-motion:reduce){.zart circle{animation:none}}`;
-})();
 const level=(s)=>s.mood!=null?Math.max(1,Math.min(5,Math.round(s.mood))):s.valence!=null?Math.max(1,Math.min(5,Math.round(s.valence*2+3))):3;
 function miniCoord(day,lvl,scale){const r=(MINI_R_MIN+((lvl-1)/4)*MINI_R_SPREAD)*scale,a=(-90+day*(360/7))*Math.PI/180;return [r*Math.cos(a),r*Math.sin(a)];}
 
@@ -78,21 +77,37 @@ export default function JyConstellationArchive({monthGroups,weeksByMonth,focusMo
         });
         weekMeta.push({g,wx,wy,verts});
       });
-      return {m,num,cx,cy,stars,weekMeta,count:k,zodiac:zodiacOf(num),
+      const litInfo=litStarsFor(m.monthKey,k);
+      return {m,num,cx,cy,stars,weekMeta,count:k,lit:litInfo,zodiac:zodiacOf(num),
               zLines:zodiacLines(num,k,ZR),
               isNow:m.monthKey===now,labelUp:i%2===0};
     });
   },[monthGroups,weeksByMonth]);
+  // 켜진 별만 밝고 반짝인다. 앞에서부터 N쌍(=원 2N개)을 켜므로 nth-child(-n+2N).
+  // 쓰이는 값만 규칙으로 만든다(12달치라 최대 12줄).
+  const twinkleCss=useMemo(()=>{
+    const ks=[...new Set(months.map((mo)=>mo.lit.lit*2))].filter((k)=>k>0);
+    const rules=ks.map((k)=>[
+      `.zart[data-lit="${k}"] circle:nth-child(-n+${k}){opacity:1}`,
+      `.zart[data-lit="${k}"] circle:nth-child(-n+${k}):nth-child(4n+1){animation:zart-tw 3.1s ease-in-out infinite;--dip:.42}`,
+      `.zart[data-lit="${k}"] circle:nth-child(-n+${k}):nth-child(4n+3){animation:zart-tw 4.4s ease-in-out .9s infinite;--dip:.3}`,
+    ].join("\n"));
+    return [
+      "@keyframes zart-tw{0%,100%{opacity:1}50%{opacity:var(--dip,.35)}}",
+      ".zart circle{opacity:.1}",                    // 아직 안 켜진 별 — 자리만 보인다
+      ...rules,
+      "@media (prefers-reduced-motion:reduce){.zart circle{animation:none}}",
+    ].join("\n");
+  },[months]);
+
   const focused=focusMonth?months.find((item)=>item.m.monthKey===focusMonth):null;
   const cam=focused?`translate(${CX-ZOOM_MONTH*focused.cx}px,${CY-ZOOM_MONTH*focused.cy}px) scale(${ZOOM_MONTH})`:"translate(0px,0px) scale(1)";
   return <div className="overflow-hidden rounded-[22px] border border-white/[.05] bg-[#071121]"><svg viewBox={`0 0 ${W} ${H}`} className="block w-full select-none">
     <defs><radialGradient id="jy-core"><stop offset="0" stopColor="#8B6CCF" stopOpacity=".3"/><stop offset="1" stopColor="#071121" stopOpacity="0"/></radialGradient></defs>
-    {/* 12별자리 그림 속 별 반짝임.
-        별자리 통째로 밝아지면 '그림이 켜졌다 꺼졌다' 하는 느낌이라, 별 하나씩
-        따로 반짝이게 한다. 주기와 시작 시각이 같으면 다 같이 깜박여 티가 나므로
-        11칸으로 나눠 서로 안 맞아떨어지는 주기(2.3~5.1초)와 시작 시각을 준다.
-        별이 318개라 전부 돌리면 무거워서, 11칸 중 7칸만 켠다. */}
-    <style>{ZART_TWINKLE}</style>
+    {/* 별자리 별은 그달 일기 비율만큼 앞에서부터 켜진다 — 별 12개짜리 달에 절반을
+        썼으면 6개. 안 켜진 별은 자리만 흐리게 남아, 이 달을 얼마나 채웠는지가
+        모양으로 보인다. 켜진 별만 반짝인다. */}
+    <style>{twinkleCss}</style>
     <rect width={W} height={H} fill="#071121"/><circle cx={CX} cy={CY} r="68" fill="url(#jy-core)"/>
     {Array.from({length:34},(_,i)=><circle key={i} cx={(i*73)%W} cy={(i*47)%H} r={i%7===0?1:.55} fill="#CAD5EA" opacity={.22+(i%4)*.1}/>) }
     <g style={{transform:cam,transformOrigin:"0 0",transition:"transform .75s cubic-bezier(.2,.85,.25,1)"}}>
@@ -107,13 +122,12 @@ export default function JyConstellationArchive({monthGroups,weeksByMonth,focusMo
             불투명도만으로는 선이 얇아 잘 안 보여서 brightness 로 선·별 자체를 밝히고,
             빛무리(drop-shadow)도 두 겹으로 겹쳐 번지게 한다. */}
         {!active&&<g pointerEvents="none"
-           opacity={lit(mo.count)}
            style={{filter: mo.count>0
              ? `drop-shadow(0 0 ${(2+glow(mo.count)*4).toFixed(1)}px rgba(180,158,246,${(.38+glow(mo.count)*.5).toFixed(2)}))`
                + ` drop-shadow(0 0 ${(6+glow(mo.count)*8).toFixed(1)}px rgba(140,120,220,.3))`
                + ` brightness(${(1.15+glow(mo.count)*.45).toFixed(2)})`
              : "brightness(1.1)"}}>
-          <ZodiacArt month={mo.num} cx={mo.cx} cy={mo.cy+(mo.labelUp?-ART_OFFSET:ART_OFFSET)} size={ZR*4}/>
+          <ZodiacArt month={mo.num} cx={mo.cx} cy={mo.cy+(mo.labelUp?-ART_OFFSET:ART_OFFSET)} size={ZR*4} litCircles={mo.lit.lit*2}/>
         </g>}
         {!active&&mo.zLines.map((ln,li)=><line key={`z${li}`} x1={mo.cx+ln[0]} y1={mo.cy+ln[1]} x2={mo.cx+ln[2]} y2={mo.cy+ln[3]} stroke="#9FB0CE" strokeWidth=".4" strokeOpacity=".38" style={{transition:"opacity .4s"}}/>)}
         {/* 평소엔 별을 연보라 하나로 — 12달이 한눈에 차분히 보인다.
