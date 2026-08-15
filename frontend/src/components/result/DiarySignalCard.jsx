@@ -1,6 +1,11 @@
 import { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import { ChevronRight } from "lucide-react";
 import { useResult } from "../../data/ResultContext.jsx";
-import { computeDiarySignals, valueGap, interpretSignals, domainAnalysis, domainReport, detectRelationSubtype } from "../../data/diarySignals.js";
+import {
+  computeDiarySignals, valueGap, interpretSignals,
+  domainAnalysis, domainReport, detectRelationSubtype, dominantDomain,
+} from "../../data/diarySignals.js";
 import { domainLabel } from "../../data/choices.js";
 import { PLANETS } from "../../data/result.js";
 
@@ -12,12 +17,18 @@ const LIFE_TO_PLANET = {
   housing: "life", lifestyle: "life",
 };
 
-// ── 결과 화면 "내 기록 기반 상태" (3층 중 2층) ──
-// 입력 시 자동 감지된 분야(scenarioDomains)를 기준으로, 그 분야 일기를 분석해 보여준다.
-//  · 진로(career) 분야  → 이직 고민 신호 + 개인화 해석 (통계 예측과 짝)
-//  · 그 외 분야(관계 등) → 그 분야 일기의 흐름·감정·대표 기록
+// ── 결과 화면 "내 기록으로 본 이 선택" (3층 중 2층) ──
+// 이 카드는 '이 갈림길'이 있어야만 성립하는 것만 다룬다 —
+// 입력에서 감지된 분야로 좁힌 신호와, 그걸 이 비교에 대입한 해석.
+//
+// 기록 자체의 흐름(월별 추이·감정·대표 기록·기분 그래프)은 여기가 아니라 나의 우주(행성)에 있다.
+// 예전엔 같은 domainReport/그래프를 두 화면에서 그대로 반복했고, 그래서 기록을 보려면
+// 시뮬레이션을 한 번 돌려야 하는 순서가 됐다. 기록은 시뮬과 무관하게 쌓이는 자산이라
+// 진입점이 행성이어야 맞다. 여기선 두 줄 요약과 링크만 남긴다.
+//
 // 정직선: 예측 '숫자'를 바꾸지 않는다. 최근 일기에서 "드러난" 상태만 보여준다.
 export default function DiarySignalCard() {
+  const navigate = useNavigate();
   const { profile, scenarioDomains, choices, scenarioTexts } = useResult();
 
   // 입력에서 자동 감지된 분야 → 대표 분야 1개 → 행성 키
@@ -25,17 +36,31 @@ export default function DiarySignalCard() {
     () => [...new Set([...(scenarioDomains?.a || []), ...(scenarioDomains?.b || [])])],
     [scenarioDomains],
   );
-  const primaryLife = inputKeys[0] || "career";
-  const planetKey = LIFE_TO_PLANET[primaryLife] || "career";
-  const isCareer = planetKey === "career";
+  const primaryLife = inputKeys[0] || null;
+  const detected = primaryLife ? LIFE_TO_PLANET[primaryLife] || null : null;
+
+  // 감지 실패 시 예전엔 무조건 "career" 로 떨어뜨렸다. 관계 고민을 입력해도 이직 신호
+  // 막대가 뜨는 오분류였다. 이제는 최근 기록에서 실제로 우세한 영역으로 폴백하고,
+  // 폴백일 때는 '이 갈림길 기준 해석'(진로 신호·준비 상태)을 아예 내보내지 않는다 —
+  // 그 해석은 입력에서 진로 계열이 확인됐을 때만 근거가 있다.
+  const fallback = useMemo(() => (detected ? null : dominantDomain({ windowDays: 28 })), [detected]);
+  const planetKey = detected || fallback;
+
   // 관계면 입력 텍스트에서 하위유형(연인/가족/친구/직장) 감지 → 그 유형만 분석
   const subtype = useMemo(() => {
-    if (planetKey !== "relation") return null;
+    if (detected !== "relation") return null;
     const txt = `${choices?.a || ""} ${choices?.b || ""} ${scenarioTexts?.a || ""} ${scenarioTexts?.b || ""}`;
     return detectRelationSubtype(txt);
-  }, [planetKey, choices, scenarioTexts]);
-  const fieldLabel = subtype ? `관계 · ${subtype}` : domainLabel(primaryLife);
+  }, [detected, choices, scenarioTexts]);
 
+  const planetLabel = PLANETS.find((p) => p.key === planetKey)?.label || null;
+  const fieldLabel = subtype
+    ? `관계 · ${subtype}`
+    : detected
+      ? domainLabel(primaryLife)
+      : planetLabel;
+
+  const isCareer = detected === "career";
   const sig = useMemo(() => computeDiarySignals({ windowDays: 28 }), []);
   const gap = useMemo(() => valueGap(profile, sig), [profile, sig]);
   const shown = (sig.signals || []).filter((x) => x.days > 0).slice(0, 4);
@@ -43,29 +68,48 @@ export default function DiarySignalCard() {
   const interp = useMemo(() => (isCareer && hasJobSignal ? interpretSignals(sig, gap) : null), [isCareer, hasJobSignal, sig, gap]);
   const toneColor = { caution: "#F0C36B", go: "#5DCAA5", mid: "#8B6CCF" };
 
-  // 그 분야 일기 분석(그래프·감정·대표 기록). 관계면 하위유형만 필터.
-  const anal = useMemo(() => domainAnalysis(planetKey, undefined, subtype), [planetKey, subtype]);
+  const anal = useMemo(
+    () => (planetKey ? domainAnalysis(planetKey, undefined, subtype) : { ok: false, n: 0 }),
+    [planetKey, subtype],
+  );
+
+  // 분야도 못 잡고 기록도 없으면 읽을 게 없다 — 빈 카드를 띄우느니 기록을 권한다.
+  if (!planetKey) {
+    return (
+      <div className="mb-3 rounded-2xl border border-line bg-[#101827] p-3.5">
+        <div className="text-[13px] font-bold text-ink">🧭 내 기록으로 본 이 선택</div>
+        <p className="mt-1.5 text-[11px] leading-relaxed text-mut">
+          아직 이 갈림길과 이어 볼 기록이 없어요. 홈에서 요즘 고민을 남기면 다음 비교부터
+          통계 결과를 내 기준으로 읽을 수 있어요.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="mb-3 rounded-2xl border border-line bg-[#101827] p-3.5">
       <div className="flex items-center justify-between">
-        <div className="text-[13px] font-bold text-ink">🗒 내 기록 기반 상태 · {fieldLabel}</div>
-        {anal.ok && <span className="text-[10px] text-mut">{fieldLabel} 기록 {anal.n}개</span>}
+        <div className="text-[13px] font-bold text-ink">🧭 내 기록으로 본 이 선택</div>
+        <span className="text-[10px] text-mut">{fieldLabel}</span>
       </div>
       <p className="mt-1 text-[10.5px] leading-relaxed text-mut">
-        {subtype
-          ? <>이 갈림길을 <b className="text-sub">{subtype} 관계</b>로 보고, <b className="text-sub">{subtype}</b> 관련 일기만 골라 분석했어요.</>
-          : <>이 갈림길을 <b className="text-sub">{fieldLabel}</b> 분야로 보고, 그 분야 일기를 분석했어요.</>}
+        {subtype ? (
+          <>이 갈림길을 <b className="text-sub">{subtype} 관계</b>로 보고, <b className="text-sub">{subtype}</b> 관련 일기만 골라 읽었어요.</>
+        ) : detected ? (
+          <>이 갈림길을 <b className="text-sub">{fieldLabel}</b> 분야로 보고, 그 분야 일기를 읽었어요.</>
+        ) : (
+          <>입력에서 분야가 뚜렷하지 않아, 최근 가장 많이 기록한 <b className="text-sub">{fieldLabel}</b> 영역을 대신 보여드려요.</>
+        )}
       </p>
 
       {!anal.ok ? (
         <p className="mt-2 text-[11px] leading-relaxed text-mut">
           아직 <b className="text-sub">{fieldLabel}</b> 분야 일기가 없어요. 홈에서 이 분야 기록을 남기면
-          여기에 흐름·고민이 정리돼 이 예측을 내 기준으로 읽을 수 있어요.
+          이 예측을 내 기준으로 읽을 수 있어요.
         </p>
       ) : (
         <>
-          {/* 진로 분야일 때만 — 이직 고민 신호(그 분야의 구체적 고민) */}
+          {/* ── 이 갈림길 기준 해석 — 입력에서 진로 계열이 감지됐을 때만 ── */}
           {isCareer && hasJobSignal && (
             <>
               {sig.jobChangeDays >= 1 && (
@@ -91,30 +135,6 @@ export default function DiarySignalCard() {
             </>
           )}
 
-          {/* 그 분야 일기 요약 + 그래프 (모든 분야 공통) */}
-          <p className="mt-2.5 text-[11.5px] leading-relaxed text-sub">{domainReport(anal, fieldLabel)}</p>
-          {anal.topEmotions.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {anal.topEmotions.map((e) => (
-                <span key={e} className="rounded-full border border-line px-2 py-0.5 text-[10px] text-sub">{e}</span>
-              ))}
-            </div>
-          )}
-          <Sparkline series={anal.series} trend={anal.trend} />
-          {anal.best.text && (
-            <div className="mt-2 rounded-lg bg-[#1D1730] px-2.5 py-1.5">
-              <div className="text-[9.5px] text-[#5DCAA5]">🌟 가장 좋았던 날 · {anal.best.date.slice(5)}</div>
-              <div className="mt-0.5 text-[11px] leading-relaxed text-sub">“{anal.best.text}”</div>
-            </div>
-          )}
-          {anal.worst.text && anal.worst.date !== anal.best.date && (
-            <div className="mt-1.5 rounded-lg bg-[#241a1a] px-2.5 py-1.5">
-              <div className="text-[9.5px] text-[#F0A0A0]">🌧 힘들었던 날 · {anal.worst.date.slice(5)}</div>
-              <div className="mt-0.5 text-[11px] leading-relaxed text-sub">“{anal.worst.text}”</div>
-            </div>
-          )}
-
-          {/* 진로 분야 개인화 해석 */}
           {isCareer && interp && (
             <div className="mt-3 border-t border-line pt-2.5">
               <div className="text-[11px] font-bold text-ink">🧭 그래서 — 내 기록으로 본 해석</div>
@@ -132,32 +152,26 @@ export default function DiarySignalCard() {
               {interp.valueNote && <p className="mt-1.5 text-[10px] leading-relaxed text-mut">{interp.valueNote}</p>}
             </div>
           )}
+
+          {/* ── 기록 요약 두 줄 + 행성으로 보내는 링크 ──
+              그래프·월별 추이·대표 기록은 행성 패널이 더 깊게 보여준다. 여기선 되풀이하지 않는다. */}
+          <div className={`${isCareer && (hasJobSignal || interp) ? "mt-3 border-t border-line pt-2.5" : "mt-2.5"}`}>
+            <p className="text-[11.5px] leading-relaxed text-sub">{domainReport(anal, fieldLabel)}</p>
+            <button
+              type="button"
+              onClick={() => navigate(`/my?planet=${planetKey}`)}
+              className="tap mt-1.5 flex items-center gap-0.5 text-[11px] font-semibold text-cyan"
+            >
+              나의 우주에서 {fieldLabel} 기록 전체 보기
+              <ChevronRight size={13} />
+            </button>
+          </div>
         </>
       )}
 
       <p className="mt-2.5 text-[9.5px] leading-relaxed text-mut/80">
         일기에서 드러난 주제예요. 예측 <b>숫자를 바꾸지 않고</b>, 무엇을 비교할지 제안하고 통계 결과를 내 기준으로 읽는 데 씁니다.
       </p>
-    </div>
-  );
-}
-
-// 연속 기분 흐름 그래프 — 기록 순서대로 이어지는 SVG polyline (이미지 아님, 데이터로 그림).
-function Sparkline({ series = [], trend }) {
-  if (!series.length) return null;
-  const W = 260, H = 40, PAD = 4;
-  const xs = (i) => (series.length === 1 ? W / 2 : PAD + (i * (W - 2 * PAD)) / (series.length - 1));
-  const ys = (v) => H - PAD - ((v + 1) / 2) * (H - 2 * PAD);
-  const pts = series.map((p, i) => `${xs(i).toFixed(1)},${ys(p.v).toFixed(1)}`).join(" ");
-  const col = trend == null ? "#8B6CCF" : trend > 0.1 ? "#5DCAA5" : trend < -0.1 ? "#F0736F" : "#8B6CCF";
-  return (
-    <div className="mt-2.5">
-      <div className="mb-1 text-[9.5px] text-mut">기분 흐름 (기록 순서대로 이어짐)</div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 44 }}>
-        <line x1={PAD} y1={H / 2} x2={W - PAD} y2={H / 2} stroke="#28324D" strokeWidth="0.5" strokeDasharray="2 3" />
-        {series.length > 1 && <polyline points={pts} fill="none" stroke={col} strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" />}
-        {series.map((p, i) => <circle key={i} cx={xs(i)} cy={ys(p.v)} r="1.6" fill={col} />)}
-      </svg>
     </div>
   );
 }

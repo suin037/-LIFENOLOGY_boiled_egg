@@ -27,7 +27,10 @@ from schemas import (
     CompareRequest,
     CompareResponse,
     SimulateRequest,
+    AvatarGenerateRequest,
+    AvatarGenerateResponse,
 )
+import avatar_gen
 from core import run_prediction
 from compare import build_comparison
 from choice_classifier import classification_stats
@@ -309,6 +312,21 @@ def koweps_evidence(payload: dict = Body(...)) -> dict:
     return koweps_evidence_for_request(payload)
 
 
+@app.post("/avatar/generate", response_model=AvatarGenerateResponse)
+def avatar_generate(req: AvatarGenerateRequest) -> AvatarGenerateResponse:
+    """빌더 아바타(PNG)를 참조 이미지로 실사 아바타를 생성한다.
+
+    실패해도 프론트는 SVG 아바타를 계속 쓰므로 화면이 깨지지 않는다.
+    503 은 '설정/연동이 아직 안 됨', 400 은 '보낸 이미지가 잘못됨'.
+    """
+    try:
+        return AvatarGenerateResponse(image=avatar_gen.generate(req.reference_png, req.prompt))
+    except avatar_gen.AvatarGenError as e:
+        # 참조 이미지 문제면 클라이언트 잘못, 그 외는 서버 설정 문제.
+        status = 400 if "참조 이미지" in str(e) or "프롬프트" in str(e) else 503
+        raise HTTPException(status_code=status, detail=str(e))
+
+
 @app.get("/health")
 def health() -> dict:
     # 선택 분류 통계·워밍업 상태는 캐시하지 않는다 — 런타임 값이라 매번 새로 읽는다.
@@ -419,13 +437,13 @@ def simulate(req: SimulateRequest) -> dict:
     - indicator_scores 는 엔진에서 산출(요청에 주면 override).
     - ANTHROPIC_API_KEY 없으면 수치·지표·근거는 반환하고 서사만 건너뛴다.
     """
-    # 0) 일기모듈 — 감정신호 추출 & 개인화
+    # 0) 일기모듈 — 감정신호 추출 & 해석 개인화
+    # 일기 한 편의 정서를 만족도 입력값으로 변환해 예측 수치를 바꾸면 현재 감정과
+    # 미래 결과가 순환 정의된다. 일기는 안전 분기·관심 축·서사에만 사용하고,
+    # 수치 모델에는 사용자가 명시적으로 입력한 현재 상태만 전달한다.
     diary: dict = {"available": False}
     if getattr(req, "diary", None):
         diary = diary_bridge.analyze_diary(req.diary)
-        for k, v in diary_bridge.to_profile_signals(diary).items():
-            if getattr(req.profile, k, None) is None:
-                setattr(req.profile, k, v)
 
     # 0-1) 안전 분기(민주 safety, 정본) — 감정 + 일기 텍스트 종합
     safety_level, safety_hits = rag_safety.assess_safety(
@@ -523,6 +541,10 @@ def simulate(req: SimulateRequest) -> dict:
         note += f"\n[사용자가 적은 A의 구체적 상황] {req.choice_a_detail}"
     if req.choice_b_detail:
         note += f"\n[사용자가 적은 B의 구체적 상황] {req.choice_b_detail}"
+    if req.choice_a_context:
+        note += "\n[A 구조화 사건·추가 조건] " + json.dumps(req.choice_a_context, ensure_ascii=False)
+    if req.choice_b_context:
+        note += "\n[B 구조화 사건·추가 조건] " + json.dumps(req.choice_b_context, ensure_ascii=False)
     # 삶의 영역(domain) 컨텍스트 — '행동+영역' 구조화 입력의 영역 축을 서사에 알린다.
     _dl = _domain_labels(req.choice_a_domains) + _domain_labels(req.choice_b_domains)
     if _dl:
@@ -541,6 +563,11 @@ def simulate(req: SimulateRequest) -> dict:
     if value_weights:
         note = (note + "\n\n" + personalize.narrative_directive(
             pz, req.choice_a, req.choice_b)).strip()
+    elif req.disposition_block:
+        # 가치 순위를 건너뛰어도 MBTI·서술형 성향 재료는 서사에 전달한다.
+        # 수치와 유사집단 매칭에는 쓰지 않고 표현 방식·주의점에만 사용한다.
+        note = (note + "\n\n" + req.disposition_block +
+                "\n위 성향은 고정 성격이나 예측 피처로 단정하지 말고 설명의 톤과 관점에만 반영할 것.").strip()
 
     note = note.strip()
 
@@ -578,6 +605,13 @@ def simulate(req: SimulateRequest) -> dict:
         "validated_predictions": {"A": validated_a, "B": validated_b},
         "koweps_evidence": koweps,
         "personalization": pz,
+        "prediction_contract": {
+            "mode": "profile_matched_prediction",
+            "numeric_inputs": "나이·성별·학력·소득·직종·고용상태 등 명시적 현재 조건",
+            "diary_role": "안전 감지·관심 지표 우선순위·심리 해석·서사만 조정하며 예측 수치는 변경하지 않음",
+            "score_definition": "0~1 지표는 동일 연령 또는 유사 조건 분포에서의 백분위 위치이며 성공확률이나 종합 우열 점수가 아님",
+            "missing_policy": "직접 결과변수가 없으면 대리지표 또는 근거 부족으로 표시하고 임의 점수를 생성하지 않음",
+        },
         "psych": {
             "A": {"focus": psych_a.get("focus_indicator"), "level": psych_a.get("level"),
                   "cards": [c["card_id"] for c in psych_a.get("cards", [])]},

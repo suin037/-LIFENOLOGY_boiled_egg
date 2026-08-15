@@ -52,6 +52,42 @@ def _csv(rel: str) -> pd.DataFrame:
     return pd.read_csv(DATA / rel)
 
 
+@lru_cache(maxsize=1)
+def _klips_work_health_panel() -> pd.DataFrame:
+    """KLIPS 26차 부가조사에 같은 차수의 연령·성별을 결합한다."""
+    detail = pd.read_pickle(DATA / "raw/klips/klips_health26a.pkl")
+    base = pd.read_pickle(DATA / "raw/klips/klips_base.pkl")
+    demographics = base[["pid", "wave", "나이", "성별"]].drop_duplicates(["pid", "wave"])
+    return detail.merge(demographics, on=["pid", "wave"], how="left")
+
+
+def _klips_matched(profile, specs: list[tuple[str, str, str]]) -> list[dict]:
+    """사용자와 같은 성별·±5세 KLIPS 26차 집단의 근로·건강 상태."""
+    try:
+        panel = _klips_work_health_panel()
+    except Exception:
+        return []
+    age = int(profile.get("age") or 29)
+    sex = float(profile.get("sex") or 2)
+    matched = panel[panel["나이"].between(age - 5, age + 5) & panel["성별"].eq(sex)]
+    conditions = f"{age - 5}~{age + 5}세·동일 성별"
+    if len(matched) < 100:
+        matched = panel[panel["나이"].between(age - 5, age + 5)]
+        conditions = f"{age - 5}~{age + 5}세"
+    out = []
+    for column, label, kind in specs:
+        values = pd.to_numeric(matched.get(column), errors="coerce").dropna()
+        if len(values) < 40:
+            continue
+        if kind == "rate":
+            value, unit = values.mean() * 100, "%"
+        else:
+            value, unit = values.mean(), kind
+        out.append(_ind(label, value, unit, len(values), "KLIPS 26차 부가조사",
+                        note=f"{conditions} 유사 조건 관측"))
+    return out
+
+
 def _ind(name, value, unit, n=None, source=None, note=None) -> dict:
     return {"name": name, "value": (None if value is None else round(float(value), 1)),
             "unit": unit, "sample_n": (int(n) if n and n == n else None),
@@ -61,7 +97,8 @@ def _ind(name, value, unit, n=None, source=None, note=None) -> dict:
 # ── 로더 (영역별) ────────────────────────────────────────────────────────────
 LANOLLAB = "lanollab/lookup_lanollab_master_v1.csv"
 HEALTH_INDS = ["우울장애유병률", "불안감유병", "수면장애", "스트레스인지율",
-               "EQ5D_통증문제", "우울함유병"]
+               "EQ5D_통증문제", "우울함유병", "유산소신체활동실천율",
+               "현재흡연율", "월간음주율", "평균BMI"]
 LIFESTYLE_INDS = ["업무스트레스", "주중평균수면시간", "스트레스인지율"]
 
 
@@ -195,13 +232,29 @@ def _relationship(profile) -> list[dict]:
 
 
 def _lifestyle(profile) -> list[dict]:
-    return _lanollab(profile, LIFESTYLE_INDS) + _qol(
+    work = _klips_matched(profile, [
+        ("실근무시간", "주간 실근무시간", "시간"),
+        ("야간근무", "야간근무 비율", "rate"),
+        ("교대근무", "교대근무 비율", "rate"),
+        ("장시간근무", "장시간근무 비율", "rate"),
+        ("짧은휴식", "짧은 휴식 비율", "rate"),
+        ("출퇴근시간", "평균 출퇴근시간", "분"),
+    ])
+    return work + _lanollab(profile, LIFESTYLE_INDS) + _qol(
         profile, ["여가생활 만족도", "하루 평균 여가시간"]
     )
 
 
 def _health(profile) -> list[dict]:
-    return _lanollab(profile, HEALTH_INDS) + _qol(
+    health = _klips_matched(profile, [
+        ("수면시간", "평균 수면시간", "시간"),
+        ("불면지수", "평균 불면지수", "점"),
+        ("스트레스", "평균 스트레스", "점"),
+        ("우울2주지속", "2주 이상 우울 경험 비율", "rate"),
+        ("휴식_필요", "평균 휴식 필요도", "점"),
+        ("BMI", "평균 BMI", "kg/㎡"),
+    ])
+    return health + _lanollab(profile, HEALTH_INDS) + _qol(
         profile, ["스트레스 인지율", "주관적 건강상태 양호율"]
     )
 
@@ -240,6 +293,21 @@ _ROUTE_NOTE = {
     "career": "GOMS/YP 유사인물·인과·생존 모델(기존 엔진)이 담당",
     "relationship": "사회적 고립도 집단통계 + 기록 기반 관계 해석. 선택의 인과효과는 아님",
     "housing": "현재 뒷받침 데이터 없음 — 수치 대신 신중히 안내",
+    "health": "KLIPS 유사 조건 건강·수면 관측 + KNHANES/CHS 연령집단 기준값. 선택 효과는 아님",
+    "lifestyle": "KLIPS 유사 조건 근무시간·야간·교대·휴식 관측 + 공공 집단 기준값",
+    "long_term_values": "예측 대상이 아니라 사용자가 중요하게 보는 결과의 정렬·강조 기준",
+}
+
+DOMAIN_OUTCOMES = {
+    "career": ["소득·고용 안정", "직종·고용형태 변화", "직무·삶 만족"],
+    "education": ["학비·소득 공백", "학력·취업 전환", "교육·삶 만족"],
+    "business": ["사업소득·생존", "자영 전환·지속", "직무·건강·삶 만족"],
+    "finance": ["가처분소득·자산·부채", "선택 가능 여력", "재무 스트레스·삶 만족"],
+    "health": ["의료·근로 부담", "활동·기능 변화", "수면·스트레스·주관 건강"],
+    "housing": ["주거비·자산·부채", "통근·생활 기회", "주거·삶 만족"],
+    "relationship": ["가구 재정 변화", "관계 행동 지속", "가족·사회관계 만족·고립"],
+    "lifestyle": ["소득·생활비", "시간 활용 변화", "수면·여가·스트레스"],
+    "long_term_values": ["경제적 감당 가능성", "가치와 선택의 정합성", "장기 만족·후회 신호"],
 }
 
 
@@ -267,6 +335,7 @@ def route_domains(domains, profile: dict, choice: str | None = None) -> dict:
                 "insufficient_evidence"
             ),
             "indicators": inds,
+            "outcome_contract": DOMAIN_OUTCOMES.get(d, []),
             "source_note": _ROUTE_NOTE.get(d),
             "limitation": (
                 "현재 조건과 유사한 집단의 참고값이며 이 선택이 만든 개인 효과가 아닙니다."

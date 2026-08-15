@@ -16,20 +16,43 @@ import ActionView from "../components/result/ActionView.jsx";
 import AvatarComparison from "../components/result/AvatarComparison.jsx";
 import DiarySignalCard from "../components/result/DiarySignalCard.jsx";
 import KowepsEvidenceCard from "../components/result/KowepsEvidenceCard.jsx";
+import JobAnalysisView from "../components/result/JobAnalysisView.jsx";
+import RelationshipView from "../components/result/RelationshipView.jsx";
+import SoftCompareView from "../components/result/SoftCompareView.jsx";
+import { softDomainOf } from "../data/softCompare.js";
+import { DOMAIN_LABEL } from "../data/diarySignals.js";
 
 export default function Result() {
   const navigate = useNavigate();
-  const { result, profile, scenarioDomains, retryVisuals } = useResult();
+  const { result, profile, scenarioDomains, retryVisuals, jobAnalyses, postings, relResults, talks } = useResult();
   const { a, b } = result;
 
+  // 진로가 아닌 영역(관계·건강·일상·성장)은 KLIPS 수치가 맞지 않는다.
+  // 그대로 두면 지표 필터에 하나도 안 걸려 '핵심 지표'가 빈 화면이 된다(관계가 그랬다).
+  // 그 자리를 기록 기반 장면 비교로 바꾸고, 수치 탭은 뒤로 물린다.
+  const softPlanet = softDomainOf([...(result.domains?.a || scenarioDomains?.a || []),
+                                   ...(result.domains?.b || scenarioDomains?.b || [])]);
+
   const tabs = [
-    { key: "indicators", label: "핵심 지표", View: LifeView },
+    ...(softPlanet
+      ? [{ key: "soft", label: "두 길의 하루",
+           View: (p) => <SoftCompareView {...p} planet={softPlanet} planetLabel={DOMAIN_LABEL[softPlanet] || ""} /> }]
+      : []),
+    { key: "indicators", label: softPlanet ? "참고 지표" : "핵심 지표", View: LifeView },
     { key: "change", label: "변화 흐름", View: ChangeView },
     { key: "evidence", label: "분석 상세", View: EvidenceView },
     { key: "next", label: "다음 단계", View: ActionView },
+    // 입력에서 공고를 분석했을 때만 — 예측 수치 옆에서 그 공고를 다시 확인한다.
+    ...(jobAnalyses?.length || postings?.length
+      ? [{ key: "job", label: `공고 분석${(jobAnalyses?.length || postings?.length) > 1 ? ` ${jobAnalyses?.length || postings?.length}` : ""}`, View: JobAnalysisView }]
+      : []),
+    // 관계 선택지에서 대화를 담았을 때만.
+    ...(relResults?.length || talks?.length
+      ? [{ key: "rel", label: `관계 분석${(relResults?.length || talks?.length) > 1 ? ` ${relResults?.length || talks?.length}` : ""}`, View: RelationshipView }]
+      : []),
   ];
 
-  const [tab, setTab] = useState("indicators");
+  const [tab, setTab] = useState(softPlanet ? "soft" : "indicators");
   const Active = (tabs.find((t) => t.key === tab) || tabs[0]).View;
 
   // 보관함 저장 — 화면에 보이는 A/B 그대로 담는다. 같은 비교를 같은 날 두 번 담지 않는다.
@@ -59,6 +82,7 @@ export default function Result() {
         <span className="text-mut"> vs </span>
         <span className="font-bold text-gold">{labelOf(b.choice)}</span>
       </p>
+      <EvidenceModeBadge a={a} b={b} domains={result.domains || scenarioDomains} />
 
       <div className="lg:mt-5 lg:grid lg:grid-cols-[minmax(0,.9fr)_minmax(0,1.1fr)] lg:items-start lg:gap-7">
         <section className="lg:sticky lg:top-0">
@@ -153,6 +177,23 @@ export default function Result() {
       )}
     </div>
   );
+}
+
+function EvidenceModeBadge({ a, b, domains }) {
+  const selected = new Set([...(domains?.a || []), ...(domains?.b || [])]);
+  const hasModel = [a, b].some((side) => side.evidence_level === "model" || side.parallel_trajectory?.status === "available");
+  const hasMatched = [a, b].some((side) => side.koweps_evidence?.evidence_level === "personalized_matched_observation");
+  const hasObserved = [a, b].some((side) => side.koweps_evidence?.available || Object.values(side.domain_stats || {}).some((item) => item.status === "available"));
+  const mode = hasModel
+    ? ["개인 조건 모델", "입력 조건을 모델과 유사사례 매칭에 사용했습니다.", "#9B72F2"]
+    : hasMatched
+      ? ["유사 조건 종단 관측", "나와 가까운 조건의 사건 발생군과 미발생군을 비교합니다.", "#7E9EFF"]
+      : hasObserved
+        ? ["집단 관측·참고 통계", "개인의 확정 미래가 아니라 관련 집단의 기준값입니다.", "#65C8B0"]
+        : selected.has("relationship")
+          ? ["관계 행동 시뮬레이션", "예측 점수 대신 실행 단계와 기록할 변화를 제시합니다.", "#F39A4A"]
+          : ["설명 기반 탐색", "검증된 수치가 없는 부분은 서사와 행동 제안만 제공합니다.", "#8791A8"];
+  return <div className="mt-3 flex items-start gap-2 rounded-xl border border-white/10 bg-white/[.035] px-3 py-2.5"><span className="mt-0.5 h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: mode[2] }} /><div><div className="text-[10px] font-bold" style={{ color: mode[2] }}>{mode[0]}</div><div className="mt-0.5 text-[9px] leading-4 text-mut">{mode[1]}</div></div></div>;
 }
 
 // A/B 외의 '제3의 길' — 성향+일기신호로 LLM이 생성 (재구성 제안, 수치 예측 아님)

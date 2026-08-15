@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useResult } from "../data/ResultContext.jsx";
 import { Eyebrow, Button } from "../components/ui.jsx";
@@ -42,6 +42,7 @@ export default function Onboarding() {
   const { profile, setProfile, setOnboarded } = useResult();
 
   const [visibleThrough, setVisibleThrough] = useState(0);
+  const stepRefs = useRef([]);
   const [incomeInput, setIncomeInput] = useState(() =>
     Number(profile.income) > 0 ? String(profile.income) : "",
   );
@@ -49,9 +50,16 @@ export default function Onboarding() {
   const ranked = profile.values; // 라벨 배열, 앞이 1순위
   const steps = ["이름", "나이", "직종", "소득", "가치", "성격유형", "아바타"];
 
+  useEffect(() => {
+    const node = stepRefs.current[visibleThrough];
+    if (!node || visibleThrough === 0) return;
+    const timer = window.setTimeout(() => node.scrollIntoView({ behavior: "smooth", block: "center" }), 80);
+    return () => window.clearTimeout(timer);
+  }, [visibleThrough]);
+
   function finish() {
     setOnboarded(true); // 이후 홈 탭은 '나의 우주' 허브로 진입
-    navigate("/home");
+    navigate("/my");
   }
 
   function reveal(index) {
@@ -68,7 +76,7 @@ export default function Onboarding() {
   function updateIncome(value) {
     const normalized = value.replace(/^0+(?=\d)/, "");
     setIncomeInput(normalized);
-    setProfile((p) => ({ ...p, income: normalized === "" ? 0 : Number(normalized) }));
+    setProfile((p) => ({ ...p, income: normalized === "" ? null : Number(normalized) }));
   }
 
   function confirmIncome() {
@@ -109,9 +117,20 @@ export default function Onboarding() {
         onChange={(e) => setProfile((p) => ({ ...p, name: e.target.value }))}
         onKeyDown={(e) => profile.name?.trim() && revealOnEnter(e, 1)}
         className="w-full rounded-xl border border-line bg-[#0E1424] px-3.5 py-3 text-sm text-ink outline-none placeholder:text-mut focus:border-cyan" />
+      {profile.name?.trim() && visibleThrough < 1 && (
+        <Button type="button" className="mt-3" onClick={() => reveal(1)}>다음</Button>
+      )}
     </div>,
     <div key="age">
-      <label className="mb-2 block text-xs text-sub">나이<span className="float-right font-bold text-cyan">{profile.age}세</span></label>
+      <div className="mb-4 flex items-end justify-between gap-3">
+        <div>
+          <label className="block text-xs font-semibold text-sub">나이</label>
+          <p className="mt-1 text-[10px] text-mut">같은 연령대의 관측 결과를 비교할 때 사용해요.</p>
+        </div>
+        <div className="shrink-0 rounded-xl border border-violet-400/25 bg-violet-500/[.08] px-3 py-1.5 text-right">
+          <span className="text-[18px] font-bold tabular-nums text-white">{profile.age}</span><span className="ml-1 text-[10px] font-semibold text-violet-300">세</span>
+        </div>
+      </div>
       <input type="range" min="18" max="70" value={profile.age}
         onChange={(e) => {
           setProfile((p) => ({ ...p, age: Number(e.target.value) }));
@@ -123,6 +142,9 @@ export default function Onboarding() {
           [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-[0_0_8px_rgba(127,212,255,.6)]"
         style={{ background: `linear-gradient(90deg, #8B6CCF, #8B6CCF ${agePct}%, #1E2740 ${agePct}%)` }} />
       <div className="mt-3 flex justify-between text-[11px] text-mut"><span>18세</span><span>70세</span></div>
+      {visibleThrough < 2 && (
+        <Button type="button" className="mt-3" onClick={() => reveal(2)}>다음</Button>
+      )}
     </div>,
     <div key="occupation">
       <label className="mb-2 block text-xs text-sub">직종</label>
@@ -255,7 +277,7 @@ export default function Onboarding() {
 
         <div className="space-y-5 lg:space-y-6">
           {stepContent.slice(0, visibleThrough + 1).map((content, index) => (
-            <section key={steps[index]} className="animate-fade lg:rounded-[18px] lg:border lg:border-white/[.055] lg:bg-black/10 lg:p-5">
+            <section ref={(node) => { stepRefs.current[index] = node; }} key={steps[index]} className="scroll-mt-24 animate-fade lg:rounded-[18px] lg:border lg:border-white/[.055] lg:bg-black/10 lg:p-5">
               {content}
             </section>
           ))}

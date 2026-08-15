@@ -1,10 +1,14 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useResult } from "../data/ResultContext.jsx";
-import { LIFE_DOMAINS, classifyChoice, detectLifeDomains, domainLabel, labelOf } from "../data/choices.js";
+import { LIFE_DOMAINS, detectLifeDomains, domainLabel, suggestComparePrompts } from "../data/choices.js";
 import { detectEmotions } from "../data/DiaryContext.jsx";
 import { domainRumination } from "../data/diarySignals.js";
+import { DOMAIN_OUTCOMES, questionsForChoice } from "../data/scenarioIntake.js";
 import { Caption } from "../components/ui.jsx";
+import ValueDeepTest from "../components/ValueDeepTest.jsx";
+import JobPostingInput from "../components/JobPostingInput.jsx";
+import RelationshipInput from "../components/RelationshipInput.jsx";
 import Mascot from "../components/Mascot.jsx";
 import { BriefcaseBusiness, GraduationCap, Sprout, Wallet, HeartPulse, House, Users, Leaf, Compass, ArrowRight, GitCompareArrows } from "lucide-react";
 
@@ -13,10 +17,6 @@ const DOMAIN_ICONS = {
   career: BriefcaseBusiness, education: GraduationCap, business: Sprout,
   finance: Wallet, health: HeartPulse, housing: House,
   relationship: Users, lifestyle: Leaf, long_term_values: Compass,
-};
-const SUGGESTIONS = {
-  a: ["더 큰 회사로 이직하기", "대학원에 진학하기", "창업 준비 시작하기"],
-  b: ["현재 회사에 남기", "다른 직무를 준비하기", "잠시 쉬어가기"],
 };
 const OCCUPATION_GROUPS = [
   [1, "관리자"], [2, "전문가·관련 종사자"], [3, "사무 종사자"],
@@ -37,8 +37,18 @@ export default function InputScreen() {
   const {
     profile, setProfile, choices, setChoices,
     scenarioTexts, setScenarioTexts, scenarioDomains, setScenarioDomains,
-    diary, setDiary,
+    scenarioContexts, setScenarioContexts,
+    diary, setDiary, postings, setPostings, analyzePostings,
+    talks, setTalks, analyzeTalks,
   } = useResult();
+  // 두 선택지 중 하나라도 '관계'로 잡히면 관계 상담 흐름으로 전환한다.
+  // 선택지가 어느 영역인지에 따라 아래에 뜨는 입력이 통째로 바뀐다.
+  // 관계면 대화·연락 내역을, 직업이면 직업 정보·공고·가치관 검사를 한 묶음으로.
+  // 단, choices 기본값이 {이직, 유지}라 아무것도 안 썼을 때 직업으로 오인된다 —
+  // 실제로 무언가 적었을 때만 영역 입력을 편다.
+  const typed = Boolean(scenarioTexts.a?.trim() || scenarioTexts.b?.trim());
+  const allDomains = [...(scenarioDomains.a || []), ...(scenarioDomains.b || [])];
+  const isRelationship = typed && allDomains.includes("relationship");
   const textA = scenarioTexts.a;
   const textB = scenarioTexts.b;
   const [domainAuto, setDomainAuto] = useState({ a: true, b: true });
@@ -55,7 +65,7 @@ export default function InputScreen() {
     if (!rumination.compare) return;
     const next = { a: rumination.compare.a, b: rumination.compare.b };
     setScenarioTexts(next);
-    setChoices({ a: classifyChoice(next.a) || "기타", b: classifyChoice(next.b) || "기타" });
+    setChoices(next);
     setScenarioDomains({ a: [rumination.domain.key], b: [rumination.domain.key] });
     setDomainAuto({ a: true, b: true });
     setFocused("a");
@@ -64,7 +74,7 @@ export default function InputScreen() {
   function onText(side, value) {
     const field = side.toLowerCase();
     setScenarioTexts((prev) => ({ ...prev, [field]: value }));
-    setChoices((prev) => ({ ...prev, [field]: classifyChoice(value) || "기타" }));
+    setChoices((prev) => ({ ...prev, [field]: value.trim() || prev[field] }));
     if (domainAuto[field]) {
       setScenarioDomains((prev) => ({ ...prev, [field]: detectLifeDomains(value) }));
     }
@@ -94,28 +104,53 @@ export default function InputScreen() {
 
   const normalizedA = textA.trim().replace(/\s+/g, " ");
   const normalizedB = textB.trim().replace(/\s+/g, " ");
-  const sameCategory = Boolean(normalizedA && normalizedB && choices.a === choices.b);
-  const duplicate = sameCategory && normalizedA === normalizedB;
+  const duplicate = Boolean(normalizedA && normalizedB && normalizedA === normalizedB);
+  const sameCategory = Boolean(normalizedA && normalizedB && !duplicate && scenarioDomains.a.some((key) => scenarioDomains.b.includes(key)));
   const missingDomains = Boolean(normalizedA && normalizedB && (!scenarioDomains.a.length || !scenarioDomains.b.length));
-  const needJobDetails = choices.a === "이직" || choices.b === "이직";
+  // 직업 영역은 넓게 잡는다 — 좁게 걸면 '다른 직무 준비하기', '대학원 진학' 처럼
+  // 사실상 커리어 결정인데도 입력이 안 뜨는 일이 생긴다. 못 보여주는 쪽이 더 손해라서,
+  // '관계만' 잡힌 경우를 빼고는 직업 묶음을 열어둔다.
+  const onlyRelationship = allDomains.length > 0 && allDomains.every((d) => d === "relationship");
+  const isCareer = typed && !onlyRelationship;
+  const needJobDetails = isCareer;
   // 직업정보가 없으면 전체 유사 집단으로 자동 완화한다. 입력 화면 진행을 막지는 않는다.
   const jobDetailsMissing = needJobDetails && profile.occupation_group == null;
   const blocked = !normalizedA || !normalizedB || duplicate;
-  const needMajor = choices.a === "진학" || choices.b === "진학";
+  const needMajor = scenarioDomains.a.includes("education") || scenarioDomains.b.includes("education");
   const emotions = detectEmotions(`${diary} ${textA} ${textB}`);
   const completed = Number(Boolean(normalizedA)) + Number(Boolean(normalizedB));
+  const intakeA = questionsForChoice(textA, scenarioDomains.a);
+  const intakeB = questionsForChoice(textB, scenarioDomains.b);
+
+  function updateContext(side, intake, key, value) {
+    const field = side.toLowerCase();
+    setScenarioContexts((prev) => ({
+      ...prev,
+      [field]: { event: intake.event, event_label: intake.eventLabel, domain: intake.domain, answers: { ...(prev[field]?.answers || {}), [key]: value } },
+    }));
+  }
 
   function startComparison() {
     const fallback = (choice) => {
       if (["이직", "유지"].includes(choice)) return ["career"];
       if (choice === "진학") return ["education"];
       if (choice === "창업") return ["business"];
+      // 쉬어가기는 일만의 결정이 아니다 — 대개 건강·소진이 같이 걸려 있어
+      // 두 영역을 함께 켠다(9영역 근거가 한쪽만 붙으면 판단 재료가 반쪽이 된다).
+      if (choice === "휴식") return ["career", "health"];
       return ["long_term_values"];
     };
-    setScenarioDomains((prev) => ({
-      a: prev.a?.length ? prev.a : fallback(choices.a),
-      b: prev.b?.length ? prev.b : fallback(choices.b),
+    setScenarioContexts((prev) => ({
+      a: { event: intakeA.event, event_label: intakeA.eventLabel, domain: intakeA.domain, answers: prev.a?.answers || {} },
+      b: { event: intakeB.event, event_label: intakeB.eventLabel, domain: intakeB.domain, answers: prev.b?.answers || {} },
     }));
+    setScenarioDomains((prev) => ({
+      a: prev.a?.length ? prev.a : prev.b?.length ? prev.b : fallback(choices.a),
+      b: prev.b?.length ? prev.b : prev.a?.length ? prev.a : fallback(choices.b),
+    }));
+    // 담아둔 재료는 시뮬레이션과 함께 분석을 시작한다(결과 화면에서 확인).
+    if (isRelationship) analyzeTalks(talks);
+    if (isCareer) analyzePostings(postings, textA || choices.a);
     navigate("/simulate");
   }
 
@@ -149,7 +184,8 @@ export default function InputScreen() {
       <div className="relative mt-3 flex min-h-[400px] flex-col overflow-hidden rounded-[24px] border border-white/10 bg-[#08111F]/70 shadow-[0_20px_50px_rgba(0,0,0,.32)] lg:mt-6 lg:min-h-[430px] lg:flex-row lg:rounded-[30px]">
         <ChoicePanel
           side="A" text={textA} domains={scenarioDomains.a} domainAuto={domainAuto.a}
-          active={focused === "a"} suggestions={SUGGESTIONS.a}
+          active={focused === "a"} suggestions={suggestComparePrompts({ side: "a", recentDomains: rumination.domains, valueRanking: profile.value_ranking, otherText: textB })}
+          suggestionLabel="이런 식으로 시작할 수 있어요"
           onFocus={() => setFocused("a")} onText={(value) => onText("A", value)}
           onSuggestion={(value) => chooseSuggestion("a", value)}
           onDomain={(key) => toggleDomain("A", key)} onRedetect={() => resetDomainDetection("A")}
@@ -163,7 +199,8 @@ export default function InputScreen() {
 
         <ChoicePanel
           side="B" text={textB} domains={scenarioDomains.b} domainAuto={domainAuto.b}
-          active={focused === "b"} suggestions={SUGGESTIONS.b}
+          active={focused === "b"} suggestions={suggestComparePrompts({ side: "b", recentDomains: rumination.domains, valueRanking: profile.value_ranking, otherText: textA })}
+          suggestionLabel={textA.trim() ? "A와 비교할 수 있는 다른 길이에요" : "이런 식으로 시작할 수 있어요"}
           onFocus={() => setFocused("b")} onText={(value) => onText("B", value)}
           onSuggestion={(value) => chooseSuggestion("b", value)}
           onDomain={(key) => toggleDomain("B", key)} onRedetect={() => resetDomainDetection("B")}
@@ -178,8 +215,8 @@ export default function InputScreen() {
         <section className="mt-4 rounded-[22px] border border-cyan/30 bg-[#0B1729]/90 p-4">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <div className="text-[13px] font-bold text-ink">이직 결과를 더 정확히 비교하려면</div>
-              <div className="mt-1 text-[11px] leading-relaxed text-muted">이직 시뮬레이션을 선택했을 때만 한 번 입력해요. 입력값은 다음 비교에도 다시 사용할 수 있어요.</div>
+              <div className="text-[13px] font-bold text-ink">일과 관련된 비교를 더 정확히 하려면</div>
+              <div className="mt-1 text-[11px] leading-relaxed text-muted">이직·쉬어가기처럼 일이 걸린 시뮬레이션에서 쓰는 값이라 한 번만 입력하면 돼요. 다음 비교에도 다시 사용할 수 있어요.</div>
               <p className="mt-1 text-[11px] leading-relaxed text-mut">유사 조건 비교에 사용하며, 선택 결과를 확정하는 정보는 아니에요.</p>
             </div>
             <span className="shrink-0 rounded-full bg-cyan/15 px-2 py-1 text-[9px] font-bold text-cyan">선택 입력</span>
@@ -227,6 +264,32 @@ export default function InputScreen() {
         </div>
       )}
 
+      {normalizedA && normalizedB && (
+        <section className="mt-4 rounded-[22px] border border-violet-400/25 bg-[#121126]/90 p-4">
+          <div className="text-[13px] font-bold text-ink">선택별 조건을 조금만 더 알려주세요</div>
+          <p className="mt-1 text-[10px] leading-4 text-mut">영역마다 공통 질문을 사용하고, 구체 사건이 확인되면 필요한 조건만 추가합니다. 비워도 비교는 가능하지만 유사집단 범위가 넓어집니다.</p>
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            <IntakePanel side="A" intake={intakeA} context={scenarioContexts.a} onChange={(key, value) => updateContext("a", intakeA, key, value)} />
+            <IntakePanel side="B" intake={intakeB} context={scenarioContexts.b} onChange={(key, value) => updateContext("b", intakeB, key, value)} />
+          </div>
+        </section>
+      )}
+
+      {/* 지원하려는 공고가 있으면 붙여넣기 → 요구역량 + 내 성향과의 접점·마찰점.
+          공고 수집은 약관 문제가 커서 크롤링 대신 붙여넣기로 받는다. */}
+      {/* 선택지가 어느 영역인지에 따라 담는 재료가 달라진다.
+          관계면 그 관계의 대화를, 그 밖이면 지원하려는 공고를. */}
+      {/* 관계면 대화·연락 내역 하나만. */}
+      {isRelationship && <RelationshipInput talks={talks} setTalks={setTalks} />}
+
+      {/* 직업이면 공고 담기 + 직업가치관검사가 함께 뜬다(위의 직업 정보와 한 묶음). */}
+      {isCareer && (
+        <>
+          <JobPostingInput postings={postings} setPostings={setPostings} />
+          <ValueTestSection profile={profile} setProfile={setProfile} />
+        </>
+      )}
+
       <details className="mt-3 rounded-2xl border border-white/10 bg-[#0B1423]/80 px-3.5 py-3">
         <summary className="cursor-pointer text-[11px] font-semibold text-sub">지금 심정도 덧붙이기 · 선택</summary>
         <input value={diary} onChange={(event) => setDiary(event.target.value)} placeholder="왜 이 선택이 망설여지는지 한 줄로 적어보세요" className="mt-3 w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-xs text-ink outline-none focus:border-cyan" />
@@ -240,6 +303,83 @@ export default function InputScreen() {
   );
 }
 
+function IntakePanel({ side, intake, context, onChange }) {
+  const color = side === "A" ? "#9B72F2" : "#F39A4A";
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/15 p-3">
+      <div className="flex items-center justify-between gap-2"><b className="text-[11px]" style={{ color }}>선택 {side}</b><span className="rounded-full bg-white/[.06] px-2 py-1 text-[9px] text-sub">{intake.eventLabel}</span></div>
+      <div className="mt-3 space-y-3">
+        {intake.questions.map((question) => <label key={question.key} className="block"><span className="mb-1 block text-[10px] text-sub">{question.label}</span><input value={context?.answers?.[question.key] || ""} onChange={(event) => onChange(question.key, event.target.value)} placeholder={question.placeholder} className="w-full rounded-xl border border-line bg-[#0E1424] px-3 py-2.5 text-[11px] text-ink outline-none placeholder:text-mut focus:border-violet-400" /></label>)}
+      </div>
+      <div className="mt-3 border-t border-white/10 pt-2 text-[9px] leading-4 text-mut">결과 변수 · {(DOMAIN_OUTCOMES[intake.domain] || []).join(" / ")}</div>
+    </div>
+  );
+}
+
+// 직업가치관검사 단독 섹션 — 공고 없이도 검사만 할 수 있게. 결과는 프로필에 남아
+// 이후 공고 분석·시뮬레이션 서사가 계속 쓴다.
+function ValueTestSection({ profile, setProfile }) {
+  const [open, setOpen] = useState(false);
+  const done = (profile?.career_values || []).length > 0;
+
+  return (
+    <details className="mt-3 rounded-2xl border border-white/10 bg-[#0B1423]/80 px-3.5 py-3">
+      <summary className="cursor-pointer text-[11px] font-semibold text-sub">
+        직업가치관검사 · 선택 {done && <span className="ml-1 text-[10px] text-[#C7B5F2]">완료</span>}
+      </summary>
+      {done && !open ? (
+        <div className="mt-2 rounded-xl border border-[#8B6CCF]/25 bg-[#8B6CCF]/[.07] px-3 py-2.5">
+          <p className="text-[11px] leading-relaxed text-sub">
+            {(profile.career_values || []).slice(0, 3).map((v) => v.name).join(" > ")} 순으로 나왔어요.
+            공고 분석과 결과 서사에 반영됩니다.
+          </p>
+          <div className="mt-1.5 flex gap-2.5">
+            <button onClick={() => setOpen(true)} className="tap text-[10px] text-mut">다시 하기</button>
+            {profile.career_values_report && (
+              <a href={profile.career_values_report} target="_blank" rel="noreferrer" className="tap text-[10px] text-mut">
+                공식 결과지 ↗
+              </a>
+            )}
+          </div>
+        </div>
+      ) : open ? (
+        <div className="mt-2">
+          <ValueDeepTest
+            onDone={(data) => {
+              setProfile((prev) => ({ ...prev, career_values: data.ranking, career_values_report: data.report_url }));
+              setOpen(false);
+            }}
+            onClose={() => setOpen(false)}
+          />
+        </div>
+      ) : (
+        <>
+          <p className="mt-2 text-[10px] leading-relaxed text-mut">
+            커리어넷(한국직업능력연구원) 직업가치관검사 28문항 · 10분. 두 가치 중 하나씩 고르면
+            8개 가치의 우선순위가 나오고, 공고 분석·결과 서사에 반영됩니다.
+          </p>
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="tap mt-2 w-full rounded-xl border border-[#8B6CCF]/40 bg-[#8B6CCF]/[.08] py-2.5 text-[12px] font-bold text-[#C7B5F2]"
+          >
+            검사 시작하기
+          </button>
+        </>
+      )}
+    </details>
+  );
+}
+
+function JobBlock({ title, tone = "#8B6CCF", children }) {
+  return (
+    <div className="rounded-xl border border-white/[.07] bg-black/15 px-3 py-2.5">
+      <p className="text-[10px] font-bold" style={{ color: tone }}>{title}</p>
+      <ul className="mt-1.5 space-y-1.5">{children}</ul>
+    </div>
+  );
+}
+
 function JobField({ label, children }) {
   return (
     <label className="block">
@@ -249,7 +389,7 @@ function JobField({ label, children }) {
   );
 }
 
-function ChoicePanel({ side, text, domains, domainAuto, active, suggestions, onFocus, onText, onSuggestion, onDomain, onRedetect }) {
+function ChoicePanel({ side, text, domains, domainAuto, active, suggestions, suggestionLabel, onFocus, onText, onSuggestion, onDomain, onRedetect }) {
   const [editingDomains, setEditingDomains] = useState(false);
   const isA = side === "A";
   const accentText = isA ? "text-[#8B6CCF]" : "text-[#FFB85C]";
@@ -261,9 +401,9 @@ function ChoicePanel({ side, text, domains, domainAuto, active, suggestions, onF
 
       {!text.trim() && active && (
         <div className="mt-3 min-w-0 overflow-hidden">
-          <div className="mb-2 text-[10px] text-mut">이런 식으로 시작할 수 있어요</div>
+          <div className="mb-2 text-[10px] text-mut">{suggestionLabel}</div>
           <div className="flex min-w-0 flex-wrap gap-1.5">
-            {suggestions.map((item) => <button key={item} type="button" onClick={(event) => { event.stopPropagation(); onSuggestion(item); }} className={`tap max-w-full truncate rounded-full border border-white/10 bg-white/[.06] px-2.5 py-1.5 text-[10px] ${accentText}`}>{item}</button>)}
+            {suggestions.map((item) => <button key={item.key} type="button" onClick={(event) => { event.stopPropagation(); onSuggestion(item.text); }} className={`tap max-w-full truncate rounded-full border border-white/10 bg-white/[.06] px-2.5 py-1.5 text-[10px] ${accentText}`}>{item.text}</button>)}
           </div>
         </div>
       )}

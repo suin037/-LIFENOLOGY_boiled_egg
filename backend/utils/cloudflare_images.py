@@ -1,6 +1,7 @@
 """Cloudflare Workers AI를 이용한 RAG 서사 기반 아바타 장면 생성."""
 
 import asyncio
+import hashlib
 import json
 import time
 import requests
@@ -30,11 +31,14 @@ mandatory and override any conflicting implication in the story or scene directi
 
 Exact avatar attributes to preserve:
 {identity}
-Do NOT copy the reference image's pose, clothes, shoulders, circular frame, background,
-camera angle, composition, or art style. Do not recreate a centered avatar portrait.
+Do NOT copy the reference image's pose, circular frame, background, camera angle,
+composition, or art style. Do not recreate a centered avatar portrait. Keep one shared,
+unchanged wardrobe design and color palette for this character across both A and B scenes.
+The A and B outputs are parallel futures of the EXACT SAME PERSON, not siblings, variants,
+or two redesigned avatars. Identity consistency is more important than scene styling.
 
 Future choice: {choice}
-Story to visualize: {narrative[:1200]}
+Story to visualize: {narrative[:700]}
 Scene direction:
 {scene}
 
@@ -58,7 +62,8 @@ def _generate_one(avatar_png, choice, narrative, visual_scene, avatar_spec, seed
         f"{settings.cloudflare_account_id}/ai/run/{model}"
     )
     response = None
-    for attempt in range(3):
+    max_attempts = max(1, settings.cloudflare_image_max_attempts)
+    for attempt in range(max_attempts):
         response = requests.post(
             url,
             headers={"Authorization": f"Bearer {settings.cloudflare_api_token}"},
@@ -71,10 +76,10 @@ def _generate_one(avatar_png, choice, narrative, visual_scene, avatar_spec, seed
             files={"input_image_0": ("avatar.png", avatar_png, "image/png")},
             timeout=(30, 240),
         )
-        if response.status_code < 500 or attempt == 2:
+        if response.status_code < 500 or attempt == max_attempts - 1:
             break
         # Workers AI의 일시적인 5xx/동시 처리 실패는 짧게 기다렸다 재시도한다.
-        time.sleep(1.5 * (attempt + 1))
+        time.sleep(0.5 * (attempt + 1))
     if not response.ok:
         try:
             detail = response.json()
@@ -93,6 +98,9 @@ def _generate_one(avatar_png, choice, narrative, visual_scene, avatar_spec, seed
     return f"data:image/jpeg;base64,{image}"
 
 
+_PAIR_CACHE: dict[str, dict] = {}
+
+
 async def generate_pair(
     avatar_png, choice_a, choice_b, narrative_a, narrative_b,
     visual_a=None, visual_b=None, avatar_spec=None,
@@ -101,6 +109,14 @@ async def generate_pair(
         raise RuntimeError("Cloudflare Workers AI is not configured")
     if not avatar_png:
         raise ValueError("Avatar image is empty")
+    cache_key = hashlib.sha256(
+        avatar_png + json.dumps(
+            [choice_a, choice_b, narrative_a, narrative_b, visual_a, visual_b, avatar_spec],
+            ensure_ascii=False, sort_keys=True, default=str,
+        ).encode("utf-8")
+    ).hexdigest()
+    if cache_key in _PAIR_CACHE:
+        return _PAIR_CACHE[cache_key]
     # The two scenes are independent. Generate them concurrently so their
     # latencies do not add up.
     # 같은 참조 이미지와 seed를 사용해 A/B의 인물 정체성과 기본 화풍을 최대한 맞춘다.
@@ -114,4 +130,9 @@ async def generate_pair(
             _generate_one, avatar_png, choice_b, narrative_b, visual_b, avatar_spec, identity_seed
         ),
     )
-    return {"a": image_a, "b": image_b}
+    pair = {"a": image_a, "b": image_b}
+    # 발표 중 같은 선택을 다시 실행하면 외부 모델을 재호출하지 않아 즉시 표시한다.
+    if len(_PAIR_CACHE) >= 24:
+        _PAIR_CACHE.pop(next(iter(_PAIR_CACHE)))
+    _PAIR_CACHE[cache_key] = pair
+    return pair

@@ -29,6 +29,10 @@ function normalizeLifeIndicators(list) {
     group: it.group ?? null,
     source: it.source ?? null,
     n: it.n ?? null,
+    // 백엔드가 붙여 보내는 삶의 영역 태그. 화면이 지표 '이름 문자열'로 영역을
+    // 추측하던 것을 대체한다(예전 방식은 관계에서 15개 중 14개를 버렸다).
+    domains: it.domains || [],
+    lower_is_better: it.lower_is_better ?? false,
   }));
 }
 
@@ -52,7 +56,9 @@ function buildSide(scenario, choice, detail, profile, evidence, domainCov, domai
 
   // 이직은 개인단위 모델, 창업은 artifact가 배포된 경우 개인단위 자영 이탈모델을 쓴다.
   // artifact가 없더라도 창업 risk_timeline에는 업종·규모별 기업생멸 통계가 들어온다.
-  const hasIndividual = choice === "이직" || (choice === "창업" && raw.survival_months != null);
+  // 휴식(쉬어가기)도 개인단위다 — KLIPS 직업력 공백 스펠의 L3/L4.
+  const hasIndividual = choice === "이직"
+    || (["창업", "휴식"].includes(choice) && raw.survival_months != null);
   const hasRisk = choice === "창업" || hasIndividual;
 
   return {
@@ -89,6 +95,9 @@ function buildSide(scenario, choice, detail, profile, evidence, domainCov, domai
     down_ratio: null,
     risk_timeline: hasRisk ? raw.risk_timeline || {} : {},
     risk_label: hasRisk ? scenario?.regret_summary?.label ?? null : null,
+    // 휴식 전용 — {개월: 복귀 누적확률}. risk_timeline(연차별 미복귀확률)의 반대편이다.
+    // 쉬는 기간 중앙값이 1년 미만이라 연 단위로는 3·6개월 구간이 통째로 뭉개진다.
+    return_timeline: raw.return_timeline || {},
 
     // 근거 수준(항목4) — 이 갈래가 어떤 강도의 근거인지 + 수치그래프 표시 정당성.
     evidence_level: evidence?.level || null,      // model | group_stat | rag | insufficient
@@ -133,8 +142,14 @@ export function mapSimulateToPair(sim, { choiceA, choiceB, detailA = "", detailB
   const vp = cmp.validated_predictions || sim.validated_predictions || {};
   const ie = cmp.indicator_evidence || sim.indicator_evidence || {};
   const ke = cmp.koweps_evidence || sim.koweps_evidence || null;
-  const a = buildSide(A, choiceA, detailA, profile, ev.A, dc.A, ds.A, vp.A, ie.A, ke, "A");
-  const b = buildSide(B, choiceB, detailB, profile, ev.B, dc.B, ds.B, vp.B, ie.B, ke, "B");
+  const keA = ke?.comparison_mode === "independent_events" ? ke.side_evidence?.A : ke;
+  const keB = ke?.comparison_mode === "independent_events" ? ke.side_evidence?.B : ke;
+  const a = buildSide(A, choiceA, detailA, profile, ev.A, dc.A, ds.A, vp.A, ie.A, keA, "A");
+  const b = buildSide(B, choiceB, detailB, profile, ev.B, dc.B, ds.B, vp.B, ie.B, keB, "B");
+  // 장기 가치는 별도 미래점수가 아니라 어떤 결과를 먼저 읽을지 정하는 개인화 축이다.
+  // /compare 미리보기에는 없고 /simulate 최종 응답부터 적용된다.
+  a.personalization = sim.personalization || null;
+  b.personalization = sim.personalization || null;
 
   // 실데이터가 하나라도 있으면 실수치 모드. 연차별 궤적이 비어도(관측범위 밖/표본부족)
   // 이웃·인과·기대임금·지표 같은 실측이 있으면 목업으로 되돌리지 않는다.

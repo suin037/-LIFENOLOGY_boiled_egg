@@ -3,14 +3,29 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Html, OrbitControls, Sparkles } from "@react-three/drei";
 import * as THREE from "three";
 import { RotateCcw } from "lucide-react";
+import { seedFrom, starShapeFor } from "../data/starShapes.js";
 
 const PLANET_POSITIONS = [
-  [-5.2, 2.2, -1.2], [0, -1.1, 1.5], [-5.3, -3.1, -6.4],
-  [5.1, -3, -1.8], [5.2, 2.2, -5.2],
+  [-3.8, 1.7, -.8], [0, -.8, 1.1], [-4, -2.35, -4.15],
+  [3.8, -2.2, -1.2], [4, 1.75, -3.35],
 ];
 const PLANET_SIZES = [1.05, 1.35, .9, 1, 1.12];
-const INITIAL_CAMERA = new THREE.Vector3(0, 4.8, 18);
+const INITIAL_CAMERA = new THREE.Vector3(0, 3.7, 14.4);
 const UNIVERSE_TARGET = new THREE.Vector3(0, -1.1, 0);
+
+// 행성은 매 프레임 제 궤도를 돈다. 별자리·시나리오도 반드시 같은 식을 써야 행성을 따라간다.
+// (전에는 이 셋이 PLANET_POSITIONS 를 '고정 위치'로 읽어, 행성만 궤도를 돌고 별자리는
+//  출발 자리에 남았다. 몇 분만 지나도 별자리가 행성과 떨어져 엉뚱한 데 떠 있었다.)
+function planetPositionAt(index, time, out = new THREE.Vector3()) {
+  const base = PLANET_POSITIONS[index] || PLANET_POSITIONS[0];
+  const radius = Math.hypot(base[0], base[2]);
+  const angle = Math.atan2(base[2], base[0]) + time * (.0045 + index * .00035);
+  return out.set(
+    Math.cos(angle) * radius,
+    base[1] + Math.sin(time * .22 + index) * .06,
+    Math.sin(angle) * radius,
+  );
+}
 
 function seeded(seed) {
   let value = seed;
@@ -28,6 +43,25 @@ function makeSoftTexture(stops) {
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   return texture;
+}
+
+// 별 알갱이 — Points 로 한 번에 그리므로 모양은 이 스프라이트가 낸다.
+// 모듈에 한 번만 만든다(별자리마다 캔버스를 만들면 그것도 비용이다).
+let _starSprite = null;
+function starSprite() {
+  if (_starSprite) return _starSprite;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 64;
+  const ctx = canvas.getContext("2d");
+  const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0, "rgba(255,255,255,1)");
+  g.addColorStop(.35, "rgba(255,255,255,.72)");
+  g.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 64, 64);
+  _starSprite = new THREE.CanvasTexture(canvas);
+  _starSprite.colorSpace = THREE.SRGBColorSpace;
+  return _starSprite;
 }
 
 function makePlanetTexture(from, to, seed) {
@@ -102,11 +136,13 @@ function Galaxy({ reduced }) {
   }, [reduced]);
   useFrame((_, delta) => { if (ref.current) ref.current.rotation.y += delta * .012; });
   const core = useMemo(() => makeSoftTexture([[0,"rgba(255,247,217,.95)"],[.12,"rgba(255,219,162,.45)"],[.42,"rgba(147,112,214,.12)"],[1,"rgba(0,0,0,0)"]]), []);
+  // 배치는 그대로 둔다(뒤로 밀면 은하가 작고 밋밋해진다). 대신 밝기를 낮춰
+  // 별자리·행성이 그 위에 묻히지 않게 한다 — 겹침은 위치가 아니라 대비 문제였다.
   return <group rotation={[-.36, 0, .12]} position={[0,-.3,-3]}>
     <points ref={ref} geometry={geometry}>
-      <pointsMaterial size={reduced ? .025 : .034} vertexColors transparent opacity={.72} sizeAttenuation depthWrite={false} blending={THREE.AdditiveBlending}/>
+      <pointsMaterial size={reduced ? .024 : .032} vertexColors transparent opacity={.5} sizeAttenuation depthWrite={false} blending={THREE.AdditiveBlending}/>
     </points>
-    <sprite scale={[5.2,5.2,1]}><spriteMaterial map={core} transparent opacity={.68} depthWrite={false} blending={THREE.AdditiveBlending}/></sprite>
+    <sprite scale={[4.6,4.6,1]}><spriteMaterial map={core} transparent opacity={.42} depthWrite={false} blending={THREE.AdditiveBlending}/></sprite>
     <pointLight color="#ffe3ba" intensity={7} distance={12}/>
   </group>;
 }
@@ -126,7 +162,7 @@ function StarLayer({ count, radius, size, opacity, seed, color="#e9ecff" }) {
 }
 
 function OrbitRings() {
-  return <group rotation={[-Math.PI / 2 + .19, 0, .1]}>{[3.2,4.7,6.2,7.8].map((r,i)=><mesh key={r} rotation={[0,i*.025,i*.018]}><ringGeometry args={[r-.006,r+.006,160]}/><meshBasicMaterial color="#8f8eb0" transparent opacity={.055+i*.008} side={THREE.DoubleSide} depthWrite={false}/></mesh>)}</group>;
+  return <group rotation={[-Math.PI / 2 + .19, 0, .1]}>{[2.5,3.6,4.7,5.8].map((r,i)=><mesh key={r} rotation={[0,i*.025,i*.018]}><ringGeometry args={[r-.006,r+.006,160]}/><meshBasicMaterial color="#8f8eb0" transparent opacity={.055+i*.008} side={THREE.DoubleSide} depthWrite={false}/></mesh>)}</group>;
 }
 
 function Planet({ planet, index, selected, onSelect, skin }) {
@@ -134,13 +170,20 @@ function Planet({ planet, index, selected, onSelect, skin }) {
   const mesh = useRef();
   const position = PLANET_POSITIONS[index];
   const size = PLANET_SIZES[index];
+  const selectPlanet = (event) => { event.stopPropagation(); onSelect(planet.key); };
+  const showPointer = (event) => { event.stopPropagation(); document.body.style.cursor = "pointer"; };
+  const hidePointer = () => { document.body.style.cursor = ""; };
   const texture = useMemo(() => makePlanetTexture(planet.from, planet.to, index * 13.7), [planet.from, planet.to, index]);
   useFrame((state, delta) => {
-    if (mesh.current) mesh.current.rotation.y += delta * (.045 + index * .008);
-    if (group.current) group.current.position.y = position[1] + Math.sin(state.clock.elapsedTime * .28 + index) * .08;
+    if (mesh.current) mesh.current.rotation.y += delta * (.028 + index * .004);
+    if (group.current) planetPositionAt(index, state.clock.elapsedTime, group.current.position);
   });
   return <group ref={group} position={position}>
-    <mesh ref={mesh} onClick={(e)=>{e.stopPropagation();onSelect(planet.key);}} onDoubleClick={(e)=>{e.stopPropagation();onSelect(planet.key);}}>
+    <mesh onClick={selectPlanet} onDoubleClick={selectPlanet} onPointerOver={showPointer} onPointerOut={hidePointer}>
+      <sphereGeometry args={[Math.max(size * 1.65, 1.65), 24, 24]}/>
+      <meshBasicMaterial transparent opacity={0} depthWrite={false}/>
+    </mesh>
+    <mesh ref={mesh} onClick={selectPlanet} onDoubleClick={selectPlanet} onPointerOver={showPointer} onPointerOut={hidePointer}>
       <sphereGeometry args={[size, 64, 64]}/>
       <meshPhysicalMaterial
         map={texture}
@@ -169,38 +212,102 @@ function Planet({ planet, index, selected, onSelect, skin }) {
   </group>;
 }
 
+const SHAPE_SCALE = .42;   // 뼈대(-1~1)를 행성 옆에 놓기 좋은 크기로
+
 function Constellation3D({ group, index, anchorIndex, onOpen }) {
   const orbit = useRef();
-  const root = PLANET_POSITIONS[anchorIndex];
-  const visible = group.stars.filter((s)=>!s.empty).slice(0,7);
-  const orbitRadius = 2.25 + index * .28;
-  const points = useMemo(() => visible.map((_, i)=>{
-    const a = i * 1.71 + index;
-    const radius = .32 + i * .035;
-    return [Math.cos(a)*radius, Math.sin(a)*radius*.72, (i-3)*.055];
-  }), [group.weekStart, visible.length, index]);
-  const geometry = useMemo(()=>new THREE.BufferGeometry().setFromPoints(points.map((p)=>new THREE.Vector3(...p))),[points]);
+  const figure = useRef();
+  // 별자리 하나는 최대 7별로 끊어 넘어온다(starGroupsOf). 여기서 또 자르면 별이 사라진다.
+  const visible = group.stars.filter((s)=>!s.empty);
+  // 그 행성 안에서 몇 번째 별자리인지로 궤도를 잡는다.
+  // 전엔 '전체 배열에서 몇 번째'를 썼는데, 다섯 행성 것이 한 배열로 들어오면서
+  // 뒤쪽 별자리가 행성에서 7 이상 떨어져 나가 우주에 흩뿌려진 것처럼 보였다.
+  const ord = group.index ?? index;
+  const planetSize = PLANET_SIZES[anchorIndex] ?? 1;
+  const orbitRadius = planetSize + .75 + (ord % 3) * .3;   // 행성에 붙어 도는 좁은 띠
+  // 기록 개수에 맞는 디자인 별자리를 골라 그 자리에 별을 앉힌다.
+  const shape = useMemo(
+    () => starShapeFor(visible.length, seedFrom(group.weekStart || `${group.domain}-${ord}`)),
+    [group.weekStart, group.domain, visible.length, ord],
+  );
+  const starGeo = useMemo(()=>{
+    const g = new THREE.BufferGeometry();
+    const xyz = shape.points.slice(0, visible.length)
+      .flatMap(([x,y]) => [x * SHAPE_SCALE, y * SHAPE_SCALE, 0]);
+    g.setAttribute("position", new THREE.Float32BufferAttribute(xyz, 3));
+    return g;
+  },[shape, visible.length]);
+  // 선은 순번이 아니라 뼈대가 정한 edges 만 긋는다 — 전부를 한 줄로 이으면 실타래가 된다.
+  const edgeGeo = useMemo(()=>{
+    const g = new THREE.BufferGeometry();
+    const xyz = shape.edges.flatMap(([a,b]) =>
+      [shape.points[a], shape.points[b]].flatMap(([x,y]) => [x * SHAPE_SCALE, y * SHAPE_SCALE, 0]));
+    g.setAttribute("position", new THREE.Float32BufferAttribute(xyz, 3));
+    return g;
+  },[shape]);
   useFrame((state,delta)=>{
     if (!orbit.current) return;
-    orbit.current.rotation.y += delta * (.055 + index * .006);
-    orbit.current.rotation.z = Math.sin(state.clock.elapsedTime * .08 + index) * .09;
+    // 행성을 따라간다.
+    planetPositionAt(anchorIndex, state.clock.elapsedTime, orbit.current.position);
+    orbit.current.rotation.y += delta * (.055 + (ord % 5) * .006);
+    orbit.current.rotation.z = Math.sin(state.clock.elapsedTime * .08 + ord) * .09;
+    // 뼈대는 평면이라 궤도를 돌다 보면 옆으로 서서 사라진다. 늘 카메라를 보게 해
+    // 어느 각도에서든 '무슨 모양인지' 읽히게 한다.
+    figure.current?.lookAt(state.camera.position);
   });
   if (!visible.length) return null;
-  return <group ref={orbit} position={root} rotation={[.18,index*.7,.12]}>
+  // 황금각(2.4rad)으로 돌려 별자리가 몇 개든 행성 둘레에 고르게 퍼지게 한다.
+  return <group ref={orbit} rotation={[.18+(ord%3)*.24, ord*2.39996, .12]}>
     <group position={[orbitRadius,0,0]} onClick={(e)=>{e.stopPropagation();onOpen?.(group);}}>
-      <mesh visible={false}><sphereGeometry args={[.72,12,12]}/><meshBasicMaterial transparent opacity={0}/></mesh>
-      <line geometry={geometry}><lineBasicMaterial color="#bda8ee" transparent opacity={.55}/></line>
-      {points.map((p,i)=><mesh key={visible[i].date||visible[i].label||i} position={p} onClick={(e)=>{e.stopPropagation();onOpen?.({...group,selectedPoint:visible[i]});}}><sphereGeometry args={[.05+(visible[i].mood||3)*.008,12,12]}/><meshBasicMaterial color="#f5f2ff"/><pointLight color="#ad91ed" intensity={.2} distance={1}/></mesh>)}
+      <mesh visible={false}><sphereGeometry args={[.5,10,10]}/><meshBasicMaterial transparent opacity={0}/></mesh>
+      <group ref={figure}>
+        <lineSegments geometry={edgeGeo}><lineBasicMaterial color="#9FB0CE" transparent opacity={.42}/></lineSegments>
+        {/* 기록은 하얀 별. 시나리오(마름모)와 한눈에 갈라지도록 색을 섞지 않는다.
+            별을 Points 하나로 그린다 — 별마다 mesh + pointLight 를 두면 기록이 늘수록
+            드로우콜과 동적 광원이 같이 늘어난다(1년치면 광원만 100개가 넘어 프레임이 무너졌다). */}
+        <points geometry={starGeo}>
+          <pointsMaterial
+            color="#ffffff" size={.16} sizeAttenuation transparent opacity={.95}
+            map={starSprite()} depthWrite={false} blending={THREE.AdditiveBlending}
+          />
+        </points>
+      </group>
+    </group>
+  </group>;
+}
+
+// 시나리오 = 마름모(정팔면체). 기록(하얀 별)과 모양·색으로 갈라 놓아야
+// "지나온 것"과 "탐색한 미래"가 한 행성 위에서 섞이지 않는다.
+function ScenarioMark({ scenario, index, anchorIndex, onOpen }) {
+  const spin = useRef();
+  const root = useRef();
+  useFrame((state,delta)=>{
+    // 별자리와 마찬가지로 행성을 따라간다.
+    if (root.current) planetPositionAt(anchorIndex, state.clock.elapsedTime, root.current.position);
+    if (!spin.current) return;
+    spin.current.rotation.y += delta * .5;
+    spin.current.position.y = Math.sin(state.clock.elapsedTime * .5 + index) * .12;
+  });
+  const angle = index * 1.9 + .6;
+  const radius = 1.62;
+  return <group ref={root}>
+    <group position={[Math.cos(angle)*radius, 1.15 + (index%2)*.34, Math.sin(angle)*radius]}>
+      <mesh ref={spin} onClick={(e)=>{e.stopPropagation();onOpen?.(scenario);}}>
+        <octahedronGeometry args={[.135,0]}/>
+        <meshStandardMaterial color="#C9A6FF" emissive="#8B6CCF" emissiveIntensity={2.4} roughness={.3}/>
+      </mesh>
     </group>
   </group>;
 }
 
 function CameraRig({ selectedKey, planets, controlsRef, resetSignal }) {
-  const { camera } = useThree();
+  const { camera, clock } = useThree();
   const flight = useRef(null);
   useEffect(()=>{
     const index = planets.findIndex((p)=>p.key===selectedKey);
-    const target = index >= 0 ? new THREE.Vector3(...PLANET_POSITIONS[index]) : UNIVERSE_TARGET.clone();
+    // 고정 좌표가 아니라 '지금 그 행성이 있는 자리'로 날아간다 — 행성은 궤도를 돌기 때문에
+    // 출발 좌표를 쓰면 시간이 지날수록 빈 우주를 비춘다.
+    const target = index >= 0 ? planetPositionAt(index, clock.elapsedTime) : UNIVERSE_TARGET.clone();
     // 선택된 행성이 화면 중앙보다 살짝 위에 놓이도록 시선 중심을 아래로 내린다.
     if (index >= 0) target.y -= .9;
     const direction = camera.position.clone().sub(target).normalize();
@@ -222,7 +329,7 @@ function CameraRig({ selectedKey, planets, controlsRef, resetSignal }) {
   return null;
 }
 
-function Scene({ planets, groups, selectedKey, onPlanetSelect, onConstellationOpen, resetSignal, reduced, skin }) {
+function Scene({ planets, groups, scenarios = [], selectedKey, onPlanetSelect, onConstellationOpen, onScenarioOpen, resetSignal, reduced, skin }) {
   const controls = useRef();
   const selectedIndex = Math.max(0, planets.findIndex((planet)=>planet.key===selectedKey));
   return <>
@@ -238,7 +345,9 @@ function Scene({ planets, groups, selectedKey, onPlanetSelect, onConstellationOp
     <Sparkles count={reduced?22:48} scale={[25,14,25]} size={.72} speed={.045} opacity={.16} color="#bac8ff" noise={1.8}/>
     <Galaxy reduced={reduced}/><OrbitRings/>
     {planets.map((planet,i)=><Planet key={planet.key} planet={planet} index={i} selected={planet.key===selectedKey} onSelect={onPlanetSelect} skin={skin}/>) }
-    {groups.slice(-5).map((group,i)=>{
+    {/* 자르지 않는다 — 여기서 잘라내면 띄운 별 수가 실제 기록 수와 어긋난다.
+        (전에는 .slice(-5) 로 별자리를 5개만 그려 오래된 기록이 조용히 사라졌다.) */}
+    {groups.map((group,i)=>{
       const domainIndex=planets.findIndex((planet)=>planet.key===group.domain);
       const anchorIndex=selectedKey?selectedIndex:(domainIndex>=0?domainIndex:i%planets.length);
       return <Constellation3D key={group.weekStart||i} group={group} index={i} anchorIndex={anchorIndex} onOpen={(pickedGroup)=>{
@@ -246,17 +355,26 @@ function Scene({ planets, groups, selectedKey, onPlanetSelect, onConstellationOp
         onConstellationOpen?.(pickedGroup, planets[anchorIndex]?.key);
       }}/>;
     }) }
+    {/* 그 영역에서 만든 미래 — 행성 위쪽에 마름모로 뜬다. */}
+    {(selectedKey ? scenarios.filter((s)=>s.domain===selectedKey) : scenarios).map((scenario,i)=>{
+      const domainIndex=planets.findIndex((planet)=>planet.key===scenario.domain);
+      if (domainIndex<0) return null;
+      return <ScenarioMark key={`${scenario.domain}-${scenario.date}-${i}`} scenario={scenario} index={i} anchorIndex={domainIndex} onOpen={(picked)=>{
+        onPlanetSelect?.(scenario.domain);
+        onScenarioOpen?.(picked);
+      }}/>;
+    }) }
     <OrbitControls ref={controls} target={UNIVERSE_TARGET.toArray()} makeDefault enableDamping dampingFactor={.11} enablePan screenSpacePanning minDistance={2.8} maxDistance={34} rotateSpeed={.22} zoomSpeed={.62} panSpeed={.48} mouseButtons={{LEFT:THREE.MOUSE.ROTATE,MIDDLE:THREE.MOUSE.DOLLY,RIGHT:THREE.MOUSE.PAN}}/>
     <CameraRig selectedKey={selectedKey} planets={planets} controlsRef={controls} resetSignal={resetSignal}/>
   </>;
 }
 
-export default function UniverseMap({ planets, groups=[], selectedKey, onPlanetSelect, onConstellationOpen, skin="basic" }) {
+export default function UniverseMap({ planets, groups=[], scenarios=[], selectedKey, onPlanetSelect, onConstellationOpen, onScenarioOpen, skin="basic" }) {
   const [resetSignal,setResetSignal]=useState(0);
   const reduced = typeof window!=="undefined" && (window.innerWidth<760 || (navigator.hardwareConcurrency||8)<=4);
   return <div className="relative h-[calc(100dvh-112px)] min-h-[540px] w-full overflow-hidden bg-[#01040c] md:h-[calc(100dvh-104px)] md:min-h-[600px]">
     <Canvas dpr={reduced?[1,1.25]:[1,1.75]} camera={{position:INITIAL_CAMERA.toArray(),fov:48,near:.1,far:100}} gl={{antialias:!reduced,powerPreference:"high-performance"}} onPointerMissed={()=>onPlanetSelect?.(null)}>
-      <Suspense fallback={null}><Scene planets={planets} groups={groups} selectedKey={selectedKey} onPlanetSelect={onPlanetSelect} onConstellationOpen={onConstellationOpen} resetSignal={resetSignal} reduced={reduced} skin={skin}/></Suspense>
+      <Suspense fallback={null}><Scene planets={planets} groups={groups} scenarios={scenarios} selectedKey={selectedKey} onPlanetSelect={onPlanetSelect} onConstellationOpen={onConstellationOpen} onScenarioOpen={onScenarioOpen} resetSignal={resetSignal} reduced={reduced} skin={skin}/></Suspense>
     </Canvas>
     <div className="pointer-events-none absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full border border-white/10 bg-[#050914]/70 px-4 py-2 text-[9px] tracking-[.08em] text-white/55 backdrop-blur">왼쪽 드래그 회전 · Shift+드래그/오른쪽 드래그 이동 · 휠/핀치 접근</div>
     <button onClick={()=>{onPlanetSelect?.(null);setResetSignal((v)=>v+1);}} className="tap absolute bottom-5 right-5 flex items-center gap-2 rounded-full border border-white/10 bg-[#050914]/75 px-3 text-[10px] text-white/65 backdrop-blur"><RotateCcw size={13}/> 우주 중심</button>

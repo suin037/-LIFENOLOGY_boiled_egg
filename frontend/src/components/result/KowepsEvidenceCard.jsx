@@ -5,6 +5,16 @@ import { getKowepsEvidence } from "../../api.js";
 
 const LABELS = {
   disposable_income: "연간 가처분소득",
+  bank_deposits: "예금",
+  installment_savings: "적금",
+  stocks_bonds: "주식·채권",
+  financial_loan: "금융기관 대출",
+  card_debt: "카드빚",
+  living_expenses: "월 생활비",
+  medical_expenses: "월 보건의료비",
+  medical_visits: "연간 외래진료",
+  smoking_amount: "하루 흡연량",
+  weekly_work_hours: "주당 근로시간",
   job_satisfaction: "직업 만족도",
   health_satisfaction: "건강 만족도",
   housing_satisfaction: "주거 만족도",
@@ -14,6 +24,8 @@ const LABELS = {
 };
 
 function preferredOutcomes(scenario) {
+  if (scenario?.startsWith("finance.")) return ["installment_savings", "financial_loan", "living_expenses"];
+  if (scenario?.startsWith("lifestyle.")) return ["weekly_work_hours", "leisure_satisfaction", "overall_satisfaction"];
   if (scenario?.startsWith("housing.")) return ["disposable_income", "housing_satisfaction", "overall_satisfaction"];
   if (scenario?.startsWith("relationship.")) return ["disposable_income", "family_satisfaction", "overall_satisfaction"];
   if (scenario?.startsWith("career.")) return ["disposable_income", "job_satisfaction", "overall_satisfaction"];
@@ -23,11 +35,15 @@ function preferredOutcomes(scenario) {
 
 const valueText = (outcome, value) => {
   if (value == null) return "—";
-  return outcome.unit === "annual_10k_krw" ? `${Math.round(value).toLocaleString()}만원` : `${Number(value).toFixed(1)}점`;
+  if (["annual_10k_krw", "10k_krw", "monthly_10k_krw"].includes(outcome.unit)) return `${Math.round(value).toLocaleString()}만원`;
+  if (outcome.unit === "hours_per_week") return `${Number(value).toFixed(1)}시간`;
+  return `${Number(value).toFixed(1)}점`;
 };
 
 const scaleText = (outcome) => {
-  if (outcome.unit === "annual_10k_krw") return "연간 금액 · 만원";
+  if (["annual_10k_krw", "10k_krw"].includes(outcome.unit)) return "금액 · 만원";
+  if (outcome.unit === "monthly_10k_krw") return "월평균 · 만원";
+  if (outcome.unit === "hours_per_week") return "시간/주";
   if (Array.isArray(outcome.scale)) return `${outcome.scale[0]}~${outcome.scale[1]}점 · 높을수록 만족`;
   return "설문 응답값";
 };
@@ -40,7 +56,7 @@ function OutcomeChart({ outcome }) {
     selectedN: point.event.n,
     maintainedN: point.comparison.n,
   }));
-  const money = outcome.unit === "annual_10k_krw";
+  const money = ["annual_10k_krw", "10k_krw", "monthly_10k_krw"].includes(outcome.unit);
   return (
     <div className="mt-2 h-[116px] w-full">
       <ResponsiveContainer width="100%" height="100%">
@@ -61,7 +77,10 @@ function OutcomeChart({ outcome }) {
 }
 
 export default function KowepsEvidenceCard({ a, b, domains }) {
-  const [state, setState] = useState({ loading: true, data: null, error: null });
+  const independent = a.koweps_evidence?.available && b.koweps_evidence?.available
+    && a.koweps_evidence.scenario !== b.koweps_evidence.scenario;
+  const embedded = a.koweps_evidence || b.koweps_evidence || null;
+  const [state, setState] = useState({ loading: !embedded, data: embedded, error: null });
   const payload = useMemo(() => ({
     choice_a: a.choice, choice_b: b.choice,
     choice_a_detail: a.detail || "", choice_b_detail: b.detail || "",
@@ -69,17 +88,24 @@ export default function KowepsEvidenceCard({ a, b, domains }) {
   }), [a.choice, b.choice, a.detail, b.detail, domains]);
 
   useEffect(() => {
+    if (embedded?.available) {
+      setState({ loading: false, data: embedded, error: null });
+      return undefined;
+    }
     let alive = true;
     setState({ loading: true, data: null, error: null });
     getKowepsEvidence(payload)
       .then((data) => alive && setState({ loading: false, data, error: null }))
       .catch((error) => alive && setState({ loading: false, data: null, error: error.message }));
     return () => { alive = false; };
-  }, [payload]);
+  }, [payload, embedded]);
 
   if (state.loading) return <div className="mb-3 rounded-2xl border border-white/10 bg-card p-4 text-[11px] text-mut">KOWEPS 관측 근거 확인 중…</div>;
+  if (independent) return null;
   if (state.error || !state.data?.available) return null;
   const data = state.data;
+  const matched = data.evidence_level === "personalized_matched_observation";
+  const matching = data.personalization || {};
   const wanted = preferredOutcomes(data.scenario);
   const outcomes = wanted.map((key) => data.outcomes.find((item) => item.key === key)).filter(Boolean);
 
@@ -87,13 +113,13 @@ export default function KowepsEvidenceCard({ a, b, domains }) {
     <div className="mb-3 rounded-2xl border border-violet-400/30 bg-[#151329] p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="flex items-center gap-1.5 text-[12px] font-bold text-violet-200"><Database size={14} />KOWEPS 종단 관측</div>
+          <div className="flex items-center gap-1.5 text-[12px] font-bold text-violet-200"><Database size={14} />{matched ? "내 조건 기반 관측" : "KOWEPS 종단 관측"}</div>
           <p className="mt-1 text-[14px] font-semibold text-ink">{data.label}</p>
-          <p className="mt-1 text-[10px] text-mut">선택 당시 25~35세였던 사람들의 이후 관측</p>
+          <p className="mt-1 text-[10px] text-mut">{matched ? `가까운 조건: ${(matching.applied_features || []).join(" · ")}` : "선택 당시 25~35세였던 사람들의 이후 관측"}</p>
         </div>
         <span className="shrink-0 rounded-full bg-violet-400/10 px-2 py-1 text-[9px] text-violet-200">25~35세</span>
       </div>
-      <p className="mt-2 text-[10px] text-mut">사건군 {data.event_people.toLocaleString()}명 · 비교군 {data.comparison_people.toLocaleString()}명</p>
+      <p className="mt-2 text-[10px] text-mut">사건군 {Number(matching.event_sample_n || data.event_people).toLocaleString()}명 · 비교군 {Number(matching.comparison_sample_n || data.comparison_people).toLocaleString()}명</p>
       <div className="mt-3 space-y-2">
         {outcomes.map((outcome) => (
           <div key={outcome.key} className="rounded-xl border border-white/[.07] bg-black/15 p-3">
@@ -106,7 +132,7 @@ export default function KowepsEvidenceCard({ a, b, domains }) {
           </div>
         ))}
       </div>
-      <div className="mt-3 flex gap-1.5 text-[9px] leading-relaxed text-mut"><Info size={12} className="mt-0.5 shrink-0" /><span>관측된 집단 분포이며 선택의 인과효과나 개인별 미래 예측이 아닙니다. {data.coding_note}</span></div>
+      <div className="mt-3 flex gap-1.5 text-[9px] leading-relaxed text-mut"><Info size={12} className="mt-0.5 shrink-0" /><span>{matching.score_definition || "관측된 집단 분포이며 선택의 인과효과나 개인별 확정 미래가 아닙니다."} {data.coding_note}</span></div>
     </div>
   );
 }

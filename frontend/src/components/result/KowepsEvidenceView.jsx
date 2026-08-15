@@ -3,6 +3,10 @@ import { Card, Caption } from "../ui.jsx";
 
 const LABELS = {
   disposable_income: "가처분소득",
+  installment_savings: "적금",
+  financial_loan: "금융기관 대출",
+  living_expenses: "월 생활비",
+  weekly_work_hours: "주당 근로시간",
   health_satisfaction: "건강 만족도",
   family_satisfaction: "가족관계 만족도",
   social_satisfaction: "사회관계 만족도",
@@ -14,6 +18,11 @@ const LABELS = {
 };
 
 const PRIORITY = ["disposable_income", "family_satisfaction", "overall_satisfaction"];
+const priorityFor = (scenario) => {
+  if (scenario?.startsWith("finance.")) return ["installment_savings", "financial_loan", "living_expenses"];
+  if (scenario?.startsWith("lifestyle.")) return ["weekly_work_hours", "leisure_satisfaction", "overall_satisfaction"];
+  return PRIORITY;
+};
 
 function value(cell) {
   return typeof cell?.mean === "number" ? Number(cell.mean.toFixed(2)) : null;
@@ -31,22 +40,34 @@ function chartRows(outcome, evidence) {
 
 function unitOf(outcome) {
   if (outcome?.unit === "annual_10k_krw") return "만원/년";
+  if (outcome?.unit === "10k_krw") return "만원";
+  if (outcome?.unit === "monthly_10k_krw") return "만원/월";
+  if (outcome?.unit === "hours_per_week") return "시간/주";
   if (outcome?.scale) return `${outcome.scale[0]}–${outcome.scale[1]}점`;
   return "평균";
 }
 
 export default function KowepsTrajectoryView({ a, b }) {
-  const evidence = a.koweps_evidence || b.koweps_evidence;
+  const evidenceA = a.koweps_evidence;
+  const evidenceB = b.koweps_evidence;
+  if (evidenceA?.available && evidenceB?.available && evidenceA.scenario !== evidenceB.scenario) {
+    return <div className="space-y-3">
+      <IndependentTrajectory evidence={evidenceA} tag="A" choice={a.choice} />
+      <IndependentTrajectory evidence={evidenceB} tag="B" choice={b.choice} />
+    </div>;
+  }
+  const evidence = evidenceA || evidenceB;
   if (!evidence?.available) return null;
-  const outcomes = PRIORITY.map((key) => evidence.outcomes?.find((o) => o.key === key)).filter(Boolean);
+  const matched = evidence.evidence_level === "personalized_matched_observation";
+  const outcomes = priorityFor(evidence.scenario).map((key) => evidence.outcomes?.find((o) => o.key === key)).filter(Boolean);
   return (
     <Card>
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold">1·3·5·10차 관측 변화</h2>
-          <Caption>{evidence.label} · KOWEPS 25~35세 종단 관측</Caption>
+          <Caption>{evidence.label} · {matched ? "내 조건과 가까운 KOWEPS 표본" : "KOWEPS 25~35세 종단 관측"}</Caption>
         </div>
-        <span className="shrink-0 rounded-full bg-violet-500/10 px-2 py-1 text-[9px] font-semibold text-violet-300">집단 관측</span>
+        <span className="shrink-0 rounded-full bg-violet-500/10 px-2 py-1 text-[9px] font-semibold text-violet-300">{matched ? "유사 조건 관측" : "집단 관측"}</span>
       </div>
       <div className="mt-4 grid gap-3 lg:grid-cols-3">
         {outcomes.map((outcome) => (
@@ -73,21 +94,60 @@ export default function KowepsTrajectoryView({ a, b }) {
         <span><i className="mr-1 inline-block h-2 w-2 rounded-full bg-[#9B7AE5]" />A · {a.choice}</span>
         <span><i className="mr-1 inline-block h-2 w-2 rounded-full bg-[#F2C56B]" />B · {b.choice}</span>
       </div>
-      <Caption>‘차 후’는 사건 기준 다음 조사 차수입니다. 두 집단의 관측 평균이며 결혼의 인과효과나 개인의 확정 미래를 뜻하지 않습니다.</Caption>
+      <Caption>‘차 후’는 사건 기준 다음 조사 차수입니다. {matched ? `나이·성별·학력·소득 등 사용 가능한 조건으로 가까운 표본을 골랐습니다. ` : ""}관측 평균이며 인과효과나 개인의 확정 미래를 뜻하지 않습니다.</Caption>
     </Card>
   );
 }
 
+function IndependentTrajectory({ evidence, tag, choice }) {
+  const outcomes = priorityFor(evidence.scenario)
+    .map((key) => evidence.outcomes?.find((outcome) => outcome.key === key)).filter(Boolean);
+  return <Card>
+    <div className="flex items-start justify-between gap-3">
+      <div><h2 className="text-base font-semibold">{tag} · {choice}</h2><Caption>{evidence.label} · 이 선택의 미발생 유사집단과 비교</Caption></div>
+      <span className="shrink-0 rounded-full bg-violet-500/10 px-2 py-1 text-[9px] font-semibold text-violet-300">독립 기준선</span>
+    </div>
+    <div className="mt-4 grid gap-3 lg:grid-cols-3">
+      {outcomes.map((outcome) => {
+        const rows = (outcome.trajectory || []).map((point) => ({
+          wave: `${point.wave}차 후`, selected: value(point.event), baseline: value(point.comparison),
+          selectedN: point.event?.n, baselineN: point.comparison?.n,
+        }));
+        return <div key={outcome.key} className="rounded-xl border border-line bg-[#0E1424] p-3">
+          <div className="flex items-center justify-between text-[11px]"><span className="font-semibold text-ink">{LABELS[outcome.key] || outcome.key}</span><span className="text-mut">{unitOf(outcome)}</span></div>
+          <div className="mt-2 h-32"><ResponsiveContainer width="100%" height="100%"><LineChart data={rows} margin={{ top: 5, right: 8, left: -18, bottom: 0 }}>
+            <XAxis dataKey="wave" tick={{ fill: "#7F8AA3", fontSize: 9 }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fill: "#7F8AA3", fontSize: 9 }} axisLine={false} tickLine={false} domain={["auto", "auto"]} />
+            <Tooltip contentStyle={{ background: "#11182A", border: "1px solid #28324A", borderRadius: 10, fontSize: 11 }} />
+            <Line type="monotone" dataKey="selected" name={`${tag} 선택 관측`} stroke="#9B7AE5" strokeWidth={2.2} dot={{ r: 2.5 }} connectNulls />
+            <Line type="monotone" dataKey="baseline" name="미발생 유사집단" stroke="#7B879D" strokeWidth={1.6} strokeDasharray="4 3" dot={{ r: 2 }} connectNulls />
+          </LineChart></ResponsiveContainer></div>
+        </div>;
+      })}
+    </div>
+    <Caption>A와 B를 서로의 대조군으로 간주하지 않았습니다. 각 선택을 해당 사건이 발생하지 않은 유사 조건 집단과 따로 비교합니다.</Caption>
+  </Card>;
+}
+
 export function KowepsDetailView({ a, b }) {
-  const evidence = a.koweps_evidence || b.koweps_evidence;
+  const evidenceA = a.koweps_evidence;
+  const evidenceB = b.koweps_evidence;
+  if (evidenceA?.available && evidenceB?.available && evidenceA.scenario !== evidenceB.scenario) {
+    return <div className="space-y-3"><IndependentDetail tag="A" choice={a.choice} evidence={evidenceA} /><IndependentDetail tag="B" choice={b.choice} evidence={evidenceB} /></div>;
+  }
+  const evidence = evidenceA || evidenceB;
   if (!evidence?.available) return null;
-  const shown = (evidence.outcomes || []).filter((o) => PRIORITY.includes(o.key));
+  const selectedKeys = priorityFor(evidence.scenario);
+  const shown = selectedKeys.map((key) => evidence.outcomes?.find((o) => o.key === key)).filter(Boolean);
+  const matching = evidence.personalization || {};
+  const eventCount = matching.event_sample_n || evidence.event_people;
+  const comparisonCount = matching.comparison_sample_n || evidence.comparison_people;
   return (
     <Card>
       <p className="text-[11px] font-bold text-violet-300">KOWEPS 비교 집단 구성</p>
       <div className="mt-2 grid grid-cols-2 gap-2">
-        <Sample label={evidence.event_side === "A" ? `A · ${a.choice}` : `B · ${b.choice}`} value={evidence.event_people} note="사건 발생군" />
-        <Sample label={evidence.comparison_side === "A" ? `A · ${a.choice}` : `B · ${b.choice}`} value={evidence.comparison_people} note="미발생 비교군" />
+        <Sample label={evidence.event_side === "A" ? `A · ${a.choice}` : `B · ${b.choice}`} value={eventCount} note="사건 발생군" />
+        <Sample label={evidence.comparison_side === "A" ? `A · ${a.choice}` : `B · ${b.choice}`} value={comparisonCount} note="미발생 비교군" />
       </div>
       <div className="mt-3 space-y-2">
         {shown.map((outcome) => {
@@ -98,9 +158,22 @@ export function KowepsDetailView({ a, b }) {
           </div>;
         })}
       </div>
-      <Caption>{evidence.claim_limit || "집단 관측 비교이며 개인 예측 또는 인과효과가 아닙니다."}</Caption>
+      {matching.applied_features?.length > 0 && <Caption>개인화 조건: {matching.applied_features.join(" · ")}</Caption>}
+      <Caption>{matching.score_definition || evidence.claim_limit || "집단 관측 비교이며 개인 예측 또는 인과효과가 아닙니다."}</Caption>
     </Card>
   );
+}
+
+function IndependentDetail({ tag, choice, evidence }) {
+  const matching = evidence.personalization || {};
+  return <Card>
+    <p className="text-[11px] font-bold text-violet-300">{tag} · {choice} 비교 집단</p>
+    <div className="mt-2 grid grid-cols-2 gap-2">
+      <Sample label={`${tag} · ${choice}`} value={matching.event_sample_n || evidence.event_people} note="사건 발생군" />
+      <Sample label="이 선택의 기준선" value={matching.comparison_sample_n || evidence.comparison_people} note="미발생 유사집단" />
+    </div>
+    {matching.applied_features?.length > 0 && <Caption>개인화 조건: {matching.applied_features.join(" · ")}</Caption>}
+  </Card>;
 }
 
 function Sample({ label, value: count, note }) {

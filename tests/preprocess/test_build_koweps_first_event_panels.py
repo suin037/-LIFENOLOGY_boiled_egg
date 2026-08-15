@@ -45,3 +45,14 @@ def test_increase_excludes_decrease_from_control():
     assert event.iloc[1] == 1
     assert pd.isna(event.iloc[3])
     assert event.iloc[5] == 0
+
+
+def test_positive_entry_compares_zero_to_positive_with_zero_stayers():
+    frame = pd.DataFrame({
+        "h_pid": [1, 1, 2, 2, 3, 3], "wv": [1, 2, 1, 2, 1, 2],
+        "age": [25, 26] * 3, "debt": [0, 500, 0, 0, 100, 50],
+    })
+    event = make_event(frame, {"source": "debt", "mode": "positive_entry"})
+    assert event.iloc[1] == 1
+    assert event.iloc[3] == 0
+    assert pd.isna(event.iloc[5])

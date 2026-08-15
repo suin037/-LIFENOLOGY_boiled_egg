@@ -81,6 +81,8 @@ class CompareRequest(BaseModel):
     choice_b_detail: Optional[str] = Field(
         None, max_length=500, description="B의 업종·규모·지역 등 구체적인 선택 조건"
     )
+    choice_a_context: Optional[dict] = Field(None, description="A의 구조화 사건·영역별 추가 입력")
+    choice_b_context: Optional[dict] = Field(None, description="B의 구조화 사건·영역별 추가 입력")
 
 
 class SimulateRequest(CompareRequest):
@@ -138,6 +140,15 @@ class LifeIndicator(BaseModel):
     unit: str
     group: str = Field(..., description="이 값이 어떤 집단 기준인지 (예: 성별×연령대, 25-29)")
     source: str
+    domains: list[str] = Field(
+        default_factory=list,
+        description="이 지표를 참고할 삶의 영역 키(9개 domain). 프론트가 지표 이름 문자열로 "
+        "영역을 추측하던 것을 대체한다. '소유'가 아니라 '그 영역을 볼 때 참고할 값인가'.",
+    )
+    lower_is_better: bool = Field(
+        False,
+        description="값이 낮을수록 좋은 지표인가(우울·스트레스·고립도 등). A/B 비교 방향 표시용.",
+    )
 
 
 class TrajectoryPoint(BaseModel):
@@ -193,11 +204,19 @@ class PredictResponse(BaseModel):
         description="연차별 인과효과 프로파일 {by_year:{h:{ate,ci_low,ci_high,n_treated}}} — "
                     "효과의 시간 변화와 불확실성 근거(동적 처치효과)")
     survival_months: Optional[float] = Field(None,
-        description="상태 지속기간 중앙값(L4 lifelines). 이직=재직, 창업=자영 유지")
+        description="상태 지속기간 중앙값(L4 lifelines). 이직=재직, 창업=자영 유지, "
+                    "쉬어가기=일에서 떠나 있는 기간(복귀까지)")
     neighbors: list[NeighborCase] = []
     neighbor_changed_ratio: Optional[float] = Field(None, description="유사집단 중 실제 이직 비율(이직만)")
     risk_timeline: dict[int, float] = Field(default_factory=dict,
-        description="{연차: 누적확률} — 이직=이직확률(L4), 창업=폐업확률(생멸통계)")
+        description="{연차: 누적확률} — 이직=이직확률(L4), 창업=폐업확률(생멸통계), "
+                    "쉬어가기=**미복귀**확률(그 시점에 아직 일로 못 돌아왔을 확률). "
+                    "쉬어가기만 이벤트가 좋은 쪽(복귀)이라 여집합을 싣는다")
+    return_timeline: dict[int, float] = Field(default_factory=dict,
+        description="{개월: 복귀 누적확률} — 쉬어가기(휴식)에서만 제공. "
+                    "risk_timeline 과 곡선은 같은 방식이지만 이벤트가 '다음 일자리 시작'"
+                    "이라 좋은 쪽이다. 단위가 연이 아니라 개월인 이유는 쉬는 기간 "
+                    "중앙값이 1년 미만이기 때문")
     life_indicators: list[LifeIndicator] = Field(default_factory=list,
         description="Layer1 룰베이스 생활지표 패널(경제·삶의질·건강·창업 등) — 넓은 인생 차원")
     trajectory: list[TrajectoryPoint] = Field(default_factory=list,
@@ -309,3 +328,18 @@ class CompareResponse(BaseModel):
     scenarios: dict[str, ScenarioView] = Field(default_factory=dict,
         description="{'A': ScenarioView, 'B': ScenarioView}")
     note: str = Field("", description="비교 해석 주의사항(동일 유형 경고·인과 적용 범위 등)")
+
+
+# ============================================================ /avatar/generate
+# 빌더(ToonHeadBuilder)가 만든 SVG 를 PNG 로 구워 참조 이미지로 넘기면,
+# 그걸 바탕으로 실사 아바타를 만든다. 실패해도 프론트는 SVG 를 계속 쓴다.
+
+class AvatarGenerateRequest(BaseModel):
+    """빌더가 만든 SVG 아바타를 구운 PNG + 생성 프롬프트."""
+
+    reference_png: str = Field(..., description="참조 이미지. 'data:image/png;base64,...' 형식")
+    prompt: str = Field(..., min_length=1, description="이미지 생성 프롬프트(영문)")
+
+
+class AvatarGenerateResponse(BaseModel):
+    image: str = Field(..., description="생성된 실사 아바타. PNG dataURL")

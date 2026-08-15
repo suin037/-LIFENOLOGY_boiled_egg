@@ -313,6 +313,75 @@ _CHOICE_SOURCES = [
 ]
 
 
+# --- 지표 → 삶의 영역(9개 domain) 태깅 -------------------------------------
+#
+# 예전엔 프론트(LifeView)가 지표 '이름 문자열'에 특정 단어가 있는지로 영역을 추측했다.
+# 그 방식은 관계 선택에서 15개 중 14개(우울·불안·스트레스·삶의 만족도 등)를 조용히
+# 버렸다. 영역 판단은 지표를 만드는 쪽이 알고 있으니 여기서 붙여서 내려보낸다.
+#
+# 여기서 domain 은 '소유'가 아니라 **"그 영역의 선택을 볼 때 참고할 값인가"** 다.
+# 이 지표들은 어차피 선택의 인과효과가 아니라 참고 기준으로 표기되므로 다중 태그가 맞다.
+_DIMENSION_DOMAINS = {
+    "경제": ["finance", "career"],
+    "정신건강": ["health", "relationship"],
+    "신체건강": ["health", "lifestyle"],
+    "직업환경": ["career", "health", "lifestyle"],
+    # 삶의질 계열은 relationship 을 통으로 달지 않는다. '소득 만족도'·'계층 상승 가능성'
+    # 까지 관계로 딸려와서다. 관계는 아래 지표명 키워드로만 좁혀 붙인다.
+    "삶의질": ["long_term_values", "lifestyle"],
+    "삶의질(청년)": ["long_term_values", "lifestyle"],
+    "진학/취업": ["education", "career"],
+    "창업": ["business"],
+}
+
+# dimension 만으로 안 잡히는 것을 지표명 키워드로 보강한다.
+_INDICATOR_EXTRA_DOMAINS = [
+    ("외로움", ["relationship"]),
+    ("고립", ["relationship"]),
+    ("관계", ["relationship"]),
+    ("삶의 만족도", ["relationship"]),
+    ("행복감", ["relationship"]),
+    ("수면", ["health", "lifestyle"]),
+    ("번아웃", ["health", "career"]),
+    ("임금", ["finance", "career"]),
+    ("소득", ["finance"]),
+    ("취업률", ["education", "career"]),
+    ("진학률", ["education"]),
+    ("계층 상승", ["long_term_values", "finance"]),
+    ("주거", ["housing"]),
+    ("주택", ["housing"]),
+    ("전세", ["housing"]),
+    ("월세", ["housing"]),
+]
+
+# 값이 낮을수록 좋은 지표 — A/B 막대 비교에서 방향을 뒤집어 읽어야 한다.
+_LOWER_IS_BETTER = (
+    "스트레스", "우울", "불안", "수면장애", "고립", "외로움", "번아웃", "폐업",
+)
+
+
+def _tag_domains(item: dict) -> dict:
+    """지표 1건에 domains / lower_is_better 를 붙인다 (원본 dict 를 수정하지 않는다)."""
+    haystack = f"{item.get('dimension', '')} {item.get('indicator', '')}"
+    domains = list(_DIMENSION_DOMAINS.get(item.get("dimension", ""), []))
+    for keyword, extra in _INDICATOR_EXTRA_DOMAINS:
+        if keyword in haystack:
+            domains.extend(extra)
+    # 순서 유지 중복 제거 — 첫 태그가 그 지표의 '주 영역'이라 순서에 의미가 있다.
+    seen, ordered = set(), []
+    for d in domains:
+        if d not in seen:
+            seen.add(d)
+            ordered.append(d)
+    return {
+        **item,
+        "domains": item.get("domains") or ordered,
+        "lower_is_better": item.get(
+            "lower_is_better", any(w in haystack for w in _LOWER_IS_BETTER)
+        ),
+    }
+
+
 def _run(sources, profile: dict) -> list[dict]:
     out: list[dict] = []
     for src in sources:
@@ -320,7 +389,7 @@ def _run(sources, profile: dict) -> list[dict]:
             out.extend(src(profile))
         except Exception:
             continue
-    return out
+    return [_tag_domains(item) for item in out]
 
 
 def query_life_indicators(profile: dict) -> list[dict]:

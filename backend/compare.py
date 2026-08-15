@@ -139,6 +139,12 @@ def _regret_meta(pr: PredictResponse, kind: str) -> tuple[str, str]:
             return ("자영 이탈확률",
                     "lifelines 생존분석(L4, KLIPS 자영 스펠) — 폐업·업종전환·재취업 포함")
         return "폐업확률", "기업생멸행정통계"
+    if kind == "휴식":
+        # 다른 선택은 '그 상태에서 이탈' 이 나쁜 쪽인데, 쉬어가기는 이탈(=복귀)이
+        # 좋은 쪽이다. 그래서 후회 축에 올리는 값은 그 여집합인 **미복귀** 확률이다.
+        return ("미복귀확률",
+                "lifelines 생존분석(L4, KLIPS 직업력 공백 스펠) — 그 시점에 아직 "
+                "일로 돌아오지 못했을 확률")
     return "이탈확률", "lifelines 생존분석(L4)"
 
 
@@ -147,7 +153,11 @@ def _regret_summary(pr: PredictResponse, kind: str) -> dict | None:
     rt = {y: v for y, v in pr.risk_timeline.items()}
     if not rt:
         return None
-    worst_year = max(rt)
+    # 값이 가장 큰 연차를 고른다 — 마지막 연차가 아니다.
+    # 이탈·폐업 누적확률은 단조증가라 둘이 같지만, 쉬어가기의 '미복귀확률' 은
+    # 시간이 갈수록 **줄어든다**(1년 55% → 5년 17%). 마지막 연차를 집으면
+    # 가장 낮은 값을 '가장 나쁜 값' 이라고 내놓게 된다.
+    worst_year = max(rt, key=lambda y: rt[y])
     label, src = _regret_meta(pr, kind)
     return {"label": label, "worst_year": worst_year,
             "worst_value": round(float(rt[worst_year]) * 100, 1),

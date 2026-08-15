@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Mascot from "./Mascot.jsx";
 import PetCreature from "./PetCreature.jsx";
+import { loadShop, equippedItem } from "../data/petShop.js";
 import { loadPet, claimDaily, petMascot, feedMascot, setWhich, moodOf, canPatToday } from "../data/petCare.js";
 import { hasCheckedInToday } from "../data/myUniverse.js";
+import { guideNudge, GUIDE_DOMAIN } from "../data/diarySignals.js";
 
 // 🧸 마스코트 육성(가벼운 버전) — 쓰다듬기(말랑 튕김) + 간식으로 친밀도 키우기.
 // 3D 느낌은 CSS 소프트 그라디언트·그림자·squash/stretch로 '말랑말랑'하게.
@@ -12,8 +14,17 @@ const GUIDES = [
   { key: "lumi", name: "루미", color: "#FFD97A", glow: "rgba(255,217,122,.45)" },
 ];
 
-export default function PetMascot({ rumination, onCompare }) {
+export default function PetMascot({ onCompare }) {
   const [pet, setPet] = useState(() => claimDaily(loadPet()));
+  // 상점에서 산 배경·소품 — 사거나 장착하면 바로 반영되게 이벤트를 듣는다.
+  const [shop, setShop] = useState(loadShop);
+  useEffect(() => {
+    const refresh = () => setShop(loadShop());
+    window.addEventListener("pm:pet-shop", refresh);
+    return () => window.removeEventListener("pm:pet-shop", refresh);
+  }, []);
+  const bgItem = equippedItem("background", shop);
+  const accItem = equippedItem("accessory", shop);
   const [squish, setSquish] = useState(0); // 탭할 때마다 +1 → 애니 리트리거
   const [hearts, setHearts] = useState([]);
   const [eating, setEating] = useState(false);
@@ -35,14 +46,35 @@ export default function PetMascot({ rumination, onCompare }) {
   }, []);
 
   const guide = GUIDES.find((g) => g.key === pet.which) || GUIDES[1];
+  // 넛지는 고른 돌보미의 영역에서 뽑는다 — 노바=일상 / 코스모=진로 / 루미=몸과 마음.
+  // 전에는 셋 다 이직 신호만 봐서 누구를 골라도 같은 말을 했다.
+  const nudge = useMemo(
+    () => guideNudge(GUIDE_DOMAIN[pet.which] || "career", { windowDays: 28, threshold: 4 }),
+    [pet.which],
+  );
   const mood = moodOf(pet.happiness);
   const pattedToday = !canPatToday(pet);
   const checkedIn = hasCheckedInToday();
-  const guideMessage = rumination?.prompt
-    ? `최근 ${rumination.windowDays}일 동안 ${rumination.domain.label} 이야기가 ${rumination.count}일 반복됐어요. 이제 기록만 하기보다 ${rumination.compare.action}을 비교해볼까요?`
-    : checkedIn
-      ? "오늘 상태는 기록했어요. 무리해서 결정하지 말고, 떠오른 갈림길을 한 줄로 남겨두세요."
-      : "아직 오늘 상태를 모르겠어요. 30초 체크인을 하면 오늘에 맞는 다음 행동을 같이 정해볼게요.";
+  // 신호가 없을 때도 돌보미마다 자기 영역의 말을 한다 — 셋이 같은 말을 하면
+  // 굳이 나눠 둔 의미가 없다.
+  const IDLE = {
+    nova: {
+      done: "오늘도 남겼네요. 며칠 쌓이면 내 하루의 리듬이 보여요.",
+      todo: "오늘 하루는 어땠어요? 한 줄만 적어도 리듬이 잡혀요.",
+    },
+    cosmo: {
+      done: "오늘 상태는 기록했어요. 무리해서 결정하지 말고, 떠오른 갈림길을 한 줄로 남겨두세요.",
+      todo: "아직 오늘 상태를 모르겠어요. 30초 체크인을 하면 오늘에 맞는 다음 행동을 같이 정해볼게요.",
+    },
+    lumi: {
+      done: "오늘 몸 상태도 남겨줘서 고마워요. 잠·피로가 쌓이면 흐름이 보여요.",
+      todo: "요즘 몸은 좀 어때요? 잠이나 피로만 적어둬도 신호가 보여요.",
+    },
+  };
+  const idle = IDLE[pet.which] || IDLE.cosmo;
+  const guideMessage = nudge.prompt
+    ? `최근 ${nudge.windowDays}일 동안 ${nudge.label}${nudge.particle} ${nudge.count}일 나타났어요. 기록만 하기보다 두 선택을 비교해볼까요?`
+    : checkedIn ? idle.done : idle.todo;
 
   // 동물을 직접 누르면: 토닥토닥 모션만(친밀도 변화 없음).
   function tapOnly() {
@@ -148,18 +180,25 @@ export default function PetMascot({ rumination, onCompare }) {
         </div>
       </div>
 
-      <div className="mt-3 rounded-2xl border border-white/10 bg-[#0B1423]/80 px-3 py-2.5 text-[11px] leading-relaxed text-sub">
+      {/* 말풍선 — 폭이 카드 전체(374px)라 98px 캐릭터의 말로 보이지 않았다.
+          캐릭터 무대(220px)에 가깝게 좁히고 가운데 정렬하고, 아래로 꼬리를 달아
+          누가 하는 말인지 모양으로 드러낸다. */}
+      <div className="relative mx-auto mt-3 max-w-[268px] rounded-2xl border border-white/10 bg-[#0B1423]/80 px-3.5 py-2.5 text-center text-[11px] leading-relaxed text-sub">
         <span className="mr-1 font-bold" style={{ color: guide.color }}>{guide.name}</span>
         {guideMessage}
-        {rumination?.prompt && onCompare && (
-          <button type="button" onClick={onCompare} className="tap mt-2 block w-full rounded-xl border border-cyan/35 bg-cyan/10 py-2 text-[11px] font-bold text-cyan">
-            이직과 현상 유지 비교하기
+        {nudge.prompt && onCompare && (
+          <button type="button" onClick={() => onCompare(nudge)} className="tap mt-2 block w-full rounded-xl border border-cyan/35 bg-cyan/10 py-2 text-[11px] font-bold text-cyan">
+            {nudge.choiceA} vs {nudge.choiceB} 비교하기
           </button>
         )}
+        {/* 꼬리 — 아래 두 변만 남긴 정사각형을 돌려 말풍선에서 뻗어 나온 것처럼 */}
+        <span className="absolute bottom-[-6px] left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 border-b border-r border-white/10 bg-[#0B1423]" />
       </div>
 
       {/* 무대 — 말랑한 마스코트 */}
       <div className="relative mx-auto mt-2 flex h-[118px] w-full max-w-[220px] items-end justify-center">
+        {/* 상점 배경 — 후광보다 뒤에 깔린다 */}
+        {bgItem && <div className="pointer-events-none absolute inset-0 rounded-[18px]" style={{ background: bgItem.render }} />}
         {/* 배경 후광 */}
         <div className="pointer-events-none absolute inset-0" style={{ background: `radial-gradient(circle at 50% 44%, ${guide.glow}, transparent 62%)` }} />
         {/* 바닥 그림자 */}
@@ -186,6 +225,21 @@ export default function PetMascot({ rumination, onCompare }) {
             <div className="relative">
               <PetCreature size={98} variant={guide.key} mood={mood} expr={expr} />
               <div className="pointer-events-none absolute left-[24%] top-[24%] h-8 w-8 rounded-full bg-white/45 blur-[7px]" />
+              {/* 장착 소품 — 원본 좌표는 size 124 기준이라 우리 크기(98)에 맞춰 비율로 줄인다 */}
+              {accItem && (
+                <span
+                  className="pointer-events-none absolute"
+                  style={{
+                    top: `${(accItem.pos?.top ?? 2) * (98 / 124)}px`,
+                    left: accItem.pos?.left ?? "50%",
+                    transform: `translateX(-50%)${accItem.pos?.rotate ? ` rotate(${accItem.pos.rotate}deg)` : ""}`,
+                    fontSize: `${(accItem.pos?.size ?? 24) * (98 / 124)}px`,
+                    lineHeight: 1,
+                  }}
+                >
+                  {accItem.render}
+                </span>
+              )}
               {/* 입가로 날아와 와구와구 사라지는 쿠키 */}
               {eating && (
                 <span

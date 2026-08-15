@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Check, GitCompareArrows, Search, Sparkles, TrendingUp } from "lucide-react";
 import { useResult } from "../data/ResultContext.jsx";
 import { labelOf } from "../data/prediction.js";
+import Stars from "../components/Stars.jsx";
 
 const STEPS = [
   { label: "입력한 선택 이해하기", icon: Search },
@@ -10,6 +11,9 @@ const STEPS = [
   { label: "두 선택 비교하기", icon: GitCompareArrows },
   { label: "결과 화면 준비하기", icon: Sparkles },
 ];
+
+// 단계당 표시 시간. 4단계 × 1400ms = 최소 5.6초 — 체크되는 항목을 읽을 수 있을 만큼 머문다.
+const STEP_MS = 1400;
 
 export default function Simulate() {
   const navigate = useNavigate();
@@ -25,10 +29,10 @@ export default function Simulate() {
       i += 1;
       setDone(Math.min(i, STEPS.length));
       if (i >= STEPS.length) clearInterval(tick);
-    }, 520);
+    }, STEP_MS);
     // 애니메이션(최소 표시시간)과 실제 호출이 모두 끝나면 이동.
-    Promise.all([sim, new Promise((r) => setTimeout(r, STEPS.length * 520))]).finally(() => {
-      if (!cancelled) setTimeout(() => navigate("/result", { replace: true }), 180);
+    Promise.all([sim, new Promise((r) => setTimeout(r, STEPS.length * STEP_MS))]).finally(() => {
+      if (!cancelled) setTimeout(() => navigate("/result", { replace: true }), 400);
     });
     return () => {
       cancelled = true;
@@ -40,43 +44,57 @@ export default function Simulate() {
   const progress = Math.max(8, Math.round((done / STEPS.length) * 100));
 
   return (
-    <div className="flex min-h-full flex-col pb-3 pt-5">
-      <div className="text-center">
+    <div className="relative mx-auto flex min-h-full max-w-[1180px] flex-col pb-3 pt-5 lg:min-h-[calc(100vh-40px)] lg:flex-row lg:items-center lg:px-10 lg:py-10">
+      {/* 우주 배경. 음수 inset으로 main의 패딩까지 덮고, app-shell의 overflow-hidden이 잘라준다. */}
+      <div className="pointer-events-none absolute -inset-x-6 -inset-y-5 -z-10 overflow-hidden" aria-hidden="true">
+        <div className="absolute left-[-10%] top-[-15%] h-[70%] w-[75%] animate-nebula-drift rounded-full bg-[#8B6CCF] opacity-[.13] blur-[90px]" />
+        <div className="absolute bottom-[-20%] right-[-12%] h-[65%] w-[70%] animate-nebula-drift rounded-full bg-[#FF9F32] opacity-[.09] blur-[100px] [animation-delay:-7s]" />
+        <div className="absolute left-1/2 top-1/2 h-[45%] w-[55%] -translate-x-1/2 -translate-y-1/2 animate-nebula-drift rounded-full bg-[#3E7BD4] opacity-[.10] blur-[80px] [animation-delay:-3.5s]" />
+        <Stars count={54} twinkle glow />
+      </div>
+
+      {/* 모바일에선 display:contents로 기존 세로 스택을 그대로 두고, lg부터 좌/우 2단으로 나눈다. */}
+      <div className="contents lg:block lg:w-[45%] lg:shrink-0 lg:pr-8">
+      <div className="text-center lg:text-left">
         <span className="inline-flex items-center gap-1.5 rounded-full bg-cyan/10 px-3 py-1.5 text-[11px] font-semibold text-cyan">
           <Sparkles size={13} strokeWidth={2.2} />
           미래 비교 중
         </span>
-        <h1 className="mt-4 text-[23px] font-bold leading-tight tracking-[-.025em] text-ink">
-          두 선택의 가능성을<br />차분히 살펴보고 있어요
+        <h1 className="mt-4 text-[23px] font-bold leading-tight tracking-[-.025em] text-ink lg:text-[38px]">
+          두 선택의 가능성을<br className="hidden lg:block" /> 차분히 살펴보고 있어요
         </h1>
         <p className="mt-2 text-[12px] leading-relaxed text-mut">
           입력한 조건과 관련 데이터를 연결해 결과를 준비합니다.
         </p>
       </div>
 
-      <div className="relative mx-auto my-7 h-[150px] w-[250px]" role="img" aria-label="두 선택 주위를 도는 혜성 로딩 애니메이션">
-        <i className="absolute left-[34px] top-[22px] h-1 w-1 animate-pulse rounded-full bg-white/60" />
-        <i className="absolute right-[38px] top-[28px] h-1.5 w-1.5 animate-pulse rounded-full bg-violet-300/70 [animation-delay:400ms]" />
-        <i className="absolute bottom-[22px] left-[62px] h-1 w-1 animate-pulse rounded-full bg-white/40 [animation-delay:700ms]" />
-        <div className="absolute left-1/2 top-1/2 h-[104px] w-[206px] -translate-x-1/2 -translate-y-1/2 rounded-[50%] border border-cyan/20 shadow-[inset_0_0_24px_rgba(139,108,207,.04)]" />
-        <div className="absolute left-1/2 top-1/2 h-[104px] w-[206px] animate-comet-orbit rounded-[50%]">
-          <span className="absolute right-[-5px] top-1/2 h-[11px] w-[11px] -translate-y-1/2 animate-comet-glow rounded-full bg-[#E9DEFF] shadow-[0_0_9px_3px_rgba(187,164,237,.9),0_0_24px_8px_rgba(139,108,207,.45)]" />
-          <span className="absolute right-[3px] top-1/2 h-[5px] w-[42px] origin-right -translate-y-1/2 rounded-full bg-gradient-to-l from-[#D8C8FF]/90 via-[#8B6CCF]/45 to-transparent blur-[1px]" />
+      {/* 궤도는 정원(正圓). inset-[20px]는 구체(40px) 반지름과 같아서 구체가 박스 밖으로 나가지 않는다. */}
+      <div className="relative mx-auto my-6 h-[190px] w-[190px] lg:my-10 lg:scale-[1.25]" role="img" aria-label="선택 A와 B 구체가 중심을 도는 로딩 애니메이션">
+        <i className="absolute left-[26px] top-[18px] h-1 w-1 animate-pulse rounded-full bg-white/60" />
+        <i className="absolute right-[30px] top-[24px] h-1.5 w-1.5 animate-pulse rounded-full bg-violet-300/70 [animation-delay:400ms]" />
+        <i className="absolute bottom-[18px] left-[54px] h-1 w-1 animate-pulse rounded-full bg-white/40 [animation-delay:700ms]" />
+        {/* 중심에서 번지는 빛 — 궤도가 별 주위를 도는 것처럼 보이게 한다. */}
+        <div className="absolute left-1/2 top-1/2 h-[150px] w-[150px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#8B6CCF] opacity-20 blur-[38px]" />
+        <div className="absolute inset-[20px] rounded-full border border-white/[.06]" />
+        <div className="absolute inset-[20px] rounded-full shadow-[inset_0_0_26px_rgba(139,108,207,.14)]" />
+        <div className="absolute inset-[20px] animate-orbit rounded-full">
+          <ChoiceOrb side="A" className="left-0 top-1/2 -translate-x-1/2 -translate-y-1/2" />
+          <ChoiceOrb side="B" className="right-0 top-1/2 translate-x-1/2 -translate-y-1/2" />
         </div>
-        <div className="absolute left-1/2 top-1/2 h-[132px] w-[132px] -translate-x-1/2 -translate-y-1/2 animate-spin-slow rounded-full border border-dashed border-white/10" />
-        <div className="absolute left-1/2 top-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[#8B6CCF] shadow-[0_0_38px_rgba(139,108,207,.28)]">
+        <div className="absolute left-1/2 top-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[#171128] shadow-[0_0_34px_rgba(139,108,207,.22)]">
           <GitCompareArrows size={25} className="text-white" strokeWidth={1.8} />
         </div>
-        <ChoiceOrb side="A" className="left-0 top-[53px]" />
-        <ChoiceOrb side="B" className="right-0 top-[53px]" />
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      </div>
+
+      <div className="contents lg:block lg:w-[55%]">
+      <div className="grid grid-cols-2 gap-2 lg:gap-4">
         <ChoiceCard side="A" choice={choices.a} detail={scenarioTexts.a} />
         <ChoiceCard side="B" choice={choices.b} detail={scenarioTexts.b} />
       </div>
 
-      <div className="mt-4 rounded-[18px] bg-card p-4">
+      <div className="mt-4 rounded-[18px] bg-card p-4 lg:rounded-[24px] lg:border lg:border-white/10 lg:p-6">
         <div className="mb-3 flex items-center justify-between">
           <span className="text-[13px] font-semibold text-ink">분석 진행</span>
           <span className="text-[11px] font-semibold tabular-nums text-cyan">{progress}%</span>
@@ -111,17 +129,25 @@ export default function Simulate() {
       </div>
 
       <p className="mt-3 text-center text-[10px] text-mut">잠시만 기다려주세요. 곧 결과 화면으로 이동합니다.</p>
+      </div>
     </div>
   );
 }
 
 function ChoiceOrb({ side, className }) {
   const isA = side === "A";
+  // 바깥 div = 궤도 위 위치(transform은 translate 전용), 안쪽 div = 역회전(글자 수평 유지).
   return (
-    <div className={`absolute flex h-11 w-11 items-center justify-center rounded-full border font-bold shadow-lg ${className} ${
-      isA ? "border-cyan/50 bg-[#132849] text-cyan" : "border-gold/50 bg-[#302313] text-gold"
-    }`}>
-      {side}
+    <div className={`absolute h-10 w-10 ${className}`}>
+      <div
+        className={`flex h-full w-full animate-orbit-counter items-center justify-center rounded-full border text-[15px] font-bold shadow-lg ${
+          isA
+            ? "border-cyan/50 bg-[#132849] text-cyan shadow-[0_0_18px_5px_rgba(139,108,207,.28)]"
+            : "border-gold/50 bg-[#302313] text-gold shadow-[0_0_18px_5px_rgba(243,154,74,.24)]"
+        }`}
+      >
+        {side}
+      </div>
     </div>
   );
 }

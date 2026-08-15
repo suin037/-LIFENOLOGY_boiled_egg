@@ -6,7 +6,7 @@
 //   · 통계 결과를 "내 기준"으로 해석하는 재료로만 쓴다.
 // 키워드 기반이라 정밀 측정이 아니라 "기록에서 드러난" 수준임을 화면에서도 그대로 밝힌다.
 // ─────────────────────────────────────────────────────────────
-import { loadUniverse, todayKey } from "./myUniverse.js";
+import { loadUniverse, todayKey, hasRecord } from "./myUniverse.js";
 import { CARD_BY_ID } from "./valueCards.js";
 import { LIFE_DOMAINS, detectLifeDomains } from "./choices.js";
 
@@ -35,6 +35,26 @@ const LEX = {
   burnout: {
     label: "번아웃·소진",
     words: ["번아웃", "소진", "방전", "무기력", "탈진", "의욕이 없", "쉬고 싶", "지쳤"],
+    axis: "안정",
+  },
+  // 진로 밖 영역 — 돌보미가 자기 영역의 신호로 말하려면 이 둘이 필요하다.
+  // (전에는 사전이 전부 진로 쪽이라 어느 돌보미든 이직 얘기만 했다.)
+  relationStrain: {
+    label: "관계 마찰",
+    words: ["서운", "섭섭", "다퉜", "싸웠", "싸우", "말다툼", "삐졌", "연락이 없", "연락이 뜸", "멀어",
+            "오해", "서먹", "눈치 보", "혼자인 것 같", "외로", "지긋지긋", "헤어지", "이별", "손절"],
+    axis: "관계",
+  },
+  lifeRhythm: {
+    label: "흐트러진 리듬",
+    words: ["늦잠", "미뤘", "미루", "하루종일", "하루 종일", "아무것도 못", "아무것도 안", "폰만",
+            "누워만", "나갈 데가 없", "할 게 없", "심심", "무의미", "시간을 버", "정신없이 지나"],
+    axis: "안정",
+  },
+  bodySignal: {
+    label: "몸의 신호",
+    words: ["잠을 못", "못 잤", "불면", "잠이 안", "두통", "어지럽", "속이 안", "아프", "몸살", "감기",
+            "허리", "어깨가", "눈이 아", "체력이", "운동을 못", "폭식", "입맛이 없"],
     axis: "안정",
   },
 };
@@ -224,8 +244,9 @@ export function detectRelationSubtype(text) {
 function _domainStars(planetKey, s, subtype) {
   // planetKey 없으면(null/"all") 전체 기록 — '별자리 만들기(전체 일기 평가)'용.
   const all = !planetKey || planetKey === "all";
+  // hasRecord — 별 개수와 분석 대상이 어긋나지 않게 myUniverse 와 같은 규칙을 쓴다.
   let stars = s.checkins.filter(
-    (c) => !c.empty && _val(c) != null && (all || (Array.isArray(c.domains) && c.domains.includes(planetKey))),
+    (c) => hasRecord(c) && (all || (Array.isArray(c.domains) && c.domains.includes(planetKey))),
   );
   // 관계 하위유형 필터 — 그 유형 키워드가 있는 기록만(있을 때만 적용, 없으면 전체 유지).
   if (subtype && RELATION_SUBTYPES[subtype]) {
@@ -288,6 +309,122 @@ export function domainReport(a, label) {
 }
 
 // 반복 고민 넛지에 쓸 판단 — 최근 windowDays 안에 이직 고민이 threshold일 이상 나타났나.
+// 돌보미별 넛지 — 그 돌보미가 맡은 영역의 신호로 말하고, 그 영역에 맞는 갈림길을 권한다.
+//   노바=일상 / 코스모=고민과 선택(진로) / 루미=몸과 마음
+// 전에는 셋 다 jobChange 하나만 봐서 어느 돌보미를 골라도 "이직 고민이 N일" 이었다.
+export const GUIDE_DOMAIN = { nova: "life", cosmo: "career", lumi: "health" };
+
+const DOMAIN_NUDGE = {
+  career: {
+    keys: ["jobChange", "jobDissatisfaction", "growthStagnation"],
+    a: "이직", b: "현상 유지",
+    ask: "이직 vs 현상 유지, 지금 비교해볼까요?",
+  },
+  health: {
+    keys: ["burnout", "bodySignal"],
+    a: "속도 줄이기", b: "지금 속도 유지",
+    ask: "쉬어가기 vs 지금 속도, 비교해볼까요?",
+  },
+  relation: {
+    keys: ["relationStrain"],
+    a: "먼저 말 꺼내기", b: "지금처럼 두기",
+    ask: "먼저 말 꺼내기 vs 지금처럼 두기, 비교해볼까요?",
+  },
+  growth: {
+    keys: ["growthStagnation"],
+    a: "새로 배우기 시작", b: "지금 하던 것 이어가기",
+    ask: "새로 배울까요, 하던 걸 더 밀까요?",
+  },
+  life: {
+    // 일상은 자기 신호어만 본다. 관계·건강 신호를 빌려 쓰면 "일상 · 관계 마찰이 4일"
+    // 처럼 영역이 섞인 말이 나온다(실제로 그랬다).
+    keys: ["lifeRhythm"],
+    a: "생활 리듬 바꾸기", b: "지금 리듬 유지",
+    ask: "리듬을 바꿔볼까요, 지금대로 갈까요?",
+  },
+};
+
+/** 받침이 있으면 '이', 없으면 '가'. "직무 불만이(가)" 같은 표기를 없앤다. */
+function subjectParticle(word) {
+  const last = (word || "").trim().slice(-1);
+  const code = last.charCodeAt(0);
+  if (!last || code < 0xac00 || code > 0xd7a3) return "가";
+  return (code - 0xac00) % 28 ? "이" : "가";
+}
+
+export const DOMAIN_LABEL = {
+  career: "진로", relation: "관계", health: "건강", growth: "성장", life: "일상",
+};
+
+/**
+ * 한 영역의 알림. 근거는 둘이다 —
+ *   (1) 그 영역으로 분류된 일기 중 무거웠던 날(기분 2 이하)
+ *   (2) 그 영역과 맞물리는 신호어가 나온 날
+ * 키워드만 보면 그 영역 일기를 써도 특정 단어가 없으면 못 잡고,
+ * 기분만 보면 왜 무거운지 말할 수 없다. 둘 다 본다.
+ */
+export function domainAlert(domain, { windowDays = 28, heavyMin = 3, signalMin = 4 } = {}, s = loadUniverse()) {
+  const conf = DOMAIN_NUDGE[domain] || DOMAIN_NUDGE.career;
+  const today = todayKey();
+  const inWindow = s.checkins.filter((c) => {
+    if (!hasRecord(c)) return false;
+    const d = daysBetween(c.date, today);
+    return d >= 0 && d <= windowDays;
+  });
+  // 영역 판정 — 저장된 태그가 있으면 그것, 없으면 본문의 신호어로 본다.
+  // (자동 태깅은 서버가 붙이는데 안 붙은 기록이 많다. 태그만 믿으면 알림이 아예 안 뜬다.)
+  const words = conf.keys.flatMap((k) => LEX[k]?.words || []);
+  const mine = inWindow.filter((c) => {
+    if (Array.isArray(c.domains) && c.domains.length) return c.domains.includes(domain);
+    const t = textOf(c);
+    return t && words.some((w) => t.includes(w));
+  });
+  const heavyDays = new Set(mine.filter((c) => c.mood != null && c.mood <= 2).map((c) => c.date)).size;
+
+  const sig = computeDiarySignals({ windowDays }, s);
+  const rows = (sig.signals || []).filter((x) => conf.keys.includes(x.key) && x.days > 0);
+  const top = rows.sort((a, b) => b.days - a.days)[0];
+  const signalDays = top?.days || 0;
+
+  const bySignal = signalDays >= signalMin;
+  const byMood = heavyDays >= heavyMin;
+  // 왜 알리는지 한 문장 — 근거가 화면에 그대로 보여야 넘겨짚은 말이 아니게 된다.
+  const reason = bySignal
+    ? `${top.label}${subjectParticle(top.label)} ${signalDays}일`
+    : byMood
+      ? `${DOMAIN_LABEL[domain]} 기록 중 무거웠던 날 ${heavyDays}일`
+      : "";
+
+  return {
+    domain,
+    domainLabel: DOMAIN_LABEL[domain] || domain,
+    prompt: bySignal || byMood,
+    label: top?.label || "",
+    particle: subjectParticle(top?.label || ""),
+    count: signalDays,
+    heavyDays,
+    records: mine.length,
+    reason,
+    windowDays,
+    choiceA: conf.a,
+    choiceB: conf.b,
+    ask: conf.ask,
+  };
+}
+
+/** 문제가 드러난 영역 전부 — 무거운 쪽부터. 홈에서 각각 알림으로 띄운다. */
+export function domainAlerts(opts = {}, s = loadUniverse()) {
+  return Object.keys(DOMAIN_NUDGE)
+    .map((d) => domainAlert(d, opts, s))
+    .filter((a) => a.prompt)
+    .sort((a, b) => (b.heavyDays + b.count) - (a.heavyDays + a.count));
+}
+
+/** 돌보미 하나의 넛지 — 그 돌보미가 맡은 영역의 알림. */
+export function guideNudge(domain, opts = {}, s = loadUniverse()) {
+  return domainAlert(domain, opts, s);
+}
+
 export function jobChangeRumination({ windowDays = 14, threshold = 3 } = {}, s = loadUniverse()) {
   const sig = computeDiarySignals({ windowDays }, s);
   return { ...sig, prompt: sig.jobChangeDays >= threshold, count: sig.jobChangeDays, windowDays };

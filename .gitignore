@@ -63,3 +63,6 @@ Thumbs.db
 ~$*.xlsx
 .vscode/
 .idea/
+
+# Claude Code 로컬 설정(권한 등) — 개인 환경이라 공유하지 않음
+.claude/settings.local.json

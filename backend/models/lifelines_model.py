@@ -7,6 +7,11 @@ v4: **treatment 축을 추가**했다.
                        기존엔 KOSIS 기업생멸(집단통계)로만 답하던 자리를 개인단위
                        모델로 바꾼다. 단 이벤트는 '사업체 폐업' 이 아니라 '응답자가
                        자영 상태에서 벗어남'(폐업·업종전환·재취업 포함)이다.
+    · break   (쉬어가기) — lifelines_klips_break.pkl. **일자리 사이 공백 스펠**.
+                       이벤트는 '다음 일자리 시작(복귀)' 이므로 지속기간은
+                       '얼마나 쉬게 되는가' 다. 다른 treatment 는 상태가 **끝나는**
+                       위험을 재는데, 여기서만 상태가 끝나는 게 곧 **복귀**다.
+                       파동이 아니라 직업력의 월 단위 시점으로 만들어 length bias 가 없다.
     · enroll  (진학) — 없음(이탈을 정의할 스펠 자체가 없다).
 """
 
@@ -24,6 +29,7 @@ TREATMENT_FILES: dict[str, dict[str, str]] = {
     "move": {"yp": "lifelines_yp.pkl", "klips": "lifelines_klips.pkl",
              "goms": "lifelines.pkl"},
     "startup": {"klips": "lifelines_klips_startup.pkl"},
+    "break": {"klips": "lifelines_klips_break.pkl"},
 }
 
 
@@ -162,6 +168,28 @@ def model_confidence(features: dict, treatment: str = "move") -> dict | None:
             "note": ("업종별 이탈위험 적용" if sec else
                      "업종 미상 — 학습표본 업종 구성 평균으로 대체"),
         }
+    return out
+
+
+def return_timeline(features: dict, months=(3, 6, 12, 24),
+                    treatment: str = "break") -> dict[int, float]:
+    """{개월: 복귀 누적확률} — 'break' 전용.
+
+    `risk_timeline` 과 계산은 같지만 **의미가 반대**다. 다른 treatment 의 이벤트는
+    상태 이탈(이직·폐업)이라 나쁜 쪽이지만, 여기서 이벤트는 다음 일자리 시작
+    = 복귀다. 그래서 같은 곡선을 '후회 리스크' 로 부르면 안 되고, 단위도 연이
+    아니라 개월이다(쉬는 기간 중앙값이 1년 미만이라 연 단위로는 다 뭉개진다).
+    """
+    art, enc = _select(features, treatment)
+    X = _covariate_frame(features, art, enc)
+    sf = art["cox"].predict_survival_function(X)
+    idx = np.asarray(sf.index, dtype=float)
+    max_months = art.get("max_horizon_years", 5) * 12
+    out = {}
+    for mo in months:
+        if mo > max_months:
+            continue
+        out[mo] = round(1 - float(sf.iloc[int(np.abs(idx - mo).argmin()), 0]), 3)
     return out
 
 

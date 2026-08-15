@@ -86,9 +86,11 @@ export default function ActionView({ a, b, domains = { a: [], b: [] } }) {
             <div className="text-[10px] font-bold text-cyan">
               작은 실험 {index + 1}
               {action.domain === "signal" && <span className="ml-1.5 rounded-full bg-cyan/15 px-1.5 py-0.5 text-[9px] text-cyan">내 기록 기반</span>}
+              {action.tailored && <span className="ml-1.5 rounded-full bg-violet-500/15 px-1.5 py-0.5 text-[9px] text-violet-300">질문 맞춤</span>}
             </div>
             <p className="mt-1 text-[13px] font-semibold leading-relaxed text-ink">{action.text}</p>
             <p className="mt-2 text-[11px] leading-relaxed text-sub"><b>추천 이유</b> · {action.purpose}</p>
+            <p className="mt-1 text-[9px] leading-4 text-violet-300/80">행동설계 근거 · {action.source}</p>
 
             {/* 여기 적으면 → 완료 기록 + 그날 일기에 반영되어 다음 분석에 들어감 */}
             <div className="mt-2.5">

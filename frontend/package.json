@@ -9,6 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@dicebear/collection": "^9.4.2",
+    "@dicebear/core": "^9.4.3",
     "@react-three/drei": "^9.122.0",
     "@react-three/fiber": "^8.18.0",
     "html2canvas": "^1.4.1",

@@ -20,8 +20,11 @@ class Settings(BaseSettings):
     cloudflare_api_token: str = ""
     cloudflare_reference_model: str = "@cf/black-forest-labs/flux-2-klein-4b"
     # Mobile result cards do not need a large source image. Override in .env when needed.
-    cloudflare_image_width: int = 384
-    cloudflare_image_height: int = 480
+    # 결과 카드 표시 크기에 맞춘 4:5 출력. 기존 384×480보다 픽셀 수를 약 31% 줄여
+    # 첫 생성 지연과 전송량을 낮춘다. 고해상도가 필요하면 .env에서 덮어쓴다.
+    cloudflare_image_width: int = 320
+    cloudflare_image_height: int = 400
+    cloudflare_image_max_attempts: int = 2
     # preprocess/preprocess_goms.py의 실제 출력 위치와 통일한다.
     goms_clean_path: str = "data/clean/goms_clean.csv"
     artifacts_dir: str = "backend/models/artifacts"
@@ -48,6 +51,11 @@ class Settings(BaseSettings):
     # 콜별 출력 상한. 한국어 JSON은 토큰 효율이 낮아 너무 낮추면 객체가 잘린다.
     narrative_max_tokens_story: int = 900
     narrative_max_tokens_comparison: int = 700
+
+    # 아바타 실사 이미지 생성용. Claude API 는 이미지 생성을 지원하지 않아
+    # 별도 서비스의 키가 필요하다. 비워두면 아바타는 SVG 로만 동작한다.
+    avatar_image_provider: str = ""
+    avatar_image_api_key: str = ""
 
     @property
     def goms_clean_abspath(self) -> Path:

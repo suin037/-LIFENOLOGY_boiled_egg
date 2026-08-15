@@ -207,12 +207,26 @@ export function resetUniverse() {
 }
 
 // ── 파생 계산 ────────────────────────────────────────────────
+/**
+ * 별 하나 = 기록 하나. 기분만 찍고 지나간 날은 별이 되지 않는다.
+ *
+ * 전에는 기분값만 있어도 별로 셌는데, 정작 그 별을 눌러 보는 분석(대표 문장·감정 칩·
+ * 영역 리포트)은 전부 본문을 읽는다. 그래서 "별 254개"인데 읽을 일기는 136개인
+ * 어긋남이 났다. 세는 자리마다 규칙이 갈리지 않게 여기 한 곳에서 정한다.
+ */
+export function hasRecord(c) {
+  if (!c || c.empty) return false;
+  if ((c.text || "").trim() || (c.note || "").trim()) return true;
+  const answers = Array.isArray(c.answers) ? c.answers : Object.values(c.answers || {});
+  return Boolean(c.diaryId) || answers.some((v) => String(v?.a ?? v ?? "").trim());
+}
+
 export function totalStars(s = loadUniverse()) {
-  return s.checkins.length;
+  return s.checkins.filter(hasRecord).length;
 }
 
 export function diaryDays(s = loadUniverse()) {
-  return s.checkins.filter((c) => c.hasDiary).length;
+  return s.checkins.filter(hasRecord).length;
 }
 
 export function hasCheckedInToday(s = loadUniverse()) {
@@ -247,7 +261,8 @@ export function constellationGroups(s = loadUniverse()) {
   const today = todayKey();
   const firstWeek = weekStartKey(cs[0].date);
   const lastWeek = weekStartKey(cs[cs.length - 1].date > today ? cs[cs.length - 1].date : today);
-  const byDate = Object.fromEntries(cs.map((c) => [c.date, c]));
+  // 기록이 없는 날(기분만 찍은 날)은 빈 자리로 남긴다 — 별 개수 = 일기 개수.
+  const byDate = Object.fromEntries(cs.filter(hasRecord).map((c) => [c.date, c]));
 
   const groups = [];
   for (let ws = firstWeek; ws <= lastWeek; ws = addDays(ws, 7)) {
@@ -327,8 +342,7 @@ export function adaptiveGroups(planetKey, s = loadUniverse()) {
   const stars = s.checkins
     .filter(
       (c) =>
-        !c.empty &&
-        (c.mood != null || c.valence != null) &&
+        hasRecord(c) &&
         (all || (Array.isArray(c.domains) && c.domains.includes(planetKey))),
     )
     .sort((a, b) => a.date.localeCompare(b.date));
@@ -344,6 +358,34 @@ export function adaptiveGroups(planetKey, s = loadUniverse()) {
       filled: chunk.length,
       complete: true,
       remaining: 0,
+      label: `${chunk[0].date.slice(5)}~${chunk[chunk.length - 1].date.slice(5)}`,
+    });
+  }
+  return groups;
+}
+
+/**
+ * 3D 우주에 띄울 그 영역의 기록 별자리 — 정확히 7개씩 끊고, 개수 제한을 두지 않는다.
+ *
+ * adaptiveGroups 는 그룹을 8개로 묶느라 한 별자리에 7개보다 많은 별이 들어갈 수 있는데,
+ * 3D 쪽은 별자리당 7개만 그린다. 그래서 기록이 많아질수록 그릴수록 별이 조용히 사라졌다.
+ * 여기서는 7개 고정으로 끊어, 띄운 별의 총합이 곧 그 영역의 기록 수가 되게 한다.
+ */
+export function starGroupsOf(planetKey, s = loadUniverse()) {
+  const stars = s.checkins
+    .filter((c) => hasRecord(c)
+      && (!planetKey || (Array.isArray(c.domains) && c.domains.includes(planetKey))))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const groups = [];
+  for (let i = 0; i < stars.length; i += STARS_PER_CONSTELLATION) {
+    const chunk = stars.slice(i, i + STARS_PER_CONSTELLATION);
+    groups.push({
+      index: groups.length,
+      domain: planetKey || null,
+      stars: chunk,
+      filled: chunk.length,
+      complete: chunk.length === STARS_PER_CONSTELLATION,
+      weekStart: `${planetKey || "all"}-${chunk[0].date}`,
       label: `${chunk[0].date.slice(5)}~${chunk[chunk.length - 1].date.slice(5)}`,
     });
   }

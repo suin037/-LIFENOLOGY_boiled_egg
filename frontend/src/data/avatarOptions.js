@@ -1,87 +1,190 @@
-export const BG_COLORS = [
-  "#6BD9E9", "#F4D150", "#E0DDFF", "#FFB6C1", "#8B6CCF", "#D2EFF3", "#FFE0B2",
-  "#B5EAD7", "#FFDAC1", "#C7CEEA", "#FF9AA2", "#A0E7E5", "#FBE7C6", "#111827",
-];
+// toonHead(DiceBear) 부위별 빌더 옵션.
+// 값(id)은 DiceBear 스키마의 enum 을 그대로 쓰고, 라벨만 한국어로 붙였다.
+// 스키마에 없는 값을 넣으면 조용히 무시되므로 id 를 임의로 바꾸지 말 것.
+//
+// 출처 표기 의무: ToonHead by Johan Melin, CC BY 4.0
+// https://creativecommons.org/licenses/by/4.0/
 
-const HAIRC = [
-  ["갈색", "#4E3629"], ["흑발", "#2C1B18"], ["밝은갈", "#B0703C"],
-  ["금발", "#D6B370"], ["핑크", "#FC909F"], ["애쉬", "#8A8D91"], ["보라", "#A56BBF"],
-];
-const WOMAN_HAIR = [["롱", "womanLong"], ["단발", "womanShort"], ["숏", "normal"]];
-export const HAIR_PRESETS = [
-  ...WOMAN_HAIR.flatMap(([hn, hs]) => HAIRC.map(([cn, cc]) => ({
-    label: `${hn} ${cn}`, cfg: { sex: "woman", hairStyle: hs, hairColor: cc, eyeBrowStyle: "upWoman" },
-  }))),
-  ...HAIRC.slice(0, 5).map(([cn, cc]) => ({
-    label: `숏 ${cn}`, cfg: { sex: "man", hairStyle: "normal", hairColor: cc, eyeBrowStyle: "up" },
-  })),
-  { label: "덥수룩 (검정)", cfg: { sex: "man", hairStyle: "thick", hairColor: "#2C1B18", eyeBrowStyle: "up" } },
-  { label: "모히칸 (검정)", cfg: { sex: "man", hairStyle: "mohawk", hairColor: "#2C1B18", eyeBrowStyle: "up" } },
-];
+import {
+  BROW_SHAPE_ITEMS,
+  BROW_THICKNESS,
+  FACE_SHAPES,
+  GLASSES_OPTIONS,
+} from "./customParts.js";
 
-const SKIN = [["밝은", "#F9C9B6"], ["보통", "#F1C27D"], ["웜", "#E0AC69"], ["구릿빛", "#C68642"], ["어두운", "#8D5524"]];
-const EXPR = [
-  ["미소", { eyeStyle: "smile", mouthStyle: "smile", noseStyle: "short" }],
-  ["활짝웃음", { eyeStyle: "smile", mouthStyle: "laugh", noseStyle: "round" }],
-  ["동그란눈", { eyeStyle: "circle", mouthStyle: "smile", noseStyle: "short" }],
-  ["차분", { eyeStyle: "oval", mouthStyle: "peace", noseStyle: "long" }],
-  ["장난", { eyeStyle: "circle", mouthStyle: "laugh", noseStyle: "round" }],
-];
-export const FACE_PRESETS = SKIN.flatMap(([sn, sc]) => EXPR.map(([en, e]) => ({
-  label: `${sn}·${en}`, cfg: { faceColor: sc, ...e },
-})));
+export { BROW_SHAPE_ITEMS, BROW_THICKNESS, GLASSES_OPTIONS };
 
-const HATC = [["흑", "#2C1B18"], ["갈", "#77311D"], ["보라", "#8B6CCF"], ["청록", "#6BD9E9"], ["핑크", "#FC909F"]];
-export const ACC_PRESETS = [
-  { label: "없음", cfg: { glassesStyle: "none", hatStyle: "none" } },
-  { label: "동근안경", cfg: { glassesStyle: "round", hatStyle: "none" } },
-  { label: "각진안경", cfg: { glassesStyle: "square", hatStyle: "none" } },
-  ...HATC.map(([cn, cc]) => ({ label: `비니 ${cn}`, cfg: { glassesStyle: "none", hatStyle: "beanie", hatColor: cc } })),
-  ...HATC.map(([cn, cc]) => ({ label: `터번 ${cn}`, cfg: { glassesStyle: "none", hatStyle: "turban", hatColor: cc } })),
-  { label: "비니+안경", cfg: { glassesStyle: "round", hatStyle: "beanie", hatColor: "#2C1B18" } },
-  { label: "터번+안경", cfg: { glassesStyle: "square", hatStyle: "turban", hatColor: "#8B6CCF" } },
-];
-
-const SHIRT = [["후드", "hoody"], ["티셔츠", "short"], ["폴로", "polo"]];
-const SHIRTC = [
-  ["보라", "#8B6CCF"], ["청록", "#6BD9E9"], ["핑크", "#FC909F"], ["노랑", "#F4D150"],
-  ["갈색", "#77311D"], ["검정", "#111827"], ["연보라", "#E0DDFF"], ["크림", "#E7DBC0"], ["민트", "#B5EAD7"],
-];
-export const OUTFIT_PRESETS = SHIRT.flatMap(([sn, ss]) => SHIRTC.map(([cn, cc]) => ({
-  label: `${cn} ${sn}`, cfg: { shirtStyle: ss, shirtColor: cc },
-})));
-
-export const DEFAULT_AVATAR = {
-  ...HAIR_PRESETS[0].cfg,
-  ...FACE_PRESETS[0].cfg,
-  ...ACC_PRESETS[0].cfg,
-  ...OUTFIT_PRESETS[0].cfg,
-  bgColor: BG_COLORS[0], earSize: "small", shape: "circle",
+export const TOONHEAD_CREDIT = {
+  title: "ToonHead",
+  creator: "Johan Melin",
+  creatorUrl: "https://www.johanmelin.com",
+  license: "CC BY 4.0",
+  licenseUrl: "https://creativecommons.org/licenses/by/4.0/",
 };
 
+// 헤어스타일 = 앞머리 + 뒷머리 조합 프리셋.
+// 앞·뒤를 따로 고르게 하면 어울리지 않는 조합이 나오고 고를 게 두 배로 늘어난다.
+// 그래서 완성된 스타일 하나씩만 고르게 한다. 긴머리는 '앞머리 있음/없음'으로 갈린다.
+//   hair = 앞머리 (null 이면 없음), rear = 뒷머리 (null 이면 없음)
+//   custom: true 면 customParts.js 의 CUSTOM_HAIR 에서 온 것
+// '앞머리 없음'은 민머리가 아니라 '이마가 드러나는 가르마'를 뜻한다(윗머리는 있다).
+// '앞머리 있음'은 이마를 덮는 뱅. 빌트인 앞머리 4종은 전부 이마가 드러나는 쪽이라
+// 뱅은 customParts.CUSTOM_HAIR.bangs 로 따로 그려서 쓴다.
+export const HAIR_STYLES = [
+  { id: "bald", label: "민머리", hair: null, rear: null },
+  { id: "sideComed", label: "옆가르마", hair: "sideComed", rear: null },
+  { id: "undercut", label: "언더컷", hair: "undercut", rear: null },
+  { id: "spiky", label: "뾰족머리", hair: "spiky", rear: null },
+  { id: "bun", label: "번머리", hair: "bun", rear: null },
+  { id: "bobShort", label: "단발(짧게) · 앞머리", hair: "bangs", rear: "neckHigh", custom: true },
+  { id: "bobLong", label: "단발(어깨) · 앞머리", hair: "bangs", rear: "shoulderHigh", custom: true },
+  { id: "longParted", label: "긴 생머리 · 가르마", hair: "sideComed", rear: "longStraight" },
+  { id: "longBangs", label: "긴 생머리 · 앞머리", hair: "bangs", rear: "longStraight", custom: true },
+  { id: "wavyParted", label: "긴 웨이브 · 가르마", hair: "sideComed", rear: "longWavy" },
+  { id: "wavyBangs", label: "긴 웨이브 · 앞머리", hair: "bangs", rear: "longWavy", custom: true },
+];
+
+export function hairStyleById(id) {
+  return HAIR_STYLES.find((h) => h.id === id) || HAIR_STYLES[0];
+}
+
+export const BEARD = [
+  { id: "moustacheTwirl", label: "콧수염" },
+  { id: "chin", label: "턱수염" },
+  { id: "chinMoustache", label: "턱+콧수염" },
+  { id: "fullBeard", label: "풀비어드" },
+  { id: "longBeard", label: "긴 수염" },
+];
+
+// 직접 그린 무쌍/유쌍은 화풍이 안 맞아 기각됐다. 빌트인만 쓴다.
+// 눈매를 손보려면 손으로 그리지 말고 Figma 원본에서 그려 재수출하는 쪽이 맞다.
+export const EYES = [
+  { id: "wide", label: "크게 뜬" },
+  { id: "happy", label: "웃는" },
+  { id: "humble", label: "수줍은" },
+  { id: "bow", label: "활 모양" },
+  { id: "wink", label: "윙크" },
+];
+
+// 눈썹은 두께를 조절하려고 전부 직접 그린 것으로 대체했다(customParts.BROW_SHAPES).
+// 모양 목록은 BROW_SHAPE_ITEMS, 두께는 BROW_THICKNESS 를 쓴다.
+
+export const MOUTH = [
+  { id: "smile", label: "미소" },
+  { id: "laugh", label: "활짝" },
+  { id: "agape", label: "벌린" },
+  { id: "sad", label: "슬픔" },
+  { id: "angry", label: "화남" },
+];
+
+export const CLOTHES = [
+  { id: "tShirt", label: "티셔츠" },
+  { id: "shirt", label: "셔츠" },
+  { id: "turtleNeck", label: "터틀넥" },
+  { id: "openJacket", label: "오픈자켓" },
+  { id: "dress", label: "드레스" },
+];
+
+// DiceBear 색 파라미터는 '#' 없는 hex 문자열을 받는다. UI 표시할 때만 '#'을 붙인다.
+export const SKIN_COLORS = ["f2d3b1", "edb98a", "d08b5b", "ae5d29", "8d5524", "614335"];
+export const HAIR_COLORS = ["2c1b18", "0e0e0e", "724133", "a55728", "b58143", "c93305", "d6b370", "e8e1e1"];
+export const CLOTHES_COLORS = ["3c4f5c", "5199e4", "25557c", "929598", "a7ffc4", "ff5c5c", "ffafb9", "ffffb1"];
+
+export const DEFAULT_AVATAR = {
+  face: "original", // 얼굴형은 customParts.js 의 FACE_SHAPES 에서 온다
+  hairStyle: "longParted", // 앞·뒤 조합 프리셋 id
+  beard: null, // null = 수염 없음
+  eyes: "wide",
+  eyebrows: "neutral", // customParts.BROW_SHAPES 의 id
+  browThickness: "normal",
+  glasses: "none",
+  mouth: "smile",
+  clothes: "tShirt",
+  skinColor: SKIN_COLORS[1],
+  hairColor: HAIR_COLORS[0],
+  clothesColor: CLOTHES_COLORS[0],
+};
+
+/**
+ * 빌더 config → DiceBear createAvatar 옵션.
+ * 배열로 넘겨야 그 값이 확정되고, *Probability 로 유무를 통제한다.
+ */
+export function toDicebearOptions(config) {
+  const c = { ...DEFAULT_AVATAR, ...(config || {}) };
+  const style = hairStyleById(c.hairStyle);
+  // 커스텀 앞머리(비니 등)는 DiceBear 가 모르므로 빌트인 앞머리를 끄고 나중에 덧그린다.
+  const frontHair = style.custom ? null : style.hair;
+  return {
+    hair: frontHair ? [frontHair] : undefined,
+    hairProbability: frontHair ? 100 : 0,
+    rearHair: style.rear ? [style.rear] : undefined,
+    rearHairProbability: style.rear ? 100 : 0,
+    beard: c.beard ? [c.beard] : undefined,
+    beardProbability: c.beard ? 100 : 0,
+    eyes: [c.eyes],
+    // 눈썹은 항상 neutral 로 그려두고 customParts.replaceBrows 가 그 자리를 바꾼다.
+    eyebrows: ["neutral"],
+    mouth: [c.mouth],
+    clothes: [c.clothes],
+    skinColor: [c.skinColor],
+    hairColor: [c.hairColor],
+    clothesColor: [c.clothesColor],
+  };
+}
+
+/** 무작위 조합 하나. "다시 뽑기"용. */
+export function randomToonHead() {
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  return {
+    face: pick(Object.keys(FACE_SHAPES)),
+    hairStyle: pick(HAIR_STYLES).id,
+    beard: Math.random() < 0.3 ? pick(BEARD).id : null,
+    eyes: pick(EYES).id,
+    eyebrows: pick(BROW_SHAPE_ITEMS).id,
+    browThickness: pick(BROW_THICKNESS).id,
+    glasses: Math.random() < 0.35 ? pick(GLASSES_OPTIONS.slice(1)).id : "none",
+    mouth: pick(MOUTH).id,
+    clothes: pick(CLOTHES).id,
+    skinColor: pick(SKIN_COLORS),
+    hairColor: pick(HAIR_COLORS),
+    clothesColor: pick(CLOTHES_COLORS),
+  };
+}
+
+// 기존 UI 가 기대하는 이름들. 화면 코드를 안 고치고 갈아끼우려고 유지한다.
+//   Avatar / AvatarBuilder / avatarImage 가 이 두 개를 쓴다.
+export { DEFAULT_AVATAR as DEFAULT_TOONHEAD };
+
+/** 저장된 config 를 항상 완전한 형태로. 예전(react-nice-avatar) 설정이 와도 기본값으로 되돌린다. */
 export function normalizeAvatar(config) {
-  if (!config || typeof config.sex === "undefined" || typeof config.faceColor === "undefined") {
-    return { ...DEFAULT_AVATAR };
-  }
+  const isToonHead =
+    config &&
+    typeof config.face === "string" &&
+    typeof config.hairStyle === "string" &&
+    HAIR_STYLES.some((style) => style.id === config.hairStyle);
+  if (!isToonHead) return { ...DEFAULT_AVATAR };
   return { ...DEFAULT_AVATAR, ...config };
 }
 
-// 이미지 생성 모델은 참고 PNG만 보고 머리·성별 표현을 임의로 다시 해석할 수 있다.
-// 선택한 조합을 텍스트 제약으로도 함께 보내 A/B 장면에서 같은 캐릭터를 유지한다.
+// 개인화 이미지 생성 API가 사용하는 설명 규격. 화면용 아바타와 같은 설정을
+// 전달해 A/B 이미지에서도 동일 인물의 특징이 유지되도록 한다.
 export function avatarGenerationSpec(config) {
   const c = normalizeAvatar(config);
+  const hair = hairStyleById(c.hairStyle);
+  const labelOf = (items, id) => items.find((item) => item.id === id)?.label || id;
   return {
     characterType: "gender-neutral illustrated avatar",
-    hairStyle: c.hairStyle,
-    hairColor: c.hairColor,
-    skinTone: c.faceColor,
-    eyeStyle: c.eyeStyle,
-    eyebrowStyle: c.eyeBrowStyle,
-    mouthStyle: c.mouthStyle,
-    glassesStyle: c.glassesStyle,
-    hatStyle: c.hatStyle,
-    hatColor: c.hatColor,
-    outfitStyle: c.shirtStyle,
-    outfitColor: c.shirtColor,
+    faceShape: FACE_SHAPES[c.face]?.label || c.face,
+    hairStyle: hair.label,
+    hairColor: `#${c.hairColor}`,
+    skinTone: `#${c.skinColor}`,
+    eyeStyle: labelOf(EYES, c.eyes),
+    eyebrowStyle: labelOf(BROW_SHAPE_ITEMS, c.eyebrows),
+    eyebrowThickness: labelOf(BROW_THICKNESS, c.browThickness),
+    mouthStyle: labelOf(MOUTH, c.mouth),
+    glassesStyle: labelOf(GLASSES_OPTIONS, c.glasses),
+    facialHair: c.beard ? labelOf(BEARD, c.beard) : "none",
+    outfitStyle: labelOf(CLOTHES, c.clothes),
+    outfitColor: `#${c.clothesColor}`,
   };
 }
