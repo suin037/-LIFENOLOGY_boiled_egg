@@ -100,11 +100,18 @@ def load_panel() -> pd.DataFrame:
     return b.sort_values(["pid", "wave"]).reset_index(drop=True)
 
 
-def transition_frame(b: pd.DataFrame, horizon: int) -> pd.DataFrame:
-    """t 시점 행 + t+1 전이 + t+horizon 결과. treatment 정의에 공통으로 쓰는 뼈대."""
+def transition_frame(b: pd.DataFrame, horizon: int,
+                     outcome: str = "월소득_실질") -> pd.DataFrame:
+    """t 시점 행 + t+1 전이 + t+horizon 결과. treatment 정의에 공통으로 쓰는 뼈대.
+
+    `outcome` 은 t+horizon 에서 읽을 결과변수 컬럼이다. 기본은 소득이고,
+    `train_outcomes.py` 가 만족·건강(5점, 클수록 좋음)을 넣어 같은 처치·혼재변수
+    정의 위에서 Y 만 바꿔 돌린다. 처치(T)와 대조군 정의는 결과변수와 무관하므로
+    여기서 갈라질 이유가 없다.
+    """
     g = b.groupby("pid", sort=False)
     nxt = g.shift(-1)
-    out_wage = g["월소득_실질"].shift(-horizon)
+    out_wage = g[outcome].shift(-horizon)
     out_wave = g["wave"].shift(-horizon)
 
     d = pd.DataFrame({
@@ -112,6 +119,10 @@ def transition_frame(b: pd.DataFrame, horizon: int) -> pd.DataFrame:
         "age": b["나이"], "sex": b["성별"], "edu": b["학력"],
         "occ": b["직종"], "firm_size": b["종업원규모"], "tenure": b["근속기간"],
         "income_now": b["월소득_실질"],
+        # t 시점의 **같은 결과변수** 값. 소득 Y 에서는 income_now 와 같은 것이라
+        # 기본 경로에선 쓰이지 않는다. 소득 외 Y 를 쓸 때 이 컬럼을 W 에 넣어야
+        # 소득 모델과 같은 '직전 Y 통제' 설계가 된다(train_outcomes.py 가 쓴다).
+        "outcome_now": b[outcome],
         "status": b["종사상지위"], "status_next": nxt["종사상지위"],
         "edu_next": nxt["학력"], "move_next": nxt["이직"],
         "gap1": nxt["wave"] - b["wave"],
@@ -191,8 +202,12 @@ def apply_treatment(d: pd.DataFrame, key: str) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------- L3
-def fit_linear_dml(d: pd.DataFrame, seed: int = 42):
-    """LinearDML — 분석적 95% CI. 표본이 작은 treatment 에선 CausalForest 보다 안정적."""
+def fit_linear_dml(d: pd.DataFrame, seed: int = 42, w_cols: list[str] | None = None):
+    """LinearDML — 분석적 95% CI. 표본이 작은 treatment 에선 CausalForest 보다 안정적.
+
+    `w_cols` 를 주면 혼재변수 집합을 바꿔 적합한다(기본은 소득 모델의 `W_COLS`).
+    소득 외 결과변수에서 직전 Y 를 통제할 때 쓴다.
+    """
     from econml.dml import LinearDML
     from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
 
@@ -204,7 +219,8 @@ def fit_linear_dml(d: pd.DataFrame, seed: int = 42):
         discrete_treatment=True, random_state=seed,
     )
     X = d[X_COLS].to_numpy()
-    est.fit(d["y"].to_numpy(), d["T"].to_numpy(), X=X, W=d[W_COLS].to_numpy())
+    est.fit(d["y"].to_numpy(), d["T"].to_numpy(), X=X,
+            W=d[w_cols or W_COLS].to_numpy())
     lo, hi = (float(v) for v in est.ate_interval(X, alpha=0.05))
     return est, float(est.ate(X)), lo, hi
 
