@@ -72,7 +72,6 @@ export default function JyConstellationArchive({monthGroups,weeksByMonth,focusMo
           const seed=rng(k*7+i*13);
           stars.push({key:s.date,blobX:cx+zp[0],blobY:cy+zp[1],zoomX:vx,zoomY:vy,
                       c:COL[lvl-1],p:PASTEL[lvl-1],r:.86+lvl*.14,   // 살짝 작게(그림이 커진 만큼)
-                      glint:seed>.72,                       // 일부만 4갈래 빛
                       twinkle:seed<.34,                     // 반짝임도 일부만(성능)
                       tw:(2.6+seed*2.4).toFixed(2),         // 반짝임 주기(초)
                       delay:(seed*3).toFixed(2)});k++;
@@ -129,14 +128,8 @@ export default function JyConstellationArchive({monthGroups,weeksByMonth,focusMo
           <g key={s.key}
              style={{transform:active?`translate(${s.zoomX}px,${s.zoomY}px)`:`translate(${s.blobX}px,${s.blobY}px)`,
                      transition:"transform .8s cubic-bezier(.25,.9,.3,1)"}}>
-            {/* 번짐 → 4갈래 빛 → 알맹이 → 심지. 겹쳐야 별처럼 보인다. */}
-            <circle r={s.r+1.25} fill={active?s.c:CALM} opacity=".2" style={{transition:"fill .5s"}}/>
-            {!active&&s.glint&&(
-              <g stroke={CALM} strokeWidth=".28" strokeLinecap="round" opacity=".5">
-                <line x1={-s.r*2.6} y1="0" x2={s.r*2.6} y2="0"/>
-                <line x1="0" y1={-s.r*2.6} x2="0" y2={s.r*2.6}/>
-              </g>
-            )}
+            {/* 알맹이 + 심지 두 겹. 바깥 번짐(제일 흐린 층)과 4갈래 빛(+ 모양)은
+                가까이서 보면 지저분해 보여 걷어냈다. */}
             {/* 반짝임은 일부만 — 1년치(별 100개↑)에서 전부 SMIL 을 돌리면 스크롤이 끊긴다.
                 띄엄띄엄 깜박여도 하늘은 충분히 살아 보인다. */}
             <circle r={s.r} fill={active?s.c:CALM} style={{transition:"fill .5s"}}>
