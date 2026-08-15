@@ -110,12 +110,27 @@ CAVEATS = {
 }
 
 
+# 창업 + 생활사건(train_koweps_life.py)이 함께 쓰는 열. 1.4GB 를 두 번 읽지 않도록
+# 한 벌로 모아 캐시한다.
+COLUMNS = [
+    "h_pid", "wv", "year",
+    "h_g3", "h_g4", "h_g6",                       # 성별·출생연도·교육수준
+    "p02_1",                                      # 근로유형(창업 처치)
+    "h_g10", "h06_3", "h06_aq1", "h01_1",         # 혼인·점유형태·이사·가구원수
+    "h_eco9", "h_eco6",                           # 직종·근로시간형태
+    "h_din",                                      # 가구 가처분소득
+    "h_med2", "p05_11",                           # 건강·우울
+    "p03_7", "p03_8", "p03_12",                   # 주거·가족·전반 만족
+]
+
+
 def load_columns() -> pd.DataFrame:
     """필요한 열만 읽는다(1.4GB 전체를 올리지 않는다). 한 번 읽으면 캐시한다."""
     if CACHE.exists():
-        return pd.read_pickle(CACHE)
-    cols = ["h_pid", "wv", "year", "h_g3", "h_g4", "h_g6", "p02_1",
-            "h_din", "h_med2", "p03_12", "p05_11", "h_eco9", "h_eco6", "h01_1"]
+        cached = pd.read_pickle(CACHE)
+        if set(COLUMNS) <= set(cached.columns):
+            return cached                          # 열이 늘면 아래에서 다시 읽는다
+    cols = COLUMNS
     df = pd.read_stata(RAW, columns=cols, convert_categoricals=False)
     for c in df.select_dtypes("number").columns:
         if c not in ("year", "wv", "h_g4"):
