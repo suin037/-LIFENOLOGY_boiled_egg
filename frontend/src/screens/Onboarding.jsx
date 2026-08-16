@@ -3,17 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useResult } from "../data/ResultContext.jsx";
 import { Eyebrow, Button } from "../components/ui.jsx";
 import AvatarBuilder from "../components/AvatarBuilder.jsx";
-
-const OCCUPATIONS = [
-  "연구·공학기술",
-  "경영·사무·금융·보험",
-  "교육·법률·복지·공공",
-  "보건·의료",
-  "예술·디자인·방송",
-  "영업·판매·서비스",
-  "설치·정비·생산",
-  "건설·농림·기타",
-];
+import { OCCUPATIONS } from "../data/profileOptions.js";
 
 // 성향 = 가치 강제순위(8카드 → 5축). diary_module/qmode/value_ranking.py 와 1:1.
 // 다중선택이 아니라 '순서'를 받는다 — "다 중요해요" 편향을 막고 진짜 우선순위를 드러냄.

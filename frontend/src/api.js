@@ -135,8 +135,17 @@ function buildSimulateBody({ profile, choiceA, choiceB, choiceADetail, choiceBDe
   const body = {
     profile: {
       age: profile.age,
-      sex: profile.sex,
-      major: profile.major || profile.occupation || "공학",
+      // 성별은 선택 정보다. 없으면 그대로 비워 보내고 백엔드가 전체 표본으로
+      // 떨어뜨린다. 예전엔 `|| "1"` 로 남성을 채웠는데, 고른 적 없는 성별의
+      // 유사집단 통계가 붙었다.
+      sex: profile.sex || null,
+      // 전공 계열은 '사용자가 실제로 고른 경우'에만 보낸다.
+      // 예전엔 `profile.major || profile.occupation || "공학"` 이었다. major 는 교육
+      // 영역 비교에서만 뜨는 조건부 입력이라 대부분 비어 있는데, 그때 조용히 "공학"이
+      // 들어가 서사가 "공학 배경은 창업의 기술적 기초가 될 수 있지만…" 처럼 없는
+      // 사실을 말했다. 직종(occupation, 8분류)으로 대신 채우는 것도 안 된다 —
+      // 백엔드 major 는 계열명(인문·사회·…)을 기대하는 자리라 값의 종류가 다르다.
+      ...(profile.major ? { major: profile.major } : {}),
       monthly_wage: Number(profile.income ?? profile.monthly_wage) > 0 ? Number(profile.income ?? profile.monthly_wage) : null,
       edu_level: profile.edu_level ?? 7,
       occupation_group: profile.occupation_group ?? null,

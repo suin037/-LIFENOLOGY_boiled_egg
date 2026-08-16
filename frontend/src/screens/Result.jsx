@@ -4,6 +4,7 @@ import { useResult } from "../data/ResultContext.jsx";
 import { useDiary } from "../data/DiaryContext.jsx";
 import { labelOf } from "../data/prediction.js";
 import { detectLifeDomains } from "../data/choices.js";
+import { occupationLabel } from "../data/profileOptions.js";
 import { redactPII, redactEntries } from "../data/piiRedact.js";
 import { saveMe, getScenario, getThirdPath } from "../data/api.js";
 import { listUniverses, saveUniverse, universeFromResult } from "../data/savedUniverses.js";
@@ -28,6 +29,8 @@ export default function Result() {
   const navigate = useNavigate();
   const { result, profile, scenarioDomains, retryVisuals, jobAnalyses, postings, relResults, talks } = useResult();
   const { a, b } = result;
+  // 온보딩·설정의 직종(8분류) → 없으면 입력 화면의 KSCO 대분류. 둘 다 없으면 빈 문자열.
+  const myOccupation = occupationLabel(profile);
 
   // 진로가 아닌 영역(관계·건강·일상·성장)은 KLIPS 수치가 맞지 않는다.
   // 그대로 두면 지표 필터에 하나도 안 걸려 '핵심 지표'가 빈 화면이 된다(관계가 그랬다).
@@ -77,7 +80,10 @@ export default function Result() {
     <div>
       <Eyebrow>결과 · CHART No.0427</Eyebrow>
       <h1 className="text-[21px] font-bold leading-[1.2] lg:text-[28px]">
-        {a.meta.age}세 · {a.meta.occupation}
+        {/* 헤더는 '지금 내 프로필'을 그대로 보여준다. 예전엔 결과 객체 안의 스냅샷
+            (a.meta)을 읽어서, 설정에서 나이·직종을 고친 뒤 결과 화면으로 돌아오면
+            시뮬레이션을 돌리던 시점의 옛 값이 그대로 남아 있었다. */}
+        {profile.age}세{myOccupation ? ` · ${myOccupation}` : ""}
       </h1>
       <p className="mt-1 text-[13px]">
         <span className="font-bold text-cyan">{labelOf(a.choice)}</span>
@@ -245,8 +251,10 @@ function ThirdPath({ a, b }) {
       const r = await getThirdPath({
         choice_a: redactPII(a.choice, known).masked,
         choice_b: redactPII(b.choice, known).masked,
-        age: a.meta?.age,
-        major: a.meta?.occupation,
+        // 결과 스냅샷(a.meta)이 아니라 지금 프로필을 보낸다 — 프로필을 고친 뒤
+        // 생성하면 옛 나이·직종으로 서사가 쓰이던 자리다.
+        age: profile.age,
+        major: occupationLabel(profile),
         entries: isJob ? redactEntries(rawEntries, known).entries : [],
       });
       if (!r.ok) throw new Error(r.reason === "no_api_key" ? "서버에 ANTHROPIC_API_KEY 미설정" : r.reason || "생성 실패");
@@ -318,7 +326,7 @@ function PersonaScenario({ a, b }) {
         expected_wage: jc.expected_wage || 0,
         causal_effect: jc.causal_effect || 0,
         survival_months: jc.survival_months || 0,
-        age: jc.meta?.age, major: jc.meta?.occupation,
+        age: profile.age, major: occupationLabel(profile),
       });
       setRes(r);
     } catch (e) {

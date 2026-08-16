@@ -17,6 +17,8 @@
 // 생존율 기업생멸, 스트레스 KNHANES/KWCS, 만족도 청년삶의질 등).
 // ─────────────────────────────────────────────────────────────
 
+import { occupationLabel } from "./profileOptions.js";
+
 // A/B 슬롯에서 고를 수 있는 카테고리 (유지 포함)
 export const SLOT_OPTIONS = [
   { key: "유지", label: "현상 유지", desc: "지금 그대로라면", emoji: "🌙" },
@@ -130,7 +132,9 @@ export function getPrediction({ profile, choice = "이직", detail = "" } = {}) 
   const traj = incomeTrajectory(baseWage, choice);
   const meta = {
     age: profile?.age || 27,
-    occupation: profile?.occupation || "연구·공학기술",
+    // 직종을 안 고른 사람에게 특정 직종을 지어 보여주지 않는다(예전 기본값은
+    // "연구·공학기술" 이었다 — 화면상 사용자가 입력한 값처럼 보인다).
+    occupation: occupationLabel(profile) || "—",
     observe_years_income: 10,
     observe_years_wellbeing: 4,
     source: "GOMS·YP · KOSIS · KNHANES·KWCS · KEDI",

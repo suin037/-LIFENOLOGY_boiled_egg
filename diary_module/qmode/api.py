@@ -366,7 +366,9 @@ def scenario(req: ScenarioReq):
     pb = req.persona_block or (_fetch_persona(req.uid) if req.uid else None)
     prompt = (
         f"한 사용자가 '{req.choice}'라는 진로를 택한 평행우주를 상상합니다.\n"
-        f"- 나이: {req.age or '-'}, 전공: {req.major or '-'}\n"
+        # 프론트는 이 자리에 화면 헤더와 같은 값(직종)을 보낸다. '전공'으로만 적어두면
+        # 모델이 학력 배경으로 오해해 "○○ 전공이라…" 같은 문장을 만든다.
+        f"- 나이: {req.age or '-'}, 전공·직군: {req.major or '-'}\n"
         f"- 예상 월급: {req.expected_wage:,.0f}만원\n"
         f"- 그 선택의 순수효과: {req.causal_effect:+,.1f}만원\n"
         f"- 예상 재직기간: {req.survival_months:.0f}개월\n\n"
