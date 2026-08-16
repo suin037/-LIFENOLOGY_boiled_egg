@@ -5,6 +5,23 @@ import RiskView from "./RiskView.jsx";
 import ReturnView from "./ReturnView.jsx";
 import { KowepsDetailView } from "./KowepsEvidenceView.jsx";
 
+/**
+ * 이 탭에 실제로 채울 내용이 있는지. 결과 화면의 탭 목록이 같은 기준을 써서
+ * "현재 추가로 보여드릴 상세 분석이 없습니다" 한 줄짜리 빈 탭을 만들지 않게 한다.
+ * 데모 모드는 예외 — 아래 데모 경고는 어떤 경우에도 닿을 수 있어야 한다.
+ */
+export function hasEvidenceDetail(a, b, dataMode) {
+  if (dataMode === "demo") return true;
+  return [a, b].some((s) => (
+    s.neighbors?.length
+    || s.causal_effect != null
+    || Object.keys(s.risk_timeline || {}).length
+    || Object.keys(s.return_timeline || {}).length
+    || s.koweps_evidence?.available
+    || Object.keys(s.domain_stats || {}).length
+  ));
+}
+
 export default function EvidenceView({ a, b, dataMode }) {
   const hasPeople = [a, b].some((s) => s.neighbors?.length);
   const hasCausal = [a, b].some((s) => s.causal_effect != null);

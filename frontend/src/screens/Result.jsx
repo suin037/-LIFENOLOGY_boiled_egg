@@ -11,7 +11,7 @@ import { Eyebrow } from "../components/ui.jsx";
 import { Bookmark, Check, ChevronLeft, ChevronRight, LockKeyhole } from "lucide-react";
 import LifeView from "../components/result/LifeView.jsx";
 import ChangeView from "../components/result/ChangeView.jsx";
-import EvidenceView from "../components/result/EvidenceView.jsx";
+import EvidenceView, { hasEvidenceDetail } from "../components/result/EvidenceView.jsx";
 import ActionView from "../components/result/ActionView.jsx";
 import AvatarComparison from "../components/result/AvatarComparison.jsx";
 import DiarySignalCard from "../components/result/DiarySignalCard.jsx";
@@ -42,7 +42,11 @@ export default function Result() {
       : []),
     { key: "indicators", label: softPlanet ? "참고 지표" : "핵심 지표", View: LifeView },
     { key: "change", label: "변화 흐름", View: ChangeView },
-    { key: "evidence", label: "분석 상세", View: EvidenceView },
+    // 내용이 없으면 탭 자체를 만들지 않는다 — 열어봐야 "없습니다" 한 줄인 탭은
+    // 고를 것만 늘린다. 공고·관계 분석이 이미 같은 방식이다.
+    ...(hasEvidenceDetail(a, b, result.dataMode || "demo")
+      ? [{ key: "evidence", label: "분석 상세", View: EvidenceView }]
+      : []),
     // 입력에서 공고를 분석했을 때만 — 예측 수치 옆에서 그 공고를 다시 확인한다.
     ...(jobAnalyses?.length || postings?.length
       ? [{ key: "job", label: `공고 분석${(jobAnalyses?.length || postings?.length) > 1 ? ` ${jobAnalyses?.length || postings?.length}` : ""}`, View: JobAnalysisView }]
@@ -84,8 +88,6 @@ export default function Result() {
         <span className="text-mut"> vs </span>
         <span className="font-bold text-gold">{labelOf(b.choice)}</span>
       </p>
-      <EvidenceModeBadge a={a} b={b} domains={result.domains || scenarioDomains} />
-
       <ol className="mt-5 grid grid-cols-4 gap-2" aria-label="결과 확인 단계">
         {RESULT_STEPS.map((label, index) => (
           <li key={label} className="min-w-0">
@@ -95,7 +97,12 @@ export default function Result() {
         ))}
       </ol>
 
+      {/* 근거 모드 배지는 '비교 분석'에서는 빼둔다 — 그 단계에는 항목별 근거가
+          바로 아래에 있고, 배지는 A·B 중 가장 강한 근거만 골라 한 줄로 쓴 것이라
+          나란히 놓으면 실제보다 단단해 보인다. 다른 단계에는 이 한 줄이 유일한
+          "확정 예측이 아니다" 표시라 그대로 둔다. */}
       {step === 0 && <section className="mt-5 animate-fade">
+      <EvidenceModeBadge a={a} b={b} domains={result.domains || scenarioDomains} />
       <AvatarComparison
         avatar={profile.avatarConfig}
         a={a}
@@ -138,11 +145,14 @@ export default function Result() {
         </div>
       </section>}
 
-      {step === 2 && <section className="mt-5 animate-fade lg:grid lg:grid-cols-2 lg:items-start lg:gap-7">
-        <div><ActionView a={a} b={b} domains={result.domains || scenarioDomains} dataMode={result.dataMode || "demo"} /></div>
-        <div>
-          <PersonaScenario a={a} b={b} />
-          <ThirdPath a={a} b={b} />
+      {step === 2 && <section className="mt-5 animate-fade">
+        <EvidenceModeBadge a={a} b={b} domains={result.domains || scenarioDomains} />
+        <div className="mt-4 lg:grid lg:grid-cols-2 lg:items-start lg:gap-7">
+          <div><ActionView a={a} b={b} domains={result.domains || scenarioDomains} dataMode={result.dataMode || "demo"} /></div>
+          <div>
+            <PersonaScenario a={a} b={b} />
+            <ThirdPath a={a} b={b} />
+          </div>
         </div>
       </section>}
 
