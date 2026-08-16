@@ -106,9 +106,10 @@ export const CUSTOM_HAIR = {
  * 귀를 '덮는 게 맞는' 앞머리 목록.
  *
  * overlayEars 는 원래 앞머리(bangs)가 귀를 가려 생긴 빈칸을 메우려고 귀를 위에 다시 그린다.
- * 그런데 리프컷처럼 귀를 덮는 게 디자인인 머리에까지 적용하면 귀가 머리카락을 뚫고 나온다.
+ * 귀를 덮는 게 디자인인 머리에까지 적용하면 귀가 머리카락을 뚫고 나온다.
+ * 덮머는 구레나룻이 귀 앞으로 흘러내리는 모양이라, 귀를 덧그리면 그 끝이 잘려 보인다.
  */
-export const HAIR_COVERS_EARS = new Set(["menBowl"]);
+export const HAIR_COVERS_EARS = new Set(["menBowl", "menCover"]);
 
 /**
  * Figma 에서 뽑은 헤어 SVG 를 CUSTOM_HAIR 에 넣기 쉽게 만들어주는 도우미.
