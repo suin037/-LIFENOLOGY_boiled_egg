@@ -118,14 +118,24 @@ app = FastAPI(title="parallel-me API")
 
 # jy-model의 성향 분석/저장 API를 같은 백엔드 포트에서 제공한다.
 # 선택 의존성 문제로 로딩하지 못해도 기존 예측 API는 계속 기동한다.
+#
+# 실패를 조용히 삼키면 안 된다 — 마운트가 깨지면 /qmode/* 전체(두 길의 하루·챗봇·
+# 성향분석·기업분석·관계분석·주간리포트)가 404 가 되는데, 프론트는 그걸 "서버가
+# 꺼져 있다"로 표시한다. 서버는 멀쩡히 떠 있으므로 원인을 찾을 단서가 없어진다.
+# 그래서 (1) 스택을 로그에 남기고 (2) /health 에 마운트 상태를 노출한다.
+QMODE_MOUNT: dict = {"mounted": False, "error": None}
 try:
     if str(ROOT) not in sys.path:
         sys.path.insert(0, str(ROOT))
     from diary_module.qmode.api import app as qmode_app
 
     app.mount("/qmode", qmode_app)
-except Exception:
+    QMODE_MOUNT["mounted"] = True
+except Exception as exc:
     qmode_app = None
+    QMODE_MOUNT["error"] = f"{type(exc).__name__}: {exc}"
+    log.error("qmode 마운트 실패 — /qmode/* 전체가 404 가 된다\n%s",
+              traceback.format_exc())
 
 # ── 기동 워밍업 ────────────────────────────────────────────────────────────
 # 무거운 지연 로딩이 **첫 사용자 요청**에 얹히던 문제.
@@ -332,7 +342,13 @@ def health() -> dict:
     # 선택 분류 통계·워밍업 상태는 캐시하지 않는다 — 런타임 값이라 매번 새로 읽는다.
     from rag import psych_retriever as _pr
 
-    return {"status": "ok", "model": settings.claude_model,
+    # qmode 가 안 붙으면 예측 API 는 멀쩡해도 앱의 절반(두 길의 하루·챗봇·성향·
+    # 기업·관계 분석)이 죽는다. status 를 degraded 로 낮춰 배포 헬스체크가 잡게 한다.
+    qmode = {**QMODE_MOUNT,
+             "affects": "/qmode/* — 두 길의 하루·챗봇·성향분석·기업분석·관계분석·주간리포트"}
+    return {"status": "ok" if QMODE_MOUNT["mounted"] else "degraded",
+            "model": settings.claude_model,
+            "qmode": qmode,
             "warmup": {**_warmup_state, "psych_rag_loaded": _pr.is_loaded(),
                        "note": "done=false 면 첫 요청이 임베딩 모델 로딩(수십 초)을 "
                                "기다릴 수 있다"},
