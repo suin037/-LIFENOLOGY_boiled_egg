@@ -83,8 +83,13 @@ _SEED_SYSTEM = (
     "너는 사용자의 최근 일기를 읽고 음악 추천의 '씨앗'을 뽑는 사람이다.\n"
     "- artists: 일기에 실제로 언급된 가수·밴드 이름만(없으면 빈 배열). 추측해 넣지 마라.\n"
     "- fallback: 일기에 언급이 없을 때 쓸 씨앗 — 지금 기분·방향에 어울리는 '실존하는'\n"
-    "  가수·밴드 이름 3개. 한국 사용자이니 한국 아티스트를 우선 넣되 확실히 실존하는\n"
-    "  이름만 써라(존재를 확신 못 하면 넣지 마라). 곡 제목이 아니라 아티스트 이름이다.\n"
+    "  가수·밴드 이름 3개. 일기에서 드러난 취향의 결(한국/영미/장르)을 따라가되,\n"
+    "  단서가 없으면 한국 아티스트를 기본으로 둔다. 확실히 실존하는 이름만 써라.\n"
+    "  곡 제목이 아니라 아티스트 이름이다.\n"
+    "\n"
+    "  ※ 두 배열 모두 '스트리밍 서비스에 올라 있는 표기'로 적어라. 한국 가수도 영문\n"
+    "    표기가 기본인 경우가 많다(아이유 → IU, 방탄소년단 → BTS, 검정치마는 그대로).\n"
+    "    한글로 적으면 그 이름이 없어 엉뚱한 아티스트가 잡히거나 아예 버려진다.\n"
     "- moodNow: 지금 기분을 한 단어로.\n"
     '- shift  : "stay"(그 기분에 머물게) | "lift"(천천히 끌어올리기) | "energize"(기운 내기)\n'
     "  기분이 많이 가라앉은 날엔 갑자기 신나는 쪽으로 밀지 마라. 대개 stay 나 lift 다.\n"
@@ -123,21 +128,32 @@ def _ask_json(client, system, user, max_tokens=900):
     return json.loads(raw[i:j + 1]) if i >= 0 and j > i else {}
 
 
-def _artist_id(name):
-    """이름 → 아티스트 id. 팬 수가 가장 많은 항목을 고른다.
+def _norm_name(s):
+    return "".join(ch for ch in (s or "").lower() if ch.isalnum())
 
-    1순위를 그냥 쓰면 안 된다 — 'Coldplay' 검색 1순위가 팬 74명짜리 껍데기 계정이고
+
+def _artist_id(name):
+    """이름 → 아티스트 id. 이름이 실제로 맞는 것 중 팬 수가 가장 많은 항목.
+
+    검색 1순위를 그냥 쓰면 안 된다 — 'Coldplay' 1순위가 팬 74명짜리 껍데기 계정이고
     진짜 Coldplay(팬 1,834만)는 2순위였다. 껍데기는 관련 아티스트도 대표곡도 없어
-    후보가 통째로 비었다(외국 아티스트에서 특히 잦다).
+    후보가 통째로 비었다.
+
+    팬 수만 봐도 안 된다 — Deezer 검색은 헐거워서 '아이유'처럼 그 표기가 없는 이름을
+    넣으면 관계없는 i-dle(팬 66만)이 1순위로 온다. 그 사람의 '대표곡'으로 K/DA 의
+    POP/STARS 가 붙어 나왔다. 이름이 맞지 않으면 차라리 버린다.
     """
     d = _get("/search/artist", q=name, limit=8)
     rows = [r for r in ((d or {}).get("data") or []) if r.get("id")]
     if not rows:
         return None
-    # 이름이 정확히 같은 것 우선, 그 안에서 팬 수 최대.
-    key = lambda r: (r.get("name", "").strip().lower() == name.strip().lower(),  # noqa: E731
-                     r.get("nb_fan") or 0)
-    return max(rows, key=key)["id"]
+    q = _norm_name(name)
+    # 검색은 헐겁다 — '아이유' 로 찾으면 그 이름이 없어서 i-dle(팬 66만) 이 1순위로 온다.
+    # 이름이 실제로 맞는 것만 남긴다. 하나도 없으면 버린다(엉뚱한 아티스트보다 낫다).
+    ok = [r for r in rows if q and (q == _norm_name(r.get("name")) or q in _norm_name(r.get("name")))]
+    if not ok:
+        return None
+    return max(ok, key=lambda r: r.get("nb_fan") or 0)["id"]
 
 
 def _artist_genres(artist_id):
@@ -172,7 +188,10 @@ def _tracks_for(artist_id, artist_name, want_new=True, genres=None):
     for t in ((top or {}).get("data") or []):
         if (t.get("rank") or 0) < _MIN_RANK:
             continue
-        out.append({"title": t.get("title"), "artist": artist_name, "genres": gs,
+        # 이름표는 Deezer 가 말하는 그 곡의 아티스트로 단다. 검색어(artist_name)를 붙이면
+        # 'POP/STARS — 아이유' 처럼 남의 곡에 남의 이름이 붙는다(실제로 그랬다).
+        out.append({"title": t.get("title"),
+                    "artist": (t.get("artist") or {}).get("name") or artist_name, "genres": gs,
                     "link": t.get("link"), "cover": (t.get("album") or {}).get("cover_medium"),
                     "year": None, "kind": "대표곡"})
     if want_new:
@@ -181,7 +200,8 @@ def _tracks_for(artist_id, artist_name, want_new=True, genres=None):
             full = _get("/album/%d" % alb["id"])
             year = (alb.get("release_date") or "")[:4]
             for t in ((full or {}).get("tracks") or {}).get("data", [])[:2]:
-                out.append({"title": t.get("title"), "artist": artist_name, "genres": gs,
+                out.append({"title": t.get("title"),
+                            "artist": (t.get("artist") or {}).get("name") or artist_name, "genres": gs,
                             "link": t.get("link"), "cover": alb.get("cover_medium"),
                             "year": year, "album": alb.get("title"), "kind": "최근 앨범"})
     return out
