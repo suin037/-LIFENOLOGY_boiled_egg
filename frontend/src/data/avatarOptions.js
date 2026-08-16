@@ -36,6 +36,14 @@ export const HAIR_STYLES = [
   { id: "undercut", label: "언더컷", hair: "undercut", rear: null },
   { id: "spiky", label: "뾰족머리", hair: "spiky", rear: null },
   { id: "bun", label: "번머리", hair: "bun", rear: null },
+  { id: "menFringe", label: "남자 앞머리", hair: "menFringe", rear: null, custom: true },
+  { id: "menPerm", label: "남자 펌", hair: "menPerm", rear: null, custom: true },
+  { id: "menCrop", label: "남자 크롭컷", hair: "menCrop", rear: null, custom: true },
+  // 리프컷은 옆머리 자체가 귀를 덮는 길이다. 여기에 뒷머리(neckHigh)까지 깔면 볼 높이에서
+  // 실루엣이 종 모양으로 벌어져 곧바로 '여자 단발'로 읽힌다. 그래서 rear 는 없다.
+  // 울프컷도 만들었지만 정면에서는 리프컷과 길이 차이밖에 없어 합쳤다 — 사진 인식도
+  // 둘을 구분하지 못하고 갈릴 뿐이라, 중간 기장 남자머리는 이 하나로 받는다.
+  { id: "menLeaf", label: "남자 리프컷", hair: "menLeaf", rear: null, custom: true },
   { id: "bobShort", label: "단발(짧게) · 앞머리", hair: "bangs", rear: "neckHigh", custom: true },
   { id: "bobLong", label: "단발(어깨) · 앞머리", hair: "bangs", rear: "shoulderHigh", custom: true },
   { id: "longParted", label: "긴 생머리 · 가르마", hair: "sideComed", rear: "longStraight" },
@@ -58,13 +66,17 @@ export const BEARD = [
 
 // 직접 그린 무쌍/유쌍은 화풍이 안 맞아 기각됐다. 빌트인만 쓴다.
 // 눈매를 손보려면 손으로 그리지 말고 Figma 원본에서 그려 재수출하는 쪽이 맞다.
+// 감은 눈(수줍은·활 모양·윙크)은 뺐다. 눈이 작은 사람을 표현할 방법이 없다 보니
+// 사진 분석이 '작은 눈' 대신 '감은 눈'을 계속 골랐다.
+// 'small' 은 새 그림이 아니라 'wide' 를 각 눈 중심 기준으로 줄인 것이다(customParts.scaleEyes).
 export const EYES = [
   { id: "wide", label: "크게 뜬" },
   { id: "happy", label: "웃는" },
-  { id: "humble", label: "수줍은" },
-  { id: "bow", label: "활 모양" },
-  { id: "wink", label: "윙크" },
+  { id: "small", label: "작은 눈" },
 ];
+
+// 'small' 이 실제로 쓰는 빌트인 눈과 축소 배율.
+export const SMALL_EYE = { base: "happy", scale: 0.82, inset: 0 };
 
 // 눈썹은 두께를 조절하려고 전부 직접 그린 것으로 대체했다(customParts.BROW_SHAPES).
 // 모양 목록은 BROW_SHAPE_ITEMS, 두께는 BROW_THICKNESS 를 쓴다.
@@ -95,6 +107,8 @@ export const DEFAULT_AVATAR = {
   hairStyle: "longParted", // 앞·뒤 조합 프리셋 id
   beard: null, // null = 수염 없음
   eyes: "wide",
+  // 속눈썹. 빌트인 눈에는 항상 붙어 있어서 남자 아바타가 여성적으로 보였다.
+  lashes: true,
   eyebrows: "neutral", // customParts.BROW_SHAPES 의 id
   browThickness: "normal",
   glasses: "none",
@@ -103,6 +117,9 @@ export const DEFAULT_AVATAR = {
   skinColor: SKIN_COLORS[1],
   hairColor: HAIR_COLORS[0],
   clothesColor: CLOTHES_COLORS[0],
+  // 옷 무늬. 목록에서 고르는 게 아니라 카메라 분석이 즉석에서 채운다.
+  // { kind: "none"|"stripe"|"dot"|"check", color: "hex", size: 8~120, angle: 도 }
+  pattern: { kind: "none" },
 };
 
 /**
@@ -121,7 +138,7 @@ export function toDicebearOptions(config) {
     rearHairProbability: style.rear ? 100 : 0,
     beard: c.beard ? [c.beard] : undefined,
     beardProbability: c.beard ? 100 : 0,
-    eyes: [c.eyes],
+    eyes: [c.eyes === "small" ? SMALL_EYE.base : c.eyes],
     // 눈썹은 항상 neutral 로 그려두고 customParts.replaceBrows 가 그 자리를 바꾼다.
     eyebrows: ["neutral"],
     mouth: [c.mouth],
@@ -179,6 +196,7 @@ export function avatarGenerationSpec(config) {
     hairColor: `#${c.hairColor}`,
     skinTone: `#${c.skinColor}`,
     eyeStyle: labelOf(EYES, c.eyes),
+    eyelashes: c.lashes === false ? "none" : "visible",
     eyebrowStyle: labelOf(BROW_SHAPE_ITEMS, c.eyebrows),
     eyebrowThickness: labelOf(BROW_THICKNESS, c.browThickness),
     mouthStyle: labelOf(MOUTH, c.mouth),
