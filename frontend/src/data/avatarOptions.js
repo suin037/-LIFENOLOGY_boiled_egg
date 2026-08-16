@@ -38,12 +38,8 @@ export const HAIR_STYLES = [
   { id: "bun", label: "번머리", hair: "bun", rear: null },
   { id: "menFringe", label: "남자 앞머리", hair: "menFringe", rear: null, custom: true },
   { id: "menPerm", label: "남자 펌", hair: "menPerm", rear: null, custom: true },
+  { id: "menPermFringe", label: "남자 펌 · 앞머리", hair: "menPermFringe", rear: null, custom: true },
   { id: "menCrop", label: "남자 크롭컷", hair: "menCrop", rear: null, custom: true },
-  // 리프컷은 옆머리 자체가 귀를 덮는 길이다. 여기에 뒷머리(neckHigh)까지 깔면 볼 높이에서
-  // 실루엣이 종 모양으로 벌어져 곧바로 '여자 단발'로 읽힌다. 그래서 rear 는 없다.
-  // 울프컷도 만들었지만 정면에서는 리프컷과 길이 차이밖에 없어 합쳤다 — 사진 인식도
-  // 둘을 구분하지 못하고 갈릴 뿐이라, 중간 기장 남자머리는 이 하나로 받는다.
-  { id: "menLeaf", label: "남자 리프컷", hair: "menLeaf", rear: null, custom: true },
   // 단발도 긴머리처럼 가르마/앞머리 두 갈래로 둔다. 가르마 쪽은 빌트인 파츠 조합이라
   // 새로 그린 게 없다(sideComed + 짧은 뒷머리).
   { id: "bobShortParted", label: "단발(짧게) · 가르마", hair: "sideComed", rear: "neckHigh" },
