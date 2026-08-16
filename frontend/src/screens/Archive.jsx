@@ -10,7 +10,8 @@ import {
   removeUniverse,
   universeFromResult,
 } from "../data/savedUniverses.js";
-import { actionsFor, chosenChoice } from "../data/actionBridge.js";
+import { actionsForGoal, chosenChoice } from "../data/actionBridge.js";
+import { computeDiarySignals } from "../data/diarySignals.js";
 import { LIFE_DOMAINS, domainColor, domainLabel, labelOf } from "../data/choices.js";
 
 // 보관함 = 항해일지. 저장한 결과의 목록이 아니라 '결정 → 실행 → 회고'의 진행을 추적하는 곳.
@@ -76,9 +77,10 @@ function isReflectPending(u) {
   return d != null && d >= REFLECT_AFTER_DAYS;
 }
 
-function actionsOf(u) {
+// 결과 화면·알람과 같은 진입점을 써야 문구가 같아진다(doneActions 는 텍스트로 대조).
+function actionsOf(u, signals) {
   const chosen = chosenChoice(u);
-  return chosen ? actionsFor(chosen, u.domains) : [];
+  return chosen ? actionsForGoal(chosen, u.domains, signals) : [];
 }
 
 export default function Archive() {
@@ -88,6 +90,9 @@ export default function Archive() {
   const [filter, setFilter] = useState("all");
   const [sort, setSort] = useState("recent"); // recent | domain
   const [openId, setOpenId] = useState(null);
+
+  // 일기 신호는 카드마다 같으니 화면에서 한 번만 계산해 내려준다.
+  const signals = useMemo(() => computeDiarySignals({ windowDays: 28 }), []);
 
   const refresh = () => setItems(listUniverses());
   const open = openId ? items.find((u) => u.id === openId) || null : null;
@@ -226,7 +231,7 @@ export default function Archive() {
           ) : (
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {visible.map((u) => (
-                <UniverseCard key={u.id} u={u} onOpen={() => setOpenId(u.id)} />
+                <UniverseCard key={u.id} u={u} signals={signals} onOpen={() => setOpenId(u.id)} />
               ))}
             </div>
           )}
@@ -237,6 +242,7 @@ export default function Archive() {
         <DetailSheet
           key={open.id}
           u={open}
+          signals={signals}
           onClose={() => setOpenId(null)}
           onDecide={(d) => {
             decideUniverse(open.id, d);
@@ -302,10 +308,10 @@ function ArchiveStat({ label, value, accent = false }) {
 }
 
 // 접힌 카드 — 영역 색 / 대비된 A·B / 진행 상태까지 훑기만 해도 읽힌다.
-function UniverseCard({ u, onOpen }) {
+function UniverseCard({ u, signals, onOpen }) {
   const status = statusOf(u);
   const chosen = chosenChoice(u);
-  const actions = actionsOf(u);
+  const actions = actionsOf(u, signals);
   const doneCount = actions.filter((a) => (u.doneActions || []).includes(a.text)).length;
   const pending = isReflectPending(u);
 
@@ -411,7 +417,7 @@ function StatusBadge({ status, chosen, side, pending }) {
 }
 
 // 상세 — 나의 우주 별자리 시트와 같은 패턴. 단계가 오지 않은 섹션은 잠근다.
-function DetailSheet({ u, onClose, onDecide, onToggleAction, onSaveNote, onReopen, onResim, onDelete }) {
+function DetailSheet({ u, signals, onClose, onDecide, onToggleAction, onSaveNote, onReopen, onResim, onDelete }) {
   const [note, setNote] = useState(u.reflection || "");
   const [unlockedNote, setUnlockedNote] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -435,7 +441,7 @@ function DetailSheet({ u, onClose, onDecide, onToggleAction, onSaveNote, onReope
   );
 
   const chosen = chosenChoice(u);
-  const actions = actionsOf(u);
+  const actions = actionsOf(u, signals);
   const done = u.doneActions || [];
   const decided = u.decision === "A" || u.decision === "B";
   const sinceDecision = daysSince(u.decidedAt);
