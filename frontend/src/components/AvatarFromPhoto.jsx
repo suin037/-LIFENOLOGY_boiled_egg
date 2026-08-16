@@ -28,10 +28,11 @@ const FIELD_LABELS = {
   hairStyle: "헤어스타일",
   hairColor: "헤어 컬러",
   skinColor: "피부색",
-  eyes: "눈",
+  eyes: "눈 모양",
+  eyeScale: "눈 크기",
   lashes: "속눈썹",
   eyebrows: "눈썹 모양",
-  browThickness: "눈썹 굵기",
+  browWeight: "눈썹 굵기",
   mouth: "표정",
   glasses: "안경",
   beard: "수염",
@@ -47,17 +48,15 @@ const FIELD_LABELS = {
 // 몰린다(실제로 얼굴형이 10장 내내 oval 로만 나왔다). 그래서 라벨을 같이 보낸다.
 function buildOptions() {
   const ids = (arr) => arr.map((x) => x.id);
-  const labels = (arr) => Object.fromEntries(arr.map((x) => [x.id, x.label]));
+  // 이름만으로는 부족하다 — 우리 '언더컷'은 올백 계열인데 이름만 보면 투블럭으로
+  // 읽히고, '웃는 눈'과 '작은 눈'이 어떻게 다른지도 알 수 없다. 그려진 모양을 붙인다.
+  const labels = (arr) =>
+    Object.fromEntries(arr.map((x) => [x.id, x.desc ? `${x.label} (${x.desc})` : x.label]));
   return {
     labels: {
-      // 헤어는 이름만으로 부족하다 — 우리 '언더컷'은 올백 계열인데 이름만 보내면
-      // 모델이 투블럭으로 읽는다. 그려진 모양 설명을 붙여 보낸다.
-      hairStyle: Object.fromEntries(
-        HAIR_STYLES.map((h) => [h.id, h.desc ? `${h.label} (${h.desc})` : h.label])
-      ),
+      hairStyle: labels(HAIR_STYLES),
       eyes: labels(EYES),
       eyebrows: labels(BROW_SHAPE_ITEMS),
-      browThickness: labels(BROW_THICKNESS),
       mouth: labels(MOUTH),
       glasses: labels(GLASSES_OPTIONS),
       beard: labels(BEARD),
@@ -75,7 +74,10 @@ function buildOptions() {
     hairStyle: ids(HAIR_STYLES),
     eyes: ids(EYES),
     eyebrows: ids(BROW_SHAPE_ITEMS),
-    browThickness: ids(BROW_THICKNESS),
+    // 눈 크기와 눈썹 굵기는 목록에서 고르지 않는다. 백엔드가 eyeScale/browWeight
+    // 를 숫자로 받는다 — 3지선다로 두면 매번 같은 칸에 몰린다(실사진 10장에서
+    // 눈이 10/10 'small', 우리 그림에 정답을 넣고 물어도 눈 1/3, 굵기 1/2).
+    // 옷 무늬를 숫자로 받아 잘 맞는 것과 같은 이유다.
     mouth: ids(MOUTH),
     glasses: ids(GLASSES_OPTIONS),
     beard: [...ids(BEARD), null], // null = 수염 없음
