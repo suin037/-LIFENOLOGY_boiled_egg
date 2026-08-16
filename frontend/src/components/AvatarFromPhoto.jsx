@@ -43,9 +43,24 @@ const FIELD_LABELS = {
 
 // 백엔드가 고를 수 있는 값 목록. avatarOptions.js 가 원본이라 여기서 파생시킨다.
 // 새 헤어스타일을 추가하면 자동으로 후보에 포함된다.
+//
+// id 만 보내면 모델이 'pointedShort' 가 무슨 모양인지 알 수가 없어서 무난한 값으로
+// 몰린다(실제로 얼굴형이 10장 내내 oval 로만 나왔다). 그래서 라벨을 같이 보낸다.
 function buildOptions() {
   const ids = (arr) => arr.map((x) => x.id);
+  const labels = (arr) => Object.fromEntries(arr.map((x) => [x.id, x.label]));
   return {
+    labels: {
+      face: Object.fromEntries(Object.entries(FACE_SHAPES).map(([id, v]) => [id, v.label])),
+      hairStyle: labels(HAIR_STYLES),
+      eyes: labels(EYES),
+      eyebrows: labels(BROW_SHAPE_ITEMS),
+      browThickness: labels(BROW_THICKNESS),
+      mouth: labels(MOUTH),
+      glasses: labels(GLASSES_OPTIONS),
+      beard: labels(BEARD),
+      clothes: labels(CLOTHES),
+    },
     face: Object.keys(FACE_SHAPES),
     hairStyle: ids(HAIR_STYLES),
     eyes: ids(EYES),
