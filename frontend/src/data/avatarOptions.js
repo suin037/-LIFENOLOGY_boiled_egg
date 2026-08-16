@@ -27,30 +27,32 @@ export const TOONHEAD_CREDIT = {
 // 그래서 완성된 스타일 하나씩만 고르게 한다. 긴머리는 '앞머리 있음/없음'으로 갈린다.
 //   hair = 앞머리 (null 이면 없음), rear = 뒷머리 (null 이면 없음)
 //   custom: true 면 customParts.js 의 CUSTOM_HAIR 에서 온 것
+//   desc 는 카메라 인식용 — 사진에서 보이는 특징. 이름만 보내면 모델이 우리 그림이
+//   어떤 모양인지 알 수가 없다(우리 '언더컷'은 올백 계열인데 이름만으로는 투블럭으로 읽힌다).
 // '앞머리 없음'은 민머리가 아니라 '이마가 드러나는 가르마'를 뜻한다(윗머리는 있다).
 // '앞머리 있음'은 이마를 덮는 뱅. 빌트인 앞머리 4종은 전부 이마가 드러나는 쪽이라
 // 뱅은 customParts.CUSTOM_HAIR.bangs 로 따로 그려서 쓴다.
 export const HAIR_STYLES = [
-  { id: "bald", label: "민머리", hair: null, rear: null },
-  { id: "sideComed", label: "옆가르마", hair: "sideComed", rear: null },
-  { id: "undercut", label: "언더컷", hair: "undercut", rear: null },
-  { id: "spiky", label: "뾰족머리", hair: "spiky", rear: null },
-  { id: "bun", label: "번머리", hair: "bun", rear: null },
-  { id: "menCover", label: "남자 덮머", hair: "menCover", rear: null, custom: true },
-  { id: "menPerm", label: "남자 펌", hair: "menPerm", rear: null, custom: true },
-  { id: "menPermPart", label: "남자 펌 · 5대5 가르마", hair: "menPermPart", rear: null, custom: true },
-  { id: "menBowl", label: "남자 바가지컷", hair: "menBowl", rear: null, custom: true },
-  { id: "menCrop", label: "남자 크롭컷", hair: "menCrop", rear: null, custom: true },
+  { id: "bald", label: "민머리", hair: null, rear: null, desc: "머리카락이 거의 없음. 삭발이거나 정수리가 심하게 비었을 때" },
+  { id: "sideComed", label: "옆가르마", hair: "sideComed", rear: null, desc: "이마 한쪽이 드러나고 옆으로 쓸어넘긴 짧은 머리. 볼륨이 적고 두상에 붙음" },
+  { id: "undercut", label: "언더컷", hair: "undercut", rear: null, desc: "옆은 짧고 윗머리를 위로 세워 뒤로 넘긴 머리. 포마드·올백·가일컷이 여기" },
+  { id: "spiky", label: "뾰족머리", hair: "spiky", rear: null, desc: "윗머리를 위로 뾰족뾰족 세워 끝이 삐죽삐죽 갈라진 머리. 왁스로 세게 세운 모양" },
+  { id: "bun", label: "번머리", hair: "bun", rear: null, desc: "머리를 뒤로 모아 정수리에 동그랗게 묶어 올린 머리" },
+  { id: "menCover", label: "남자 덮머", hair: "menCover", rear: null, custom: true, desc: "이마가 대부분 덮이고 앞머리가 눈썹까지 내려온 머리. 옆으로 자연스럽게 흐름" },
+  { id: "menPerm", label: "남자 펌", hair: "menPerm", rear: null, custom: true, desc: "전체가 뚜렷한 곱슬. 이마는 부분적으로만 드러남" },
+  { id: "menPermPart", label: "남자 펌 · 5대5 가르마", hair: "menPermPart", rear: null, custom: true, desc: "곱슬인데 가운데로 갈라져 이마 한가운데가 드러남" },
+  { id: "menBowl", label: "남자 바가지컷", hair: "menBowl", rear: null, custom: true, desc: "앞머리를 두껍게 일자로 내리고 옆도 비슷한 길이로 자른 버섯 모양" },
+  { id: "menCrop", label: "남자 크롭컷", hair: "menCrop", rear: null, custom: true, desc: "전체가 아주 짧고 앞머리도 짧아 이마가 거의 드러남. 스포츠컷·반삭" },
   // 단발도 긴머리처럼 가르마/앞머리 두 갈래로 둔다. 가르마 쪽은 빌트인 파츠 조합이라
   // 새로 그린 게 없다(sideComed + 짧은 뒷머리).
-  { id: "bobShortParted", label: "단발(짧게) · 가르마", hair: "sideComed", rear: "neckHigh" },
-  { id: "bobShort", label: "단발(짧게) · 앞머리", hair: "bangs", rear: "neckHigh", custom: true },
-  { id: "bobLongParted", label: "단발(어깨) · 가르마", hair: "sideComed", rear: "shoulderHigh" },
-  { id: "bobLong", label: "단발(어깨) · 앞머리", hair: "bangs", rear: "shoulderHigh", custom: true },
-  { id: "longParted", label: "긴 생머리 · 가르마", hair: "sideComed", rear: "longStraight" },
-  { id: "longBangs", label: "긴 생머리 · 앞머리", hair: "bangs", rear: "longStraight", custom: true },
-  { id: "wavyParted", label: "긴 웨이브 · 가르마", hair: "sideComed", rear: "longWavy" },
-  { id: "wavyBangs", label: "긴 웨이브 · 앞머리", hair: "bangs", rear: "longWavy", custom: true },
+  { id: "bobShortParted", label: "단발(짧게) · 가르마", hair: "sideComed", rear: "neckHigh", desc: "턱선 길이 단발. 앞머리 없이 이마가 드러남" },
+  { id: "bobShort", label: "단발(짧게) · 앞머리", hair: "bangs", rear: "neckHigh", custom: true, desc: "턱선 길이 단발. 이마를 덮는 앞머리 있음" },
+  { id: "bobLongParted", label: "단발(어깨) · 가르마", hair: "sideComed", rear: "shoulderHigh", desc: "어깨 길이 단발. 앞머리 없이 이마가 드러남" },
+  { id: "bobLong", label: "단발(어깨) · 앞머리", hair: "bangs", rear: "shoulderHigh", custom: true, desc: "어깨 길이 단발. 이마를 덮는 앞머리 있음" },
+  { id: "longParted", label: "긴 생머리 · 가르마", hair: "sideComed", rear: "longStraight", desc: "어깨 아래로 내려오는 긴 직모. 앞머리 없이 이마가 드러남" },
+  { id: "longBangs", label: "긴 생머리 · 앞머리", hair: "bangs", rear: "longStraight", custom: true, desc: "어깨 아래로 내려오는 긴 직모. 이마를 덮는 앞머리 있음" },
+  { id: "wavyParted", label: "긴 웨이브 · 가르마", hair: "sideComed", rear: "longWavy", desc: "어깨 아래로 내려오는 긴 웨이브. 앞머리 없이 이마가 드러남" },
+  { id: "wavyBangs", label: "긴 웨이브 · 앞머리", hair: "bangs", rear: "longWavy", custom: true, desc: "어깨 아래로 내려오는 긴 웨이브. 이마를 덮는 앞머리 있음" },
 ];
 
 export function hairStyleById(id) {

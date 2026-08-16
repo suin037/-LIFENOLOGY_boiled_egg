@@ -50,7 +50,11 @@ function buildOptions() {
   const labels = (arr) => Object.fromEntries(arr.map((x) => [x.id, x.label]));
   return {
     labels: {
-      hairStyle: labels(HAIR_STYLES),
+      // 헤어는 이름만으로 부족하다 — 우리 '언더컷'은 올백 계열인데 이름만 보내면
+      // 모델이 투블럭으로 읽는다. 그려진 모양 설명을 붙여 보낸다.
+      hairStyle: Object.fromEntries(
+        HAIR_STYLES.map((h) => [h.id, h.desc ? `${h.label} (${h.desc})` : h.label])
+      ),
       eyes: labels(EYES),
       eyebrows: labels(BROW_SHAPE_ITEMS),
       browThickness: labels(BROW_THICKNESS),
