@@ -44,7 +44,11 @@ export const HAIR_STYLES = [
   // 울프컷도 만들었지만 정면에서는 리프컷과 길이 차이밖에 없어 합쳤다 — 사진 인식도
   // 둘을 구분하지 못하고 갈릴 뿐이라, 중간 기장 남자머리는 이 하나로 받는다.
   { id: "menLeaf", label: "남자 리프컷", hair: "menLeaf", rear: null, custom: true },
+  // 단발도 긴머리처럼 가르마/앞머리 두 갈래로 둔다. 가르마 쪽은 빌트인 파츠 조합이라
+  // 새로 그린 게 없다(sideComed + 짧은 뒷머리).
+  { id: "bobShortParted", label: "단발(짧게) · 가르마", hair: "sideComed", rear: "neckHigh" },
   { id: "bobShort", label: "단발(짧게) · 앞머리", hair: "bangs", rear: "neckHigh", custom: true },
+  { id: "bobLongParted", label: "단발(어깨) · 가르마", hair: "sideComed", rear: "shoulderHigh" },
   { id: "bobLong", label: "단발(어깨) · 앞머리", hair: "bangs", rear: "shoulderHigh", custom: true },
   { id: "longParted", label: "긴 생머리 · 가르마", hair: "sideComed", rear: "longStraight" },
   { id: "longBangs", label: "긴 생머리 · 앞머리", hair: "bangs", rear: "longStraight", custom: true },

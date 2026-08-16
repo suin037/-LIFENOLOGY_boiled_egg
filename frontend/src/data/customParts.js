@@ -233,23 +233,25 @@ export function replaceFaceShape(svg, faceId) {
 // 그게 속눈썹이다. path 를 통째로 지우면 눈꺼풀 선까지 사라져 눈이 허옇게 뜨므로
 // 꼬리 좌표만 잘라내고 그 자리에서 닫는다(z). 눈꺼풀은 남고 속눈썹만 없어진다.
 //
-// 처음엔 뾰족한 끝만 잘라내 봤는데, 어떻게 잘라도 단면이 남아 '자른 티'가 났다.
-// Figma 원본을 열어보니 속눈썹은 eye-lash 라는 독립 벡터고, 이걸 통째로 빼면
-// 작가가 그린 흰자(둥근 아몬드)와 눈동자만 남는다 — 잘린 데 없이 둥근 눈이 된다.
+// 속눈썹은 Figma 원본에서 eye-lash 라는 독립 벡터인데, 통째로 빼면 윗눈꺼풀 선까지
+// 없어져 흰자가 그대로 드러난다. 그건 너무 밋밋해서, 눈꺼풀은 남기고 바깥으로
+// 삐져나온 꼬리 좌표만 잘라 그 자리에서 닫는다(z).
 //
-// 좌/우 각각 시작 좌표와 채움색으로 특정한다('wide' 는 M, 'happy' 는 m 으로 시작).
-const LASH_PATHS = [
-  /<path d="[Mm]266\.5[^"]*h18\.5z" fill="#4B2422"\/>/g, // 왼쪽
-  /<path d="[Mm]500\.\d+[^"]*h-18\.5z" fill="#4B2422"\/>/g, // 오른쪽
+// 좌/우 꼬리가 서로 다르게 인코딩돼 있고, 'wide'/'happy' 는 y 값만 다르다.
+//   왼쪽 : … L263 <y>l-10-7.5h18.5z
+//   오른쪽: … l2.75-10.75 10-7.5h-18.5z
+const LASH_TAILS = [
+  /L263 [\d.]+l-10-7\.5h18\.5z/g, // 왼쪽
+  /l2\.75-10\.75 10-7\.5h-18\.5z/g, // 오른쪽
 ];
 
 /** 속눈썹만 제거한다. 눈 모양(크게 뜬/웃는/작은)과 무관하게 동작한다. */
 export function removeLashes(svg) {
   let out = svg;
-  for (const re of LASH_PATHS) {
+  for (const re of LASH_TAILS) {
     re.lastIndex = 0;
-    if (!re.test(out)) warnMissing("속눈썹");
-    out = out.replace(re, "");
+    if (!re.test(out)) warnMissing("속눈썹 꼬리");
+    out = out.replace(re, "z");
   }
   return out;
 }
