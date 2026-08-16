@@ -8,7 +8,7 @@ import { redactPII, redactEntries } from "../data/piiRedact.js";
 import { saveMe, getScenario, getThirdPath } from "../data/api.js";
 import { listUniverses, saveUniverse, universeFromResult } from "../data/savedUniverses.js";
 import { Eyebrow } from "../components/ui.jsx";
-import { Bookmark, Check, ChevronRight } from "lucide-react";
+import { Bookmark, Check, ChevronLeft, ChevronRight, LockKeyhole } from "lucide-react";
 import LifeView from "../components/result/LifeView.jsx";
 import ChangeView from "../components/result/ChangeView.jsx";
 import EvidenceView from "../components/result/EvidenceView.jsx";
@@ -21,6 +21,8 @@ import RelationshipView from "../components/result/RelationshipView.jsx";
 import SoftCompareView from "../components/result/SoftCompareView.jsx";
 import { softDomainOf } from "../data/softCompare.js";
 import { DOMAIN_LABEL } from "../data/diarySignals.js";
+
+const RESULT_STEPS = ["결과 요약", "비교 분석", "다음 선택", "저장하고 완료"];
 
 export default function Result() {
   const navigate = useNavigate();
@@ -41,7 +43,6 @@ export default function Result() {
     { key: "indicators", label: softPlanet ? "참고 지표" : "핵심 지표", View: LifeView },
     { key: "change", label: "변화 흐름", View: ChangeView },
     { key: "evidence", label: "분석 상세", View: EvidenceView },
-    { key: "next", label: "다음 단계", View: ActionView },
     // 입력에서 공고를 분석했을 때만 — 예측 수치 옆에서 그 공고를 다시 확인한다.
     ...(jobAnalyses?.length || postings?.length
       ? [{ key: "job", label: `공고 분석${(jobAnalyses?.length || postings?.length) > 1 ? ` ${jobAnalyses?.length || postings?.length}` : ""}`, View: JobAnalysisView }]
@@ -53,6 +54,7 @@ export default function Result() {
   ];
 
   const [tab, setTab] = useState(softPlanet ? "soft" : "indicators");
+  const [step, setStep] = useState(0);
   const Active = (tabs.find((t) => t.key === tab) || tabs[0]).View;
 
   // 보관함 저장 — 화면에 보이는 A/B 그대로 담는다. 같은 비교를 같은 날 두 번 담지 않는다.
@@ -84,8 +86,16 @@ export default function Result() {
       </p>
       <EvidenceModeBadge a={a} b={b} domains={result.domains || scenarioDomains} />
 
-      <div className="lg:mt-5 lg:grid lg:grid-cols-[minmax(0,.9fr)_minmax(0,1.1fr)] lg:items-start lg:gap-7">
-        <section className="lg:sticky lg:top-0">
+      <ol className="mt-5 grid grid-cols-4 gap-2" aria-label="결과 확인 단계">
+        {RESULT_STEPS.map((label, index) => (
+          <li key={label} className="min-w-0">
+            <div className={`h-1 rounded-full ${index <= step ? "bg-violet-400" : "bg-white/10"}`} />
+            <span className={`mt-2 block truncate text-[10px] font-semibold lg:text-[11px] ${index === step ? "text-violet-300" : "text-mut"}`}>{index + 1}. {label}</span>
+          </li>
+        ))}
+      </ol>
+
+      {step === 0 && <section className="mt-5 animate-fade">
       <AvatarComparison
         avatar={profile.avatarConfig}
         a={a}
@@ -97,16 +107,14 @@ export default function Result() {
         error={result.visualError || result.narrativeError}
         onRetry={result.visualError ? retryVisuals : null}
       />
+      </section>}
 
-      {/* 3층: ① 통계(아래 탭) · ② 내 기록 기반 상태 · ③ 개인화 해석 */}
-      <DiarySignalCard />
-      <KowepsEvidenceCard a={a} b={b} domains={result.domains || scenarioDomains} />
-      <PersonaScenario a={a} b={b} />
-      <ThirdPath a={a} b={b} />
-        </section>
-        <section>
-
-      {/* 서브뷰 칩 */}
+      {step === 1 && <section className="mt-5 animate-fade lg:grid lg:grid-cols-[minmax(280px,.7fr)_minmax(0,1.3fr)] lg:items-start lg:gap-7">
+        <div>
+          <DiarySignalCard />
+          <KowepsEvidenceCard a={a} b={b} domains={result.domains || scenarioDomains} />
+        </div>
+        <div>
       <div className="no-scrollbar my-2.5 flex gap-1.5 overflow-x-auto pb-1">
         {tabs.map((t) => {
           const on = t.key === tab;
@@ -127,15 +135,27 @@ export default function Result() {
       <div key={tab} className="animate-fade">
         <Active a={a} b={b} domains={result.domains || scenarioDomains} dataMode={result.dataMode || "demo"} />
       </div>
-        </section>
-      </div>
+        </div>
+      </section>}
 
-      <div className="mt-4 flex gap-2">
+      {step === 2 && <section className="mt-5 animate-fade lg:grid lg:grid-cols-2 lg:items-start lg:gap-7">
+        <div><ActionView a={a} b={b} domains={result.domains || scenarioDomains} dataMode={result.dataMode || "demo"} /></div>
+        <div>
+          <PersonaScenario a={a} b={b} />
+          <ThirdPath a={a} b={b} />
+        </div>
+      </section>}
+
+      {step === 3 && <section className="mx-auto mt-6 max-w-[680px] animate-fade rounded-[24px] border border-white/10 bg-card/70 p-5 text-center lg:p-8">
+        <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-violet-500/15 text-violet-300"><Bookmark size={21}/></span>
+        <h2 className="mt-4 text-[18px] font-bold text-ink">비교 결과를 보관할까요?</h2>
+        <p className="mt-2 text-[12px] leading-5 text-mut">결과를 보관함에 저장해야 이번 비교를 마치고 다른 메뉴로 이동할 수 있어요.</p>
+      <div className="mt-5 grid gap-2 sm:grid-cols-2">
         <button
           type="button"
           onClick={saveToArchive}
           disabled={!savable}
-          className={`tap flex flex-1 items-center justify-center gap-1.5 rounded-2xl border px-3 py-3 text-[14px] font-semibold transition-colors ${
+          className={`tap flex items-center justify-center gap-1.5 rounded-2xl border px-3 py-3 text-[14px] font-semibold transition-colors ${
             savable
               ? "border-cyan/45 bg-cyan/[.12] text-cyan hover:bg-cyan/[.18]"
               : "border-white/10 bg-white/[.04] text-mut"
@@ -157,24 +177,29 @@ export default function Result() {
         </button>
         <button
           type="button"
-          onClick={() => navigate("/input")}
-          className="tap flex-1 rounded-2xl bg-card px-3 py-3 text-[14px] font-semibold text-sub transition-colors hover:bg-card2"
+          disabled={!saved}
+          onClick={() => navigate("/archive", { replace: true })}
+          className="tap flex items-center justify-center gap-1.5 rounded-2xl bg-violet-500 px-3 py-3 text-[14px] font-semibold text-white transition-colors hover:bg-violet-400 disabled:cursor-not-allowed disabled:bg-white/[.06] disabled:text-mut"
         >
-          다른 갈림길 비교
+          {saved ? <>최종 나가기 <ChevronRight size={16}/></> : <><LockKeyhole size={15}/> 저장 후 나갈 수 있어요</>}
         </button>
       </div>
+      </section>}
 
-      {/* 저장 직후에만 — 결정을 내리러 갈 다음 걸음을 열어둔다. */}
-      {saved && (
+      <div className="mt-6 flex items-center justify-between border-t border-white/10 pt-4">
+        {step > 0 ? (
+          <button type="button" onClick={() => setStep((current) => current - 1)} className="tap flex items-center gap-1.5 rounded-xl px-3 py-2 text-[12px] font-semibold text-sub hover:bg-white/[.05]"><ChevronLeft size={15}/> 이전</button>
+        ) : <span />}
+        {step < RESULT_STEPS.length - 1 && (
         <button
           type="button"
-          onClick={() => navigate("/archive")}
-          className="tap mt-2 flex w-full items-center justify-center gap-1 text-[12px] font-semibold text-cyan"
+          onClick={() => setStep((current) => current + 1)}
+          className="tap flex items-center gap-1.5 rounded-xl bg-violet-500 px-4 py-2.5 text-[12px] font-semibold text-white hover:bg-violet-400"
         >
-          보관함에서 마음 정하기
-          <ChevronRight size={14} />
+          다음 단계 <ChevronRight size={15}/>
         </button>
       )}
+      </div>
     </div>
   );
 }

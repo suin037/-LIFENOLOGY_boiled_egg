@@ -5,6 +5,7 @@ import { LIFE_DOMAINS, detectLifeDomains, domainLabel, suggestComparePrompts } f
 import { detectEmotions } from "../data/DiaryContext.jsx";
 import { domainRumination } from "../data/diarySignals.js";
 import { DOMAIN_OUTCOMES, questionsForChoice } from "../data/scenarioIntake.js";
+import { OCCUPATION_GROUPS } from "../data/occupationGroups.js";
 import { Caption } from "../components/ui.jsx";
 import ValueDeepTest from "../components/ValueDeepTest.jsx";
 import JobPostingInput from "../components/JobPostingInput.jsx";
@@ -18,11 +19,8 @@ const DOMAIN_ICONS = {
   finance: Wallet, health: HeartPulse, housing: House,
   relationship: Users, lifestyle: Leaf, long_term_values: Compass,
 };
-const OCCUPATION_GROUPS = [
-  [1, "관리자"], [2, "전문가·관련 종사자"], [3, "사무 종사자"],
-  [4, "서비스 종사자"], [5, "판매 종사자"], [6, "농림어업 숙련 종사자"],
-  [7, "기능원·관련 기능 종사자"], [8, "장치·기계 조작·조립 종사자"], [9, "단순노무 종사자"],
-];
+const CAREER_DETAIL_DOMAINS = new Set(["career", "business"]);
+const GENERIC_COUNTERPART = /현상\s*유지|지금처럼|그대로|계속|보류|하지\s*않|안\s*하|현재를?\s*유지/;
 const EMPLOYMENT_STATUSES = [
   [1, "상용직"], [2, "임시직"], [3, "일용직"], [4, "고용주·자영업자"], [5, "무급가족 종사자"],
 ];
@@ -54,6 +52,20 @@ export default function InputScreen() {
   const [domainAuto, setDomainAuto] = useState({ a: true, b: true });
   const [focused, setFocused] = useState(textA && !textB ? "b" : "a");
   const [rumination, setRumination] = useState(() => domainRumination({ windowDays: 28, threshold: 4 }));
+
+  // "이직하기 vs 지금처럼 유지"처럼 B가 맥락 의존 표현이면 단독 키워드가 없어도
+  // A와 같은 비교 영역으로 읽는다. A/B 어느 쪽에 먼저 적어도 동일하게 동작한다.
+  useEffect(() => {
+    if (!textA.trim() || !textB.trim()) return;
+    setScenarioDomains((prev) => {
+      let a = domainAuto.a ? detectLifeDomains(textA) : (prev.a || []);
+      let b = domainAuto.b ? detectLifeDomains(textB) : (prev.b || []);
+      if (!a.length && GENERIC_COUNTERPART.test(textA) && b.length) a = [...b];
+      if (!b.length && GENERIC_COUNTERPART.test(textB) && a.length) b = [...a];
+      if (a.join("|") === (prev.a || []).join("|") && b.join("|") === (prev.b || []).join("|")) return prev;
+      return { ...prev, a, b };
+    });
+  }, [textA, textB, domainAuto.a, domainAuto.b, setScenarioDomains]);
 
   useEffect(() => {
     const refresh = () => setRumination(domainRumination({ windowDays: 28, threshold: 4 }));
@@ -107,18 +119,17 @@ export default function InputScreen() {
   const duplicate = Boolean(normalizedA && normalizedB && normalizedA === normalizedB);
   const sameCategory = Boolean(normalizedA && normalizedB && !duplicate && scenarioDomains.a.some((key) => scenarioDomains.b.includes(key)));
   const missingDomains = Boolean(normalizedA && normalizedB && (!scenarioDomains.a.length || !scenarioDomains.b.length));
-  // 직업 영역은 넓게 잡는다 — 좁게 걸면 '다른 직무 준비하기', '대학원 진학' 처럼
-  // 사실상 커리어 결정인데도 입력이 안 뜨는 일이 생긴다. 못 보여주는 쪽이 더 손해라서,
-  // '관계만' 잡힌 경우를 빼고는 직업 묶음을 열어둔다.
-  const onlyRelationship = allDomains.length > 0 && allDomains.every((d) => d === "relationship");
-  const isCareer = typed && !onlyRelationship;
+  // 실제 직업·창업 영역일 때만 직업 정보와 공고 입력을 연다. 건강·관계·주거·가치
+  // 비교를 "관계만 아니면 커리어"로 처리하던 조건이 잘못된 직업 질문의 원인이었다.
+  const isCareer = typed && allDomains.some((domain) => CAREER_DETAIL_DOMAINS.has(domain));
   const needJobDetails = isCareer;
   // 직업정보가 없으면 전체 유사 집단으로 자동 완화한다. 입력 화면 진행을 막지는 않는다.
   const jobDetailsMissing = needJobDetails && profile.occupation_group == null;
+  // 성별은 유사집단 매칭의 정확도를 높이는 선택 정보다.
+  // 비어 있어도 전체 집단 기준으로 비교할 수 있으므로 진행 자체를 막지 않는다.
   const blocked = !normalizedA || !normalizedB || duplicate;
   const needMajor = scenarioDomains.a.includes("education") || scenarioDomains.b.includes("education");
   const emotions = detectEmotions(`${diary} ${textA} ${textB}`);
-  const completed = Number(Boolean(normalizedA)) + Number(Boolean(normalizedB));
   const intakeA = questionsForChoice(textA, scenarioDomains.a);
   const intakeB = questionsForChoice(textB, scenarioDomains.b);
 
@@ -156,18 +167,11 @@ export default function InputScreen() {
 
   return (
     <div className="-mx-5 -mt-1 min-h-full bg-[linear-gradient(180deg,#111D39_0%,#0B1325_46%,#171511_100%)] px-5 pb-7 pt-3 lg:mx-auto lg:bg-none lg:px-10 lg:pb-12 lg:pt-4 xl:px-14">
-      <div className="flex items-center justify-between">
+      <div>
         <div>
           <div className="text-[12px] font-semibold text-[#8B6CCF] lg:text-[13px]">시뮬레이션</div>
           <h1 className="mt-0.5 text-[22px] font-bold tracking-[-.035em] lg:text-[32px]">두 미래를 나란히 놓아볼까요?</h1>
         </div>
-        <span className="rounded-full border border-[#6F55A7] bg-[#211832] px-3 py-1 text-[11px] font-bold text-[#8B6CCF]">
-          {completed} / 2
-        </span>
-      </div>
-
-      <div className="mt-3 h-1 overflow-hidden rounded-full bg-white/10 lg:mt-5">
-        <div className="h-full rounded-full bg-[#8B6CCF] transition-all duration-300" style={{ width: `${completed * 50}%` }} />
       </div>
       {rumination.prompt && (
         <button type="button" onClick={applySuggestedCompare} className="tap mt-3 flex w-full items-center gap-3 rounded-[18px] border border-cyan/40 bg-[#1D1730] px-4 py-3.5 text-left transition-colors hover:bg-[#16264a] lg:mt-5 lg:max-w-[720px] lg:px-5 lg:py-4">
@@ -181,7 +185,7 @@ export default function InputScreen() {
         </button>
       )}
 
-      <div className="relative mt-3 flex min-h-[400px] flex-col overflow-hidden rounded-[24px] border border-white/10 bg-[#08111F]/70 shadow-[0_20px_50px_rgba(0,0,0,.32)] lg:mt-6 lg:min-h-[430px] lg:flex-row lg:rounded-[30px]">
+      <div className="relative mt-3 flex min-h-[470px] flex-col overflow-hidden rounded-[24px] border border-white/10 bg-[#08111F]/70 shadow-[0_20px_50px_rgba(0,0,0,.32)] lg:mt-6 lg:min-h-[520px] lg:flex-row lg:rounded-[30px]">
         <ChoicePanel
           side="A" text={textA} domains={scenarioDomains.a} domainAuto={domainAuto.a}
           active={focused === "a"} suggestions={suggestComparePrompts({ side: "a", recentDomains: rumination.domains, valueRanking: profile.value_ranking, otherText: textB })}
@@ -210,6 +214,7 @@ export default function InputScreen() {
       {duplicate && <Caption className="text-danger">두 미래가 같아요. 회사·조건·상황 중 하나를 다르게 적어주세요.</Caption>}
       {sameCategory && !duplicate && <Caption className="text-cyan">같은 유형이어도 구체적인 조건이 다르면 비교할 수 있어요.</Caption>}
       {missingDomains && <Caption className="text-[#FFB36B]">삶의 영역을 찾지 못한 선택은 내용에 맞는 기본 영역으로 자동 분류할게요.</Caption>}
+      {!profile.sex && <Caption className="text-[#FFB36B]">성별을 설정하면 유사집단 매칭이 더 정확해져요. 지금은 전체 집단 기준으로 비교합니다.</Caption>}
 
       {needJobDetails && (
         <section className="mt-4 rounded-[22px] border border-cyan/30 bg-[#0B1729]/90 p-4">
@@ -397,7 +402,7 @@ function ChoicePanel({ side, text, domains, domainAuto, active, suggestions, sug
   return (
     <section onClick={onFocus} className={`relative min-h-0 min-w-0 flex-1 basis-0 overflow-hidden px-4 py-4 transition-[opacity,background-color] duration-300 ease-out lg:px-9 lg:py-8 xl:px-11 ${isA ? "bg-[radial-gradient(circle_at_15%_10%,rgba(69,116,225,.19),transparent_48%)]" : "bg-[radial-gradient(circle_at_85%_90%,rgba(211,137,49,.15),transparent_48%)]"} ${active ? "opacity-100" : "opacity-75"}`}>
       <div className={`text-[11px] font-black tracking-[.12em] ${accentText}`}>CHOICE {side}</div>
-      <textarea value={text} onFocus={onFocus} onChange={(event) => onText(event.target.value)} rows={2} maxLength={100} placeholder={isA ? "첫 번째 길을 적어주세요" : "두 번째 길을 적어주세요"} className="mt-2 block max-h-[96px] min-h-[58px] w-full min-w-0 max-w-full resize-none overflow-y-auto break-words border-b border-white/15 bg-transparent pb-2 text-[18px] font-bold leading-[1.3] tracking-[-.025em] text-ink outline-none placeholder:text-white/25 lg:mt-4 lg:min-h-[82px] lg:text-[24px]" />
+      <textarea value={text} onFocus={onFocus} onChange={(event) => onText(event.target.value)} rows={4} maxLength={180} placeholder={isA ? "첫 번째 길을 적어주세요" : "두 번째 길을 적어주세요"} className="mt-2 block max-h-[180px] min-h-[104px] w-full min-w-0 max-w-full resize-none overflow-y-auto break-words rounded-xl border border-white/15 bg-black/10 p-3 text-[18px] font-bold leading-[1.4] tracking-[-.025em] text-ink outline-none placeholder:text-white/25 focus:border-violet-400/60 lg:mt-4 lg:min-h-[142px] lg:p-4 lg:text-[24px]" />
 
       {!text.trim() && active && (
         <div className="mt-3 min-w-0 overflow-hidden">

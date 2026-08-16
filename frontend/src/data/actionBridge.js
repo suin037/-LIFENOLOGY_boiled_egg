@@ -1,6 +1,8 @@
 // Action Bridge — 사용자가 선택한 미래를 실행 가능한 작은 실험으로 연결한다.
 // 행동 자체는 검토 가능한 큐레이션 콘텐츠이며, LLM은 향후 표현 개인화에만 사용한다.
 
+import { computeDiarySignals } from "./diarySignals.js";
+
 const GOAL_KEY = "pm.activeGoal.v1";
 
 const COMMON_BASIS = {
@@ -111,6 +113,19 @@ export function actionsFor(choice, domains = [], signals = null) {
     if (merged.length >= 3) break;
   }
   return merged;
+}
+
+export function isJobGoal(choice, domains = []) {
+  return (
+    ["career", "finance", "business"].some((key) => domains.includes(key)) ||
+    /이직|퇴사|유지|창업|진학|직장|커리어/.test(choice || "")
+  );
+}
+
+// 결과 화면·보관함·알람이 같은 행동 문구를 사용하도록 하는 단일 진입점.
+export function actionsForGoal(choice, domains = [], signals) {
+  const diarySignals = signals === undefined ? computeDiarySignals({ windowDays: 28 }) : signals;
+  return actionsFor(choice, domains, isJobGoal(choice, domains) ? diarySignals : null);
 }
 
 function fallbackDomains(choice) {

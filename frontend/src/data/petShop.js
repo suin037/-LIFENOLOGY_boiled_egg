@@ -35,7 +35,6 @@ export const CATALOG = [
   { id: "snack_star",   cat: "snack", name: "특별간식 별", price: 4, render: "⭐", bond: 15 },
   // 행성 스킨 (나의 우주 지도) — 미장착 = 기본 민무늬 행성. skin 값은 UniverseMap이 읽는다.
   { id: "planet_glow",   cat: "planet", name: "빛나는 구체",     price: 10, render: "🪐", skin: "glow" },
-  { id: "planet_stripe", cat: "planet", name: "줄무늬 가스행성", price: 15, render: "🌀", skin: "stripe" },
 ];
 
 // 장착된 행성 스킨 — 없으면 "basic"(민무늬).

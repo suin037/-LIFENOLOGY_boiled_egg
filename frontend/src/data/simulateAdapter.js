@@ -13,6 +13,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { ACTION_CARDS } from "./prediction.js";
+import { occupationGroupLabel } from "./occupationGroups.js";
 
 // 백엔드 생활지표의 dimension 표기 → 프론트 LIFE_DIMENSIONS 키
 const DIMENSION_ALIAS = {
@@ -66,7 +67,7 @@ function buildSide(scenario, choice, detail, profile, evidence, domainCov, domai
     detail,
     meta: {
       age: profile?.age ?? null,
-      occupation: profile?.major || profile?.occupation || "—",
+      occupation: occupationGroupLabel(profile?.occupation_group) || profile?.occupation || profile?.major || "—",
       observe_years_income: maxYear(trajectory, 0),
       observe_years_wellbeing: maxYear(wellbeing, 0),
       source: "KLIPS·GOMS·YP · KNHANES·KWCS · KOSIS·KEDI (L1~L5)",

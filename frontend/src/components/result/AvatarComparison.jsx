@@ -51,9 +51,16 @@ function StoryCard({ side, result, image, story, storyLoading, avatar, open, onT
   );
   return (
     <article className="overflow-hidden rounded-2xl border border-line bg-card">
-      <div className="relative aspect-[4/5] overflow-hidden bg-[#0E1424]">
+      <div className="relative h-[190px] overflow-hidden bg-[#0E1424] sm:h-[220px] lg:h-[240px] xl:h-[260px]">
         {image ? (
-          <img src={image} alt={`${labelOf(result.choice)} 시나리오 상상도`} className="h-full w-full object-cover" />
+          <>
+            <img src={image} alt={`${labelOf(result.choice)} 시나리오 상상도`} className="h-full w-full object-contain" />
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/65 to-transparent px-3 pb-3 pt-12 text-white lg:px-4 lg:pb-4 lg:pt-16">
+              <p className="text-[9px] font-bold uppercase tracking-[.14em] text-white/70">{side} Universe · {labelOf(result.choice)}</p>
+              {structured && story.title && <h3 className="mt-1 text-[13px] font-bold leading-snug drop-shadow lg:text-[15px]">{story.title}</h3>}
+              {summary && <p className="mt-1 overflow-hidden text-[10px] leading-[1.45] text-white/85 drop-shadow lg:text-[11px]" style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{summary}</p>}
+            </div>
+          </>
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 px-3 text-center">
             <Avatar config={avatar} size={92} />
@@ -64,12 +71,9 @@ function StoryCard({ side, result, image, story, storyLoading, avatar, open, onT
       </div>
       <div className="p-2.5">
         <p className="text-xs font-bold" style={{ color }}>{labelOf(result.choice)}</p>
-        {structured && story.title && (
-          <h3 className="mt-1 text-[12px] font-semibold leading-snug text-ink">{story.title}</h3>
-        )}
-        <p className="mt-1 text-[11px] leading-relaxed text-sub">
-          {summary || (storyLoading ? "RAG 서사를 생성하고 있어요…" : "RAG 서사를 아직 생성하지 못했어요.")}
-        </p>
+        {!image && structured && story.title && <h3 className="mt-1 text-[12px] font-semibold leading-snug text-ink">{story.title}</h3>}
+        {!image && <p className="mt-1 text-[11px] leading-relaxed text-sub">{summary || (storyLoading ? "RAG 서사를 생성하고 있어요…" : "RAG 서사를 아직 생성하지 못했어요.")}</p>}
+        {image && !summary && <p className="mt-1 text-[11px] leading-relaxed text-sub">{storyLoading ? "서사를 생성하고 있어요…" : "서사를 아직 생성하지 못했어요."}</p>}
         {hasDetail && (
           <button
             type="button"
@@ -77,7 +81,7 @@ function StoryCard({ side, result, image, story, storyLoading, avatar, open, onT
             onClick={onToggle}
             className="tap mt-2 w-full rounded-lg border border-line px-2 py-1.5 text-[10px] font-semibold text-sub"
           >
-            {open ? "상세 이야기 접기 ▲" : "상세 이야기 보기 ▼"}
+            {open ? "구체적인 설명 접기 ▲" : "구체적인 설명 보기 ▼"}
           </button>
         )}
       </div>
@@ -96,6 +100,7 @@ function StoryDetail({ side, story }) {
         <StoryBeat label="지금" text={detail.present} />
         <StoryBeat label="변화 과정" text={detail.transition} />
         <StoryBeat label="그 이후" text={detail.future} />
+        <StoryBeat label="불확실한 점" text={story.uncertainty} />
         {(story.gain || story.cost) && (
           <div className="grid grid-cols-2 gap-2 rounded-lg bg-[#0E1424] p-2.5 text-[11px]">
             {story.gain && <p><b className="text-cyan">얻게 될 수 있는 것</b><br /><span className="text-sub">{story.gain}</span></p>}

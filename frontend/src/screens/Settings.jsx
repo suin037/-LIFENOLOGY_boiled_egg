@@ -157,6 +157,7 @@ export default function Settings() {
     setProfileDraft({
       name: profile.name || "",
       age: profile.age ?? 29,
+      sex: profile.sex || "",
       occupation: profile.occupation || "",
       income: Number(profile.income) > 0 ? String(profile.income) : "",
     });
@@ -169,6 +170,8 @@ export default function Settings() {
       ...current,
       name: profileDraft.name.trim(),
       age: Number(profileDraft.age),
+      sex: profileDraft.sex,
+      sexConfirmed: Boolean(profileDraft.sex),
       occupation: profileDraft.occupation,
       income: profileDraft.income === "" ? 0 : Number(profileDraft.income),
     }));
@@ -259,6 +262,7 @@ export default function Settings() {
 
           <div className="min-w-0 divide-y divide-line/70">
             <ProfileItem label="나이" value={`${profile.age}세`} />
+            <ProfileItem label="성별" value={profile.sex === "1" ? "남성" : profile.sex === "2" ? "여성" : "—"} />
             <ProfileItem label="직종" value={profile.occupation || "—"} />
             <ProfileItem label="월소득" value={`${profile.income}만원`} />
             <ProfileItem label="MBTI" value={profile.mbti && profile.mbti !== "모름" ? profile.mbti : "—"} />
@@ -357,6 +361,13 @@ export default function Settings() {
                 onChange={(e) => setProfileDraft((p) => ({ ...p, age: Number(e.target.value) }))}
                 className="mt-3 h-1 w-full cursor-pointer accent-cyan"
               />
+            </label>
+
+            <label className="block text-[11px] text-sub">
+              성별
+              <div className="mt-1 grid grid-cols-2 gap-2">
+                {[["1", "남성"], ["2", "여성"]].map(([value, label]) => <button key={value} type="button" onClick={() => setProfileDraft((p) => ({ ...p, sex: value }))} className={`tap rounded-xl border py-2.5 text-[12px] ${profileDraft.sex === value ? "border-violet-400 bg-violet-500/15 text-violet-200" : "border-line bg-[#0E1424] text-sub"}`}>{label}</button>)}
+              </div>
             </label>
 
             <label className="block text-[11px] text-sub">

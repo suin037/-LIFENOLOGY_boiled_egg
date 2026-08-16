@@ -1,16 +1,21 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Html, OrbitControls, Sparkles } from "@react-three/drei";
+import { Html, OrbitControls, Sparkles, useTexture } from "@react-three/drei";
 import * as THREE from "three";
 import { RotateCcw } from "lucide-react";
 import { seedFrom, starShapeFor } from "../data/starShapes.js";
+import { PLANET_TEXTURES, seeded, SURFACE } from "../data/planetSurface.js";
 
+// 배치 — 크기·깊이를 다르게 줘 화면이 평평해 보이지 않게 한다.
+// 진로(고리 보라) 왼쪽 위 · 삶의 만족(테라코타, 가장 큼) 왼쪽 아래 · 관계(붉은 암석)
+// 가운데 빈 곳 · 건강(청록, 가장 작음) 오른쪽 아래 · 성장성(파랑) 오른쪽 위.
 const PLANET_POSITIONS = [
-  [-3.8, 1.7, -.8], [0, -.8, 1.1], [-4, -2.35, -4.15],
-  [3.8, -2.2, -1.2], [4, 1.75, -3.35],
+  [-4.15, 1.85, -1.0], [-1.7, -1.75, 1.5], [.7, 1.15, -5.4],
+  [3.95, -2.15, -.9], [4.25, 1.8, -3.3],
 ];
-const PLANET_SIZES = [1.05, 1.35, .9, 1, 1.12];
+const PLANET_SIZES = [1.05, 1.5, .95, .82, 1.15];
 const INITIAL_CAMERA = new THREE.Vector3(0, 3.7, 14.4);
+const INTRO_CAMERA = new THREE.Vector3(0, 8.2, 27.5);
 const UNIVERSE_TARGET = new THREE.Vector3(0, -1.1, 0);
 
 // 행성은 매 프레임 제 궤도를 돈다. 별자리·시나리오도 반드시 같은 식을 써야 행성을 따라간다.
@@ -25,11 +30,6 @@ function planetPositionAt(index, time, out = new THREE.Vector3()) {
     base[1] + Math.sin(time * .22 + index) * .06,
     Math.sin(angle) * radius,
   );
-}
-
-function seeded(seed) {
-  let value = seed;
-  return () => ((value = Math.sin(value * 999.91) * 43758.5453) - Math.floor(value));
 }
 
 function makeSoftTexture(stops) {
@@ -62,35 +62,6 @@ function starSprite() {
   _starSprite = new THREE.CanvasTexture(canvas);
   _starSprite.colorSpace = THREE.SRGBColorSpace;
   return _starSprite;
-}
-
-function makePlanetTexture(from, to, seed) {
-  const canvas = document.createElement("canvas");
-  canvas.width = 512; canvas.height = 256;
-  const context = canvas.getContext("2d");
-  const image = context.createImageData(canvas.width, canvas.height);
-  const base = new THREE.Color(from), accent = new THREE.Color(to);
-  const random = seeded(seed + 10);
-  const phases = Array.from({ length: 8 }, () => random() * Math.PI * 2);
-  for (let y = 0; y < canvas.height; y++) {
-    for (let x = 0; x < canvas.width; x++) {
-      const u = x / canvas.width, v = y / canvas.height;
-      const broad = Math.sin(u * 12 + phases[0]) * .35 + Math.sin(v * 16 + phases[1]) * .28;
-      const detail = Math.sin((u + v) * 37 + phases[2]) * .16 + Math.sin((u - v) * 61 + phases[3]) * .09;
-      const cloud = Math.sin(u * 5 + Math.sin(v * 9 + phases[4]) * 1.8) * .22;
-      const mix = THREE.MathUtils.clamp(.34 + broad + detail + cloud, 0, 1);
-      const shade = base.clone().lerp(accent, mix * .55).multiplyScalar(.62 + mix * .42);
-      const at = (y * canvas.width + x) * 4;
-      image.data[at] = shade.r * 255; image.data[at + 1] = shade.g * 255;
-      image.data[at + 2] = shade.b * 255; image.data[at + 3] = 255;
-    }
-  }
-  context.putImageData(image, 0, 0);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.wrapS = THREE.RepeatWrapping;
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = 4;
-  return texture;
 }
 
 function Nebulae({ reduced }) {
@@ -161,8 +132,71 @@ function StarLayer({ count, radius, size, opacity, seed, color="#e9ecff" }) {
   return <points ref={ref} geometry={geometry}><pointsMaterial color={color} size={size} transparent opacity={opacity} sizeAttenuation depthWrite={false}/></points>;
 }
 
+// 궤도선 — 임의의 반지름이 아니라 행성이 실제로 도는 반지름에 긋는다.
+// 그래야 행성이 선 위를 지나간다(전에는 선과 행성이 따로 놀았다).
 function OrbitRings() {
-  return <group rotation={[-Math.PI / 2 + .19, 0, .1]}>{[2.5,3.6,4.7,5.8].map((r,i)=><mesh key={r} rotation={[0,i*.025,i*.018]}><ringGeometry args={[r-.006,r+.006,160]}/><meshBasicMaterial color="#8f8eb0" transparent opacity={.055+i*.008} side={THREE.DoubleSide} depthWrite={false}/></mesh>)}</group>;
+  const radii = useMemo(() => {
+    const seen = PLANET_POSITIONS.map((p) => Math.hypot(p[0], p[2]));
+    // 반지름이 거의 같으면 선이 겹쳐 두꺼운 띠로 보인다 — 하나만 남긴다.
+    return seen.sort((a, b) => a - b).filter((r, i, all) => i === 0 || r - all[i - 1] > .25);
+  }, []);
+  return <group rotation={[-Math.PI / 2 + .19, 0, .1]}>{radii.map((r,i)=><mesh key={r} rotation={[0,i*.025,i*.018]}><ringGeometry args={[r-.005,r+.005,192]}/><meshBasicMaterial color="#8f8eb0" transparent opacity={.05+i*.006} side={THREE.DoubleSide} depthWrite={false}/></mesh>)}</group>;
+}
+
+// 장식용 celestial atlas. 기록 별자리와 모양을 공유하면 7별 뼈대(특히 북두칠성)가
+// 화면 전체에 반복된다. 배경은 서로 다른 실루엣만 사용하고, 기록 별자리는 아래의
+// Constellation3D가 기존 데이터 규칙대로 별도로 그린다.
+const CELESTIAL_ATLAS = [
+  { id:"lyra", points:[[-1,-.25],[-.45,.7],[.05,.35],[.55,.82],[1,-.15],[.2,-.65]], edges:[[0,1],[1,2],[2,3],[3,4],[4,5],[5,2]] },
+  { id:"phoenix", points:[[-1,.05],[-.35,.22],[0,.9],[.25,.18],[1,.45],[.52,-.18],[.1,-.82],[-.42,-.42]], edges:[[0,1],[1,2],[1,3],[3,4],[3,5],[5,6],[5,7],[7,1]] },
+  { id:"serpens", points:[[-1,.6],[-.7,.1],[-.28,.35],[.05,-.08],[.42,.18],[.68,-.48],[1,-.22]], edges:[[0,1],[1,2],[2,3],[3,4],[4,5],[5,6]] },
+  { id:"vela", points:[[-.9,-.55],[-.7,.55],[-.05,.9],[.75,.48],[.95,-.5],[.05,-.18]], edges:[[0,1],[1,2],[2,3],[3,4],[4,0],[1,5],[5,3]] },
+  { id:"corona", points:[[-1,.18],[-.72,-.35],[-.28,-.68],[.2,-.62],[.65,-.28],[1,.32]], edges:[[0,1],[1,2],[2,3],[3,4],[4,5]] },
+  { id:"grus", points:[[-.85,.78],[-.28,.2],[.05,-.82],[.2,.12],[.9,.65],[.55,.02],[.96,-.52]], edges:[[0,1],[1,2],[1,3],[3,4],[3,5],[5,6]] },
+  { id:"harp", points:[[-.75,.72],[.5,.92],[.9,.15],[.38,-.7],[-.62,-.55],[-.05,.15]], edges:[[0,1],[1,2],[2,3],[3,4],[4,0],[0,5],[5,2],[5,4]] },
+  { id:"kite", points:[[0,.95],[-.72,.12],[0,-.42],[.75,.08],[.18,-.92]], edges:[[0,1],[1,2],[2,3],[3,0],[2,4]] },
+  { id:"river", points:[[-1,.7],[-.68,.2],[-.82,-.28],[-.28,-.12],[.08,-.65],[.48,-.18],[.9,-.38],[1,.18]], edges:[[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,7]] },
+  { id:"twins", points:[[-.72,.82],[-.48,.18],[-.78,-.65],[-.05,-.05],[.48,.25],[.78,.88],[.72,-.62]], edges:[[0,1],[1,2],[1,3],[3,4],[4,5],[4,6]] },
+  { id:"altar", points:[[-.9,.5],[-.35,.72],[.35,.68],[.88,.35],[.55,-.5],[0,-.78],[-.58,-.42]], edges:[[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,0],[1,6],[2,4]] },
+  { id:"wing", points:[[-1,-.12],[-.4,.08],[-.05,.72],[.18,.08],[.95,.45],[.58,-.08],[.12,-.68]], edges:[[0,1],[1,2],[1,3],[3,4],[3,5],[3,6]] },
+  { id:"compass", points:[[0,.95],[.25,.25],[.9,0],[.2,-.18],[0,-.92],[-.22,-.2],[-.92,0],[-.2,.2]], edges:[[0,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,7],[7,0],[1,5],[3,7]] },
+  { id:"branch", points:[[-.95,-.58],[-.55,-.08],[-.1,.12],[.35,.42],[.92,.22],[-.15,.72],[.4,-.38],[.85,-.72]], edges:[[0,1],[1,2],[2,3],[3,4],[2,5],[2,6],[6,7]] },
+];
+
+function BackdropConstellations({ count = 14 }) {
+  const figures = useMemo(() => {
+    const random = seeded(4.77);
+    return CELESTIAL_ATLAS.slice(0, count).map((shape, i) => {
+      const theta = random() * Math.PI * 2;
+      const phi = Math.acos(2 * random() - 1);
+      const r = 26 + random() * 12;
+      const scale = 1.8 + random() * 2.1;
+      const pts = shape.points.map(([x, y]) => [x * scale, y * scale, 0]);
+      const line = new THREE.BufferGeometry();
+      line.setAttribute("position", new THREE.Float32BufferAttribute(
+        shape.edges.flatMap(([a, b]) => [...pts[a], ...pts[b]]), 3));
+      const dots = new THREE.BufferGeometry();
+      dots.setAttribute("position", new THREE.Float32BufferAttribute(pts.flat(), 3));
+      return {
+        key: `${i}-${shape.id}`, line, dots,
+        position: [r * Math.sin(phi) * Math.cos(theta), r * Math.cos(phi) * .55, r * Math.sin(phi) * Math.sin(theta)],
+        rotation: (random() - .5) * 1.5,
+        color: i % 4 === 0 ? "#e6c98f" : "#bac8e8",
+        halo: i === 1 || i === 8 || i === 12,
+        haloSize: scale * (1.12 + random() * .28),
+      };
+    });
+  }, [count]);
+  return <group>{figures.map((f)=><group key={f.key} position={f.position} onUpdate={(g)=>g.lookAt(0,0,0)}>
+    <group rotation={[0,0,f.rotation]}>
+    <lineSegments geometry={f.line}><lineBasicMaterial color={f.color} transparent opacity={.14} depthWrite={false}/></lineSegments>
+    <points geometry={f.dots}><pointsMaterial color={f.color} size={.25} sizeAttenuation transparent opacity={.62} map={starSprite()} depthWrite={false} blending={THREE.AdditiveBlending}/></points>
+    {f.halo && <>
+      <mesh><ringGeometry args={[f.haloSize,f.haloSize+.012,96]}/><meshBasicMaterial color="#d4b77b" transparent opacity={.075} side={THREE.DoubleSide} depthWrite={false}/></mesh>
+      <mesh rotation={[0,0,.55]}><ringGeometry args={[f.haloSize*.72,f.haloSize*.72+.009,72,1,0,Math.PI*1.42]}/><meshBasicMaterial color="#d4b77b" transparent opacity={.09} side={THREE.DoubleSide} depthWrite={false}/></mesh>
+    </>}
+    </group>
+  </group>)}</group>;
 }
 
 function Planet({ planet, index, selected, onSelect, skin }) {
@@ -173,7 +207,16 @@ function Planet({ planet, index, selected, onSelect, skin }) {
   const selectPlanet = (event) => { event.stopPropagation(); onSelect(planet.key); };
   const showPointer = (event) => { event.stopPropagation(); document.body.style.cursor = "pointer"; };
   const hidePointer = () => { document.body.style.cursor = ""; };
-  const texture = useMemo(() => makePlanetTexture(planet.from, planet.to, index * 13.7), [planet.from, planet.to, index]);
+  const kind = planet.kind || "gas";
+  const surface = SURFACE[kind] || SURFACE.gas;
+  const sourceTexture = useTexture(PLANET_TEXTURES[planet.key]);
+  const texture = useMemo(() => {
+    sourceTexture.wrapS = THREE.RepeatWrapping;
+    sourceTexture.colorSpace = THREE.SRGBColorSpace;
+    sourceTexture.anisotropy = 8;
+    sourceTexture.needsUpdate = true;
+    return sourceTexture;
+  }, [sourceTexture]);
   useFrame((state, delta) => {
     if (mesh.current) mesh.current.rotation.y += delta * (.028 + index * .004);
     if (group.current) planetPositionAt(index, state.clock.elapsedTime, group.current.position);
@@ -188,26 +231,30 @@ function Planet({ planet, index, selected, onSelect, skin }) {
       <meshPhysicalMaterial
         map={texture}
         bumpMap={texture}
-        bumpScale={.045}
+        bumpScale={surface.bump}
         color="#ffffff"
-        roughness={skin === "glow" ? .34 : skin === "stripe" ? .64 : .52}
-        metalness={.03}
-        clearcoat={skin === "glow" ? .42 : .18}
+        roughness={skin === "glow" ? surface.roughness * .7 : surface.roughness}
+        metalness={surface.metalness}
+        clearcoat={skin === "glow" ? surface.clearcoat + .2 : surface.clearcoat}
         clearcoatRoughness={.28}
-        sheen={.28}
+        sheen={kind === "rocky" ? 0 : .2}
         sheenColor={planet.to}
         emissive={planet.from}
-        emissiveIntensity={skin === "glow" ? .065 : selected ? .035 : .012}
+        // 자체발광을 낮게 유지해야 밤면이 제대로 어두워지고 명암 경계가 살아난다.
+        emissiveIntensity={skin === "glow" ? .05 : selected ? .022 : .006}
       />
     </mesh>
-    <mesh scale={1.028}><sphereGeometry args={[size,48,48]}/><meshBasicMaterial color={planet.to} side={THREE.BackSide} transparent opacity={skin === "glow" ? .09 : .04} blending={THREE.AdditiveBlending} depthWrite={false}/></mesh>
-    <mesh position={[-size*.34,size*.38,size*.86]} scale={[size*.3,size*.19,size*.07]}>
-      <sphereGeometry args={[1,32,16]}/>
-      <meshBasicMaterial color="#fffaf2" transparent opacity={skin === "glow" ? .28 : .16} blending={THREE.AdditiveBlending} depthWrite={false}/>
-    </mesh>
-    <pointLight position={[-2,2,3]} color={planet.to} intensity={selected ? 1.5 : .55} distance={5.5} decay={2}/>
-    {(index===0||skin==="ring")&&<mesh rotation={[Math.PI/2.3,.15,0]}><ringGeometry args={[size*1.28,size*1.48,96]}/><meshBasicMaterial color={planet.to} transparent opacity={.24} side={THREE.DoubleSide} depthWrite={false}/></mesh>}
-    {skin==="stripe"&&[-.5,-.18,.18,.5].map((y)=><mesh key={y} position={[0,y*size,0]} rotation={[Math.PI/2,0,0]}><torusGeometry args={[Math.sqrt(Math.max(.05,size*size-(y*size)*(y*size))),.025,8,64]}/><meshBasicMaterial color={planet.to} transparent opacity={.32}/></mesh>)}
+    <mesh scale={1.028}><sphereGeometry args={[size,48,48]}/><meshBasicMaterial color={planet.to} side={THREE.BackSide} transparent opacity={skin === "glow" ? surface.atmos + .04 : surface.atmos} blending={THREE.AdditiveBlending} depthWrite={false}/></mesh>
+    {/* 행성마다 달던 점광원과 가짜 하이라이트는 뺐다 — 그 둘이 밤면을 밝혀
+        명암 경계를 지우고, 플라스틱 구슬처럼 번들거리게 만들던 원인이다.
+        고른 사람만 살짝 밝혀 어느 걸 골랐는지 알 수 있게 남긴다. */}
+    {selected && <pointLight position={[-2,2,3]} color={planet.to} intensity={.7} distance={5.5} decay={2}/>}
+    {/* 고리는 한 장이 아니라 틈(카시니 간극)을 둔 두 겹이다. 색도 행성색이 아니라
+        얼음·먼지에 가까운 옅은 회갈색이어야 '실제 고리'로 읽힌다. */}
+    {(index===0||skin==="ring")&&<group rotation={[Math.PI/2.3,.15,0]}>
+      <mesh><ringGeometry args={[size*1.22,size*1.38,128]}/><meshBasicMaterial color="#C9BCA8" transparent opacity={.30} side={THREE.DoubleSide} depthWrite={false}/></mesh>
+      <mesh><ringGeometry args={[size*1.43,size*1.62,128]}/><meshBasicMaterial color="#9A8E7E" transparent opacity={.19} side={THREE.DoubleSide} depthWrite={false}/></mesh>
+    </group>}
     <Html center position={[0,-size-0.5,0]} distanceFactor={10} style={{pointerEvents:"none"}}><div className={`whitespace-nowrap text-center drop-shadow-[0_2px_8px_#000] ${selected?"text-white":"text-white/80"}`}><b className="text-[13px]">{planet.label}</b></div></Html>
   </group>;
 }
@@ -261,13 +308,13 @@ function Constellation3D({ group, index, anchorIndex, onOpen }) {
     <group position={[orbitRadius,0,0]} onClick={(e)=>{e.stopPropagation();onOpen?.(group);}}>
       <mesh visible={false}><sphereGeometry args={[.5,10,10]}/><meshBasicMaterial transparent opacity={0}/></mesh>
       <group ref={figure}>
-        <lineSegments geometry={edgeGeo}><lineBasicMaterial color="#9FB0CE" transparent opacity={.42}/></lineSegments>
+        <lineSegments geometry={edgeGeo}><lineBasicMaterial color="#AEBBD8" transparent opacity={.2}/></lineSegments>
         {/* 기록은 하얀 별. 시나리오(마름모)와 한눈에 갈라지도록 색을 섞지 않는다.
             별을 Points 하나로 그린다 — 별마다 mesh + pointLight 를 두면 기록이 늘수록
             드로우콜과 동적 광원이 같이 늘어난다(1년치면 광원만 100개가 넘어 프레임이 무너졌다). */}
         <points geometry={starGeo}>
           <pointsMaterial
-            color="#ffffff" size={.16} sizeAttenuation transparent opacity={.95}
+            color="#EEF3FF" size={.13} sizeAttenuation transparent opacity={.72}
             map={starSprite()} depthWrite={false} blending={THREE.AdditiveBlending}
           />
         </points>
@@ -300,10 +347,56 @@ function ScenarioMark({ scenario, index, anchorIndex, onOpen }) {
   </group>;
 }
 
-function CameraRig({ selectedKey, planets, controlsRef, resetSignal }) {
+function UniverseIntro({ controlsRef, reducedMotion, onComplete }) {
+  const { camera } = useThree();
+  const elapsed = useRef(0);
+  const initialized = useRef(false);
+
+  useFrame((_, delta)=>{
+    const controls = controlsRef.current;
+    if (!controls) return;
+
+    if (!initialized.current) {
+      initialized.current = true;
+      if (reducedMotion) {
+        camera.position.copy(INITIAL_CAMERA);
+        controls.target.copy(UNIVERSE_TARGET);
+        controls.update();
+        onComplete?.();
+        return;
+      }
+      camera.position.copy(INTRO_CAMERA);
+      controls.target.set(0, .35, 0);
+      controls.enabled = false;
+      controls.update();
+    }
+
+    if (reducedMotion || elapsed.current >= 2.8) return;
+    elapsed.current = Math.min(2.8, elapsed.current + delta);
+    const progress = elapsed.current / 2.8;
+    const eased = progress < .5
+      ? 4 * progress * progress * progress
+      : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+    camera.position.lerpVectors(INTRO_CAMERA, INITIAL_CAMERA, eased);
+    controls.target.lerpVectors(new THREE.Vector3(0, .35, 0), UNIVERSE_TARGET, eased);
+    controls.update();
+
+    if (progress >= 1) {
+      camera.position.copy(INITIAL_CAMERA);
+      controls.target.copy(UNIVERSE_TARGET);
+      controls.enabled = true;
+      controls.update();
+      onComplete?.();
+    }
+  });
+  return null;
+}
+
+function CameraRig({ selectedKey, planets, controlsRef, resetSignal, enabled }) {
   const { camera, clock } = useThree();
   const flight = useRef(null);
   useEffect(()=>{
+    if (!enabled) return;
     const index = planets.findIndex((p)=>p.key===selectedKey);
     // 고정 좌표가 아니라 '지금 그 행성이 있는 자리'로 날아간다 — 행성은 궤도를 돌기 때문에
     // 출발 좌표를 쓰면 시간이 지날수록 빈 우주를 비춘다.
@@ -312,7 +405,7 @@ function CameraRig({ selectedKey, planets, controlsRef, resetSignal }) {
     if (index >= 0) target.y -= .9;
     const direction = camera.position.clone().sub(target).normalize();
     flight.current = { target, position: index>=0 ? target.clone().add(direction.multiplyScalar(12)) : INITIAL_CAMERA.clone() };
-  },[selectedKey, resetSignal]);
+  },[selectedKey, resetSignal, enabled]);
   useFrame((_, delta)=>{
     if (!flight.current || !controlsRef.current) return;
     const cameraEase = 1 - Math.exp(-delta * 10.5);
@@ -331,19 +424,22 @@ function CameraRig({ selectedKey, planets, controlsRef, resetSignal }) {
 
 function Scene({ planets, groups, scenarios = [], selectedKey, onPlanetSelect, onConstellationOpen, onScenarioOpen, resetSignal, reduced, skin }) {
   const controls = useRef();
+  const [introDone, setIntroDone] = useState(false);
+  const reducedMotion = typeof window!=="undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   const selectedIndex = Math.max(0, planets.findIndex((planet)=>planet.key===selectedKey));
   return <>
     <color attach="background" args={["#01030a"]}/><fog attach="fog" args={["#02050d",20,58]}/>
-    <ambientLight color="#536080" intensity={.18}/>
-    <hemisphereLight color="#bfcaf0" groundColor="#050611" intensity={.3}/>
-    <directionalLight position={[-9,10,13]} color="#fff1dc" intensity={3.7}/>
-    <directionalLight position={[11,-5,-9]} color="#617bd1" intensity={.42}/>
+    {/* 천체 조명 — 광원은 사실상 하나(항성). 채움광을 세게 주면 밤면이 사라져
+        구가 원판처럼 보인다. 밤면이 검게 죽지 않을 만큼만 남긴다. */}
+    <ambientLight color="#46536F" intensity={.10}/>
+    <hemisphereLight color="#9fb0dc" groundColor="#04050d" intensity={.14}/>
+    <directionalLight position={[-9,10,13]} color="#fff1dc" intensity={3.9}/>
     <Nebulae reduced={reduced}/>
     <StarLayer count={reduced?700:1500} radius={48} size={.025} opacity={.38} seed={2} color="#bfc9e8"/>
     <StarLayer count={reduced?320:760} radius={27} size={.052} opacity={.58} seed={7} color="#e1e8ff"/>
     <StarLayer count={reduced?95:260} radius={14} size={.095} opacity={.78} seed={13} color="#fff5df"/>
     <Sparkles count={reduced?22:48} scale={[25,14,25]} size={.72} speed={.045} opacity={.16} color="#bac8ff" noise={1.8}/>
-    <Galaxy reduced={reduced}/><OrbitRings/>
+    <Galaxy reduced={reduced}/><OrbitRings/><BackdropConstellations count={reduced?8:14}/>
     {planets.map((planet,i)=><Planet key={planet.key} planet={planet} index={i} selected={planet.key===selectedKey} onSelect={onPlanetSelect} skin={skin}/>) }
     {/* 자르지 않는다 — 여기서 잘라내면 띄운 별 수가 실제 기록 수와 어긋난다.
         (전에는 .slice(-5) 로 별자리를 5개만 그려 오래된 기록이 조용히 사라졌다.) */}
@@ -365,7 +461,8 @@ function Scene({ planets, groups, scenarios = [], selectedKey, onPlanetSelect, o
       }}/>;
     }) }
     <OrbitControls ref={controls} target={UNIVERSE_TARGET.toArray()} makeDefault enableDamping dampingFactor={.11} enablePan screenSpacePanning minDistance={2.8} maxDistance={34} rotateSpeed={.22} zoomSpeed={.62} panSpeed={.48} mouseButtons={{LEFT:THREE.MOUSE.ROTATE,MIDDLE:THREE.MOUSE.DOLLY,RIGHT:THREE.MOUSE.PAN}}/>
-    <CameraRig selectedKey={selectedKey} planets={planets} controlsRef={controls} resetSignal={resetSignal}/>
+    <UniverseIntro controlsRef={controls} reducedMotion={reducedMotion} onComplete={()=>setIntroDone(true)}/>
+    <CameraRig selectedKey={selectedKey} planets={planets} controlsRef={controls} resetSignal={resetSignal} enabled={introDone}/>
   </>;
 }
 

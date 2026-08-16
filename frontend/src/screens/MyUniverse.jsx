@@ -5,6 +5,7 @@ import Constellation from "../components/Constellation.jsx";
 import UniverseMap from "../components/UniverseMap.jsx";
 import { useResult } from "../data/ResultContext.jsx";
 import { PLANETS } from "../data/result.js";
+import { PLANET_TEXTURES } from "../data/planetSurface.js";
 import { domainAnalysis, domainReport, analyzeStars } from "../data/diarySignals.js";
 import { seedDemoYear } from "../data/demoYear.js";
 import {
@@ -399,7 +400,10 @@ export default function MyUniverse() {
         <div className="relative z-20 -mt-12 rounded-t-[28px] border border-white/10 bg-[#0A1122]/95 p-4 shadow-[0_-20px_55px_rgba(0,0,0,.35)] backdrop-blur-xl lg:mt-0 lg:min-h-[clamp(600px,70vh,760px)] lg:rounded-none lg:border-y-0 lg:border-r-0 lg:border-l lg:border-white/10 lg:bg-[#0A1122]/88 lg:p-5 lg:shadow-none">
           <div className="mx-auto mb-4 h-1 w-12 rounded-full bg-white/20 md:mb-2" />
           <div className="flex items-center gap-3">
-            <div className="h-11 w-11 shrink-0 rounded-full border border-white/30" style={{ background: `radial-gradient(circle at 30% 25%,#fff9,transparent 22%),linear-gradient(145deg,${viewPlanet.to},${viewPlanet.from})`, boxShadow: `0 0 20px ${viewPlanet.from}66` }} />
+            <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-full border border-white/30 bg-black">
+              <img src={PLANET_TEXTURES[viewPlanet.key]} alt="" className="h-full w-full object-cover" />
+              <span className="pointer-events-none absolute inset-0 rounded-full shadow-[inset_-7px_-6px_11px_rgba(0,0,0,.7),inset_2px_2px_5px_rgba(255,255,255,.1)]" />
+            </div>
             <div className="min-w-0 flex-1">
               <div className="text-[14px] font-bold">{viewPlanet.label} 세계</div>
               <div className="mt-0.5 text-[10px] text-mut">별 {u.stats.stars}개 · 시뮬레이션 {u.stats.simulations}개</div>

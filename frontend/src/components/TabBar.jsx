@@ -1,5 +1,6 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import { BookOpen, Orbit, Bookmark } from "lucide-react";
+import { useResult } from "../data/ResultContext.jsx";
 
 function SparkleDiamond({ size = 20, strokeWidth: _strokeWidth, ...props }) {
   return (
@@ -19,17 +20,19 @@ function SparkleDiamond({ size = 20, strokeWidth: _strokeWidth, ...props }) {
   );
 }
 
-const TABS = [
-  { to: "/my", label: "홈", Icon: Orbit },
-  { to: "/input", label: "시뮬레이션", Icon: SparkleDiamond },
-  { to: "/home", label: "일기", Icon: BookOpen },
-  { to: "/archive", label: "보관함", Icon: Bookmark },
-];
-
 export default function TabBar() {
+  const { hasSimulationResult } = useResult();
+  const { pathname } = useLocation();
+  const simulationTarget = pathname === "/result" ? "/input" : hasSimulationResult ? "/result" : "/input";
+  const tabs = [
+    { to: "/my", label: "홈", Icon: Orbit },
+    { to: simulationTarget, label: "시뮬레이션", Icon: SparkleDiamond },
+    { to: "/home", label: "일기", Icon: BookOpen },
+    { to: "/archive", label: "보관함", Icon: Bookmark },
+  ];
   return (
     <nav className="z-30 mx-3 mb-2 flex rounded-[22px] border border-line bg-[#111B2AF2] px-1 pb-[env(safe-area-inset-bottom)] shadow-[0_12px_36px_rgba(0,0,0,.35)] backdrop-blur-xl lg:hidden">
-      {TABS.map(({ to, label, Icon }) => (
+      {tabs.map(({ to, label, Icon }) => (
         <NavLink
           key={to}
           to={to}

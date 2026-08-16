@@ -48,7 +48,7 @@ export default function Onboarding() {
   );
   const agePct = ((profile.age - 18) / 52) * 100;
   const ranked = profile.values; // 라벨 배열, 앞이 1순위
-  const steps = ["이름", "나이", "직종", "소득", "가치", "성격유형", "아바타"];
+  const steps = ["이름", "나이", "성별", "직종", "소득", "가치", "성격유형", "아바타"];
 
   useEffect(() => {
     const node = stepRefs.current[visibleThrough];
@@ -58,6 +58,7 @@ export default function Onboarding() {
   }, [visibleThrough]);
 
   function finish() {
+    if (!profile.sex) return;
     setOnboarded(true); // 이후 홈 탭은 '나의 우주' 허브로 진입
     navigate("/my");
   }
@@ -81,7 +82,7 @@ export default function Onboarding() {
 
   function confirmIncome() {
     if (incomeInput === "") return;
-    reveal(4);
+    reveal(5);
   }
 
   // 탭한 순서 = 우선순위. 다시 누르면 해제(뒤 순위 자동 당겨짐). 부분순위 허용.
@@ -146,12 +147,21 @@ export default function Onboarding() {
         <Button type="button" className="mt-3" onClick={() => reveal(2)}>다음</Button>
       )}
     </div>,
+    <div key="sex">
+      <label className="mb-1 block text-xs font-semibold text-sub">성별</label>
+      <p className="mb-3 text-[10px] leading-4 text-mut">현재 패널 데이터의 유사집단 매칭에 사용해요. 데이터셋 코드가 남성·여성 두 범주만 제공하는 한계가 있습니다.</p>
+      <div className="grid grid-cols-2 gap-2">
+        {[["1", "남성"], ["2", "여성"]].map(([value, label]) => (
+          <button key={value} type="button" onClick={() => { setProfile((p) => ({ ...p, sex: value, sexConfirmed: true })); reveal(3); }} className={`tap rounded-xl border py-3 text-[12px] font-semibold ${profile.sex === value ? "border-violet-400 bg-violet-500/15 text-violet-200" : "border-line bg-[#0E1424] text-sub"}`}>{label}</button>
+        ))}
+      </div>
+    </div>,
     <div key="occupation">
       <label className="mb-2 block text-xs text-sub">직종</label>
       <select value={OCCUPATIONS.includes(profile.occupation) ? profile.occupation : ""}
         onChange={(e) => {
           setProfile((p) => ({ ...p, occupation: e.target.value }));
-          reveal(3);
+          reveal(4);
         }}
         className={`w-full rounded-xl border border-line bg-[#0E1424] px-3.5 py-3 text-sm outline-none focus:border-cyan ${
           OCCUPATIONS.includes(profile.occupation) ? "text-ink" : "text-mut"
@@ -166,11 +176,11 @@ export default function Onboarding() {
         <input type="number" min="0" step="1" value={incomeInput}
           placeholder="예: 300"
           onChange={(e) => updateIncome(e.target.value)}
-          onKeyDown={(e) => incomeInput !== "" && revealOnEnter(e, 4)}
+          onKeyDown={(e) => incomeInput !== "" && revealOnEnter(e, 5)}
           className="w-full rounded-xl border border-line bg-[#0E1424] px-3.5 py-3 text-sm text-ink outline-none focus:border-cyan" />
         <span className="whitespace-nowrap text-[11px] text-mut">만원 / 월</span>
       </div>
-      {incomeInput !== "" && visibleThrough < 4 && (
+      {incomeInput !== "" && visibleThrough < 5 && (
         <Button className="mt-3" onClick={confirmIncome}>다음</Button>
       )}
     </div>,
@@ -208,7 +218,7 @@ export default function Onboarding() {
         })}
       </div>
       {ranked.length > 0 && (
-        <button type="button" onClick={() => reveal(5)}
+        <button type="button" onClick={() => reveal(6)}
           className="tap mt-2.5 w-full rounded-xl border border-cyan bg-[#1D1730] py-2.5 text-[12px] font-semibold text-cyan">
           선택 완료
         </button>
@@ -237,7 +247,7 @@ export default function Onboarding() {
           </div>
         ))}
       </div>
-      <button type="button" onClick={() => reveal(6)}
+      <button type="button" onClick={() => reveal(7)}
         className="tap mt-2.5 w-full rounded-xl border border-cyan bg-[#1D1730] py-2.5 text-[12px] font-semibold text-cyan">
         다음
       </button>
@@ -284,7 +294,7 @@ export default function Onboarding() {
         </div>
 
         {visibleThrough >= steps.length - 1 && (
-          <Button className="mb-2 mt-8 lg:ml-auto lg:max-w-[320px]" onClick={finish}>저장하고 시작하기</Button>
+          <Button disabled={!profile.sex} className="mb-2 mt-8 lg:ml-auto lg:max-w-[320px]" onClick={finish}>저장하고 시작하기</Button>
         )}
       </main>
     </div>
