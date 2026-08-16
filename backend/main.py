@@ -19,8 +19,11 @@ import traceback
 
 log = logging.getLogger("parallel-me")
 
+import avatar_vision
 from config import ROOT, settings
 from schemas import (
+    AvatarFromPhotoRequest,
+    AvatarFromPhotoResponse,
     Profile,
     PredictRequest,
     PredictResponse,
@@ -134,7 +137,7 @@ try:
 except Exception as exc:
     qmode_app = None
     QMODE_MOUNT["error"] = f"{type(exc).__name__}: {exc}"
-    log.error("qmode 마운트 실패 — /qmode/* 전체가 404 가 된다\n%s",
+    log.error("qmode 마운트 실패 — /qmode/* 전체가 404가 됩니다\n%s",
               traceback.format_exc())
 
 # ── 기동 워밍업 ────────────────────────────────────────────────────────────
@@ -277,16 +280,26 @@ def _artifact_manifest() -> dict:
         m = json.loads(p.read_text(encoding="utf-8"))
     except Exception as exc:
         return {"available": False, "error": f"{type(exc).__name__}"}
+    artifacts = {}
+    runtime_missing = []
+    for name, entry in (m.get("artifacts") or {}).items():
+        actual_present = (settings.artifacts_abspath / name).is_file()
+        if not actual_present:
+            runtime_missing.append(name)
+        artifacts[name] = {
+            **{k: entry[k] for k in ("layer", "source", "causal", "survival")
+               if k in entry},
+            "present": actual_present,
+        }
     return {
         "available": True,
         "generated_at": m.get("generated_at"),
         "git": m.get("git"),
         "data_vintage": m.get("data_vintage"),
-        "missing": m.get("missing"),
+        "missing": runtime_missing,
+        "manifest_missing": m.get("missing") or [],
         # 파일별 한 줄 요약(용량·features 등 상세는 manifest.json 원본 참조)
-        "artifacts": {name: {k: e[k] for k in ("layer", "present", "source",
-                                               "causal", "survival") if k in e}
-                      for name, e in (m.get("artifacts") or {}).items()},
+        "artifacts": artifacts,
     }
 
 
@@ -342,17 +355,20 @@ def health() -> dict:
     # 선택 분류 통계·워밍업 상태는 캐시하지 않는다 — 런타임 값이라 매번 새로 읽는다.
     from rag import psych_retriever as _pr
 
-    # qmode 가 안 붙으면 예측 API 는 멀쩡해도 앱의 절반(두 길의 하루·챗봇·성향·
-    # 기업·관계 분석)이 죽는다. status 를 degraded 로 낮춰 배포 헬스체크가 잡게 한다.
+    # qmode 또는 필수 모델 아티팩트가 빠지면 degraded 로 노출해 배포 단계에서 잡는다.
+    artifact_state = _artifact_manifest()
     qmode = {**QMODE_MOUNT,
              "affects": "/qmode/* — 두 길의 하루·챗봇·성향분석·기업분석·관계분석·주간리포트"}
-    return {"status": "ok" if QMODE_MOUNT["mounted"] else "degraded",
+    degraded = (not QMODE_MOUNT["mounted"] or
+                not artifact_state.get("available") or
+                bool(artifact_state.get("missing")))
+    return {"status": "degraded" if degraded else "ok",
             "model": settings.claude_model,
             "qmode": qmode,
             "warmup": {**_warmup_state, "psych_rag_loaded": _pr.is_loaded(),
                        "note": "done=false 면 첫 요청이 임베딩 모델 로딩(수십 초)을 "
                                "기다릴 수 있다"},
-            "artifacts": _artifact_manifest(),
+            "artifacts": artifact_state,
             "treatment_coverage": _treatment_coverage(),
             "choice_classification": classification_stats()}
 
@@ -370,6 +386,10 @@ async def visualize(
     choice_b: str = Form(...),
     narrative_a: str = Form(...),
     narrative_b: str = Form(...),
+    future_years: int = Form(3),
+    visual_width: int = Form(320),
+    visual_height: int = Form(400),
+    visual_format: str = Form("portrait 4:5"),
     avatar_spec: str = Form("{}"),
     visual_a: str = Form("{}"),
     visual_b: str = Form("{}"),
@@ -377,6 +397,9 @@ async def visualize(
     """동일 아바타를 참고해 RAG A/B 서사를 2D 장면 두 장으로 만든다."""
     if not narrative_a.strip() or not narrative_b.strip():
         raise HTTPException(400, "A/B narrative is required")
+    allowed_sizes = {(320, 400), (512, 640), (768, 432)}
+    if (visual_width, visual_height) not in allowed_sizes:
+        raise HTTPException(422, "Unsupported visual image size")
     avatar_png = await avatar.read()
     if len(avatar_png) > 4 * 1024 * 1024:
         raise HTTPException(413, "Avatar image is too large")
@@ -389,7 +412,8 @@ async def visualize(
             raise HTTPException(400, "Visual scene direction must be valid JSON") from exc
         images = await generate_pair(
             avatar_png, choice_a, choice_b, narrative_a, narrative_b,
-            scene_a, scene_b, character_spec,
+            scene_a, scene_b, character_spec, future_years,
+            visual_width, visual_height, visual_format,
         )
     except (httpx.HTTPStatusError, httpx.RequestError) as exc:
         raise HTTPException(
@@ -553,6 +577,11 @@ def simulate(req: SimulateRequest) -> dict:
 
     # 4) 서사 컨텍스트(note): 일기신호 + 심리카드 근거블록(A/B)
     note = cmp.get("note", "")
+    note += (
+        f"\n[미래 비교 기준 시점] 지금으로부터 정확히 {req.future_years}년 뒤. "
+        "A와 B의 summary·future·gain·cost 및 이미지 장면 지시를 이 시점에 맞추고, "
+        "다른 연도를 핵심 결과처럼 섞지 말 것. 장기 시점은 확정적으로 단정하지 말 것."
+    )
     if req.choice_a_detail:
         note += f"\n[사용자가 적은 A의 구체적 상황] {req.choice_a_detail}"
     if req.choice_b_detail:
@@ -654,3 +683,12 @@ def simulate(req: SimulateRequest) -> dict:
         "api_used": not narrative.get("_skipped", False),
         "model": settings.claude_model,
     }
+
+
+@app.post("/avatar/from-photo", response_model=AvatarFromPhotoResponse)
+def avatar_from_photo(req: AvatarFromPhotoRequest) -> AvatarFromPhotoResponse:
+    """셀카 한 장 → 아바타 설정. 사진은 디스크에 쓰지 않고 응답 후 버린다."""
+    try:
+        return AvatarFromPhotoResponse(**avatar_vision.analyze(req.image, req.options))
+    except avatar_vision.AvatarVisionError as e:
+        raise HTTPException(status_code=400, detail=str(e))

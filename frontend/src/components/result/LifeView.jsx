@@ -1,13 +1,18 @@
-import { Card, Caption } from "../ui.jsx";
+import { ChevronDown } from "lucide-react";
+import { Caption } from "../ui.jsx";
 import ObservedIndicators from "./ObservedIndicators.jsx";
 import IndicatorGapChart from "./IndicatorGapChart.jsx";
 
+// 숫자가 먼저, 근거는 그 다음. 전에는 '예측 근거 신뢰도'가 맨 위에 있어서
+// 첫 화면이 통째로 "이 숫자를 믿어도 되는가"였고, 정작 A와 B가 뭐가 다른지는
+// 스크롤 아래에 있었다. 근거를 없애지는 않는다 — 강도 요약 한 줄은 항상 보이고
+// 항목별 내역만 접어 둔다.
 export default function LifeView({ a, b, domains = { a: [], b: [] } }) {
   return (
     <div>
-      <EvidenceSummary a={a} b={b} domains={domains} />
       <IndicatorGapChart a={a} b={b} domains={domains} />
       <ObservedIndicators a={a} b={b} />
+      <EvidenceSummary a={a} b={b} domains={domains} />
     </div>
   );
 }
@@ -71,6 +76,11 @@ function StrengthMeter({ level, side }) {
   );
 }
 
+/** 영역 근거(domain_stats)의 강도. 항목별 근거(EVIDENCE_STRENGTH)와 같은 3단계로 맞춘다. */
+const DOMAIN_STRENGTH = { model: 3, group_stat: 2, rag: 1 };
+const domainStrength = (item) =>
+  (item?.status === "available" ? DOMAIN_STRENGTH[item.evidence] ?? 1 : 0);
+
 function EvidenceSummary({ a, b, domains }) {
   const defaultOrder = ["경제적안정도", "성장가능성", "삶의질"];
   const preferred = a.personalization?.narrate_order || b.personalization?.narrate_order || [];
@@ -87,18 +97,40 @@ function EvidenceSummary({ a, b, domains }) {
     return { domain, label: left?.label || right?.label || domain, left, right };
   }).filter(Boolean);
   if (!keys.length && !domainEvidence.length) return null;
+
+  // 접힌 상태에서도 "무엇이 몇 개나 뒷받침되는가"는 보이게 한다. 가장 강한 근거만
+  // 골라 한 줄로 쓰면 실제보다 단단해 보인다 — 강도별 개수를 그대로 센다.
+  const tally = [0, 0, 0, 0];
+  for (const row of domainEvidence) {
+    for (const item of [row.left, row.right]) if (item) tally[domainStrength(item)] += 1;
+  }
+  for (const key of keys) {
+    for (const item of [a.indicator_evidence?.[key], b.indicator_evidence?.[key]]) {
+      if (!item || item.status === "insufficient_evidence") continue;
+      tally[EVIDENCE_STRENGTH[item.status] ?? 0] += 1;
+    }
+  }
+  const summary = [[3, "개인모델 검증"], [2, "집단통계"], [1, "참고 통계만"]]
+    .filter(([level]) => tally[level] > 0)
+    .map(([level, label]) => `${label} ${tally[level]}`)
+    .join(" · ");
+
   return (
-    <Card className="mb-4">
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        <div className="text-sm font-semibold text-ink">예측 근거 신뢰도</div>
-        <div className="flex items-center gap-2.5 text-[9px] text-mut">
-          <span className="flex items-center gap-1"><Dots n={3} /> 개인모델 검증</span>
-          <span className="flex items-center gap-1"><Dots n={2} /> 집단통계</span>
-          <span className="flex items-center gap-1"><Dots n={1} /> 참고 통계</span>
-        </div>
+    <details className="group my-2.5 rounded-[18px] bg-card px-4 py-3.5">
+      <summary className="flex cursor-pointer list-none items-center gap-2.5">
+        <span className="shrink-0 text-[13px] font-semibold text-ink">이 숫자의 근거</span>
+        <span className="min-w-0 flex-1 truncate text-[10.5px] text-mut">{summary || "근거 정보 없음"}</span>
+        <ChevronDown size={15} className="shrink-0 text-mut transition-transform group-open:rotate-180" />
+      </summary>
+
+      <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[9px] text-mut">
+        <span className="flex items-center gap-1"><Dots n={3} /> 개인모델 검증</span>
+        <span className="flex items-center gap-1"><Dots n={2} /> 집단통계</span>
+        <span className="flex items-center gap-1"><Dots n={1} /> 참고 통계</span>
       </div>
       <Caption>칸이 많이 찰수록 이 숫자를 뒷받침하는 근거가 강합니다.</Caption>
       {preferred.length > 0 && <Caption>중요하게 생각하는 기준부터 A와 B의 차이를 설명해요.</Caption>}
+
       <div className="mt-3 space-y-2">
         {domainEvidence.map((row) => (
           <div key={`domain-${row.domain}`} className="rounded-xl border border-violet-400/20 bg-violet-500/[.055] px-3 py-2.5">
@@ -120,7 +152,7 @@ function EvidenceSummary({ a, b, domains }) {
           );
         })}
       </div>
-    </Card>
+    </details>
   );
 }
 

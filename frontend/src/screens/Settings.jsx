@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useResult } from "../data/ResultContext.jsx";
 import { Eyebrow, Card } from "../components/ui.jsx";
 import { MASCOTS } from "../data/result.js";
 import ValueRankingInput from "../components/ValueRankingInput.jsx";
+import ValueDeepTest from "../components/ValueDeepTest.jsx";
 import { topAxes } from "../data/valueCards.js";
 import { loadPrefs, savePrefs } from "../data/prefs.js";
+import { OCCUPATIONS } from "../data/profileOptions.js";
 import { PSYCH_QUESTIONS } from "../data/psychQuestions.js";
 import Avatar from "../components/Avatar.jsx";
 import AvatarBuilder from "../components/AvatarBuilder.jsx";
@@ -15,20 +17,8 @@ import { LEVEL_TITLES, XP_RULES, universeSummary } from "../data/myUniverse.js";
 import { LEVEL_REWARDS } from "../data/unlocks.js";
 import PetMascot from "../components/PetMascot.jsx";
 import PetShop from "../components/PetShop.jsx";
-import { Bell, ChevronRight, LockKeyhole, Palette, Smartphone, UserRound, LogOut } from "lucide-react";
+import { Bell, ChevronRight, ClipboardCheck, LockKeyhole, Palette, Smartphone, UserRound, LogOut } from "lucide-react";
 import { toChoiceDomains } from "../data/choices.js";
-
-const OCCUPATIONS = [
-  "연구·공학기술",
-  "경영·사무·금융·보험",
-  "교육·법률·복지·공공",
-  "보건·의료",
-  "예술·디자인·방송",
-  "영업·판매·서비스",
-  "건설·생산·운송",
-  "학생·취업준비",
-  "기타",
-];
 
 // 작은 on/off 토글 (track h-6/w-11 · thumb h-4/w-4 · translate 로 이동 — 크기 균형)
 function Toggle({ on, onClick }) {
@@ -118,6 +108,7 @@ const NOTIF_LABELS = {
 };
 const SETTINGS_META = {
   profile: ["프로필", "나를 표현하고 시뮬레이션 개인화에 사용할 정보를 관리합니다."],
+  careerValues: ["직업 가치관", "한 번 검사한 직업 가치관을 이후 모든 커리어 비교에 활용합니다."],
   security: ["개인정보 · 보안", "저장된 개인정보의 보호 상태를 확인합니다."],
   personalize: ["개인화", "우주와 가이드, 탐험 경험을 내 취향에 맞게 설정합니다."],
   notifications: ["알림 · 가이드", "필요한 알림과 함께할 가이드 캐릭터를 설정합니다."],
@@ -134,6 +125,7 @@ function LevelRule({ label, xp }) {
 
 export default function Settings() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { profile, setProfile, setOnboarded, setChoices, setScenarioTexts, setScenarioDomains } = useResult();
   const [prefs, setPrefs] = useState(loadPrefs);
   const [editingAvatar, setEditingAvatar] = useState(false);
@@ -141,7 +133,14 @@ export default function Settings() {
   const [shopOpen, setShopOpen] = useState(false);
   const [profileDraft, setProfileDraft] = useState(null);
   const [activeSection, setActiveSection] = useState("profile");
+  const [careerTestOpen, setCareerTestOpen] = useState(() => new URLSearchParams(location.search).get("careerValues") === "1");
   const universe = universeSummary();
+  useEffect(() => {
+    if (new URLSearchParams(location.search).get("careerValues") === "1") {
+      setActiveSection("careerValues");
+      setCareerTestOpen(true);
+    }
+  }, [location.search]);
   // 돌보미가 제안한 갈림길로 시뮬레이션을 연다 — 영역마다 다른 두 선택지가 온다.
   // (전에는 어느 돌보미든 "이직 vs 유지"로 고정이었다.)
   function startCompare(nudge) {
@@ -210,6 +209,7 @@ export default function Settings() {
 
       <div className="no-scrollbar -mx-1 mb-4 flex gap-2 overflow-x-auto px-1 lg:hidden">
         <SettingsNav active={activeSection === "profile"} onClick={() => setActiveSection("profile")} icon={UserRound}>프로필</SettingsNav>
+        <SettingsNav active={activeSection === "careerValues"} onClick={() => setActiveSection("careerValues")} icon={ClipboardCheck}>직업 가치관</SettingsNav>
         <SettingsNav active={activeSection === "security"} onClick={() => setActiveSection("security")} icon={LockKeyhole}>보안</SettingsNav>
         <SettingsNav active={activeSection === "personalize"} onClick={() => setActiveSection("personalize")} icon={Palette}>개인화</SettingsNav>
         <SettingsNav active={activeSection === "notifications"} onClick={() => setActiveSection("notifications")} icon={Bell}>알림</SettingsNav>
@@ -220,6 +220,7 @@ export default function Settings() {
         <aside className="hidden lg:sticky lg:top-[108px] lg:block">
           <nav className="rounded-[20px] border border-white/[.07] bg-[#0D1828]/75 p-2 shadow-[0_18px_45px_rgba(0,0,0,.18)] backdrop-blur-xl">
             <SettingsNav active={activeSection === "profile"} onClick={() => setActiveSection("profile")} icon={UserRound}>프로필</SettingsNav>
+            <SettingsNav active={activeSection === "careerValues"} onClick={() => setActiveSection("careerValues")} icon={ClipboardCheck}>직업 가치관</SettingsNav>
             <SettingsNav active={activeSection === "security"} onClick={() => setActiveSection("security")} icon={LockKeyhole}>개인정보 · 보안</SettingsNav>
             <SettingsNav active={activeSection === "personalize"} onClick={() => setActiveSection("personalize")} icon={Palette}>개인화</SettingsNav>
             <SettingsNav active={activeSection === "notifications"} onClick={() => setActiveSection("notifications")} icon={Bell}>알림 · 가이드</SettingsNav>
@@ -451,8 +452,46 @@ export default function Settings() {
       )}
       </section>}
 
+      {activeSection === "careerValues" && <section className="animate-fade">
+      <Card>
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="text-xs font-semibold text-mut">직업 가치관</div>
+            {(profile.career_values || []).length > 0 ? (
+              <>
+                <p className="mt-1 text-[12px] font-semibold text-ink">{profile.career_values.slice(0, 3).map((value) => value.name).join(" > ")}</p>
+                <p className="mt-1 text-[10px] leading-4 text-mut">공고 분석과 직업 비교 결과 설명의 강조 순서에 계속 반영돼요.</p>
+              </>
+            ) : (
+              <p className="mt-1 text-[10px] leading-4 text-mut">28문항을 한 번 완료하면 이후 모든 직업 비교에 재사용해요. 예측 숫자는 바꾸지 않습니다.</p>
+            )}
+          </div>
+          <button type="button" onClick={() => setCareerTestOpen(true)} className="tap shrink-0 rounded-xl border border-violet-400/35 bg-violet-500/10 px-4 text-[11px] font-bold text-violet-200">
+            {(profile.career_values || []).length > 0 ? "결과·재검사" : "검사 시작"}
+          </button>
+        </div>
+        {profile.career_values_updated_at && <p className="mt-2 text-[9px] text-mut">마지막 검사: {new Date(profile.career_values_updated_at).toLocaleDateString("ko-KR")}</p>}
+        {profile.career_values_report && <a href={profile.career_values_report} target="_blank" rel="noreferrer" className="mt-2 inline-block text-[10px] text-violet-300">커리어넷 공식 결과지 ↗</a>}
+      </Card>
+      <Card>
+        <div className="text-xs font-semibold text-mut">어디에 반영되나요?</div>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          <div className="rounded-xl border border-white/[.07] bg-black/15 p-3">
+            <p className="text-[11px] font-semibold text-sub">직업 비교 설명</p>
+            <p className="mt-1 text-[10px] leading-4 text-mut">성장·안정·보상처럼 내가 중요하게 보는 기준을 먼저 설명해요.</p>
+          </div>
+          <div className="rounded-xl border border-white/[.07] bg-black/15 p-3">
+            <p className="text-[11px] font-semibold text-sub">채용 공고 분석</p>
+            <p className="mt-1 text-[10px] leading-4 text-mut">공고 조건과 내 가치가 맞는 지점·부딪히는 지점을 찾아요.</p>
+          </div>
+        </div>
+        <p className="mt-3 text-[10px] leading-4 text-mut">예측 소득·인과효과·재직기간 같은 숫자는 바꾸지 않습니다.</p>
+      </Card>
+      </section>}
+
       {/* 가치 우선순위 — 성향 개인화 입력 (백엔드 personalize 로 전달) */}
       {activeSection === "profile" && <section className="animate-fade">
+
       <Card>
         <div className="mb-2 text-xs font-semibold text-mut">가치 우선순위</div>
         <ValueRankingInput
@@ -505,6 +544,32 @@ export default function Settings() {
 
       </div>
       </div>
+      {careerTestOpen && (
+        <div className="fixed inset-0 z-[120] flex animate-backdrop-in items-end justify-center bg-[#02050C]/75 backdrop-blur-[5px] sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label="직업 가치관검사">
+          <div className="w-full max-w-[560px] animate-sheet-up rounded-t-[28px] border border-white/10 bg-[#0D1727] p-5 shadow-[0_-22px_70px_rgba(0,0,0,.55)] sm:animate-fade sm:rounded-[28px] sm:p-6">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-[17px] font-bold text-ink">직업 가치관검사</h2>
+                <p className="mt-1 text-[10px] leading-4 text-mut">커리어넷 대학·일반용 28문항 · 결과는 프로필에 저장돼요.</p>
+              </div>
+              <button type="button" onClick={() => { setCareerTestOpen(false); navigate("/settings", { replace: true }); }} className="tap shrink-0 rounded-full px-3 text-[18px] text-mut" aria-label="검사 닫기">×</button>
+            </div>
+            <ValueDeepTest
+              onDone={(data) => {
+                setProfile((current) => ({
+                  ...current,
+                  career_values: data.ranking,
+                  career_values_report: data.report_url,
+                  career_values_updated_at: new Date().toISOString(),
+                }));
+                setCareerTestOpen(false);
+                navigate("/settings", { replace: true });
+              }}
+              onClose={() => { setCareerTestOpen(false); navigate("/settings", { replace: true }); }}
+            />
+          </div>
+        </div>
+      )}
       {shopOpen&&<PetShop onClose={()=>setShopOpen(false)}/>} 
     </div>
   );

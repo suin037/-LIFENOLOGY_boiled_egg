@@ -77,6 +77,7 @@ function isReflectPending(u) {
   return d != null && d >= REFLECT_AFTER_DAYS;
 }
 
+// 결과 화면·알람과 같은 진입점을 써야 문구가 같아진다(doneActions 는 텍스트로 대조).
 function actionsOf(u, signals) {
   const chosen = chosenChoice(u);
   return chosen ? actionsForGoal(chosen, u.domains, signals) : [];
@@ -89,6 +90,7 @@ export default function Archive() {
   const [filter, setFilter] = useState("all");
   const [sort, setSort] = useState("recent"); // recent | domain
   const [openId, setOpenId] = useState(null);
+  // 일기 신호는 카드마다 같으니 화면에서 한 번만 계산해 내려준다.
   const signals = useMemo(() => computeDiarySignals({ windowDays: 28 }), []);
 
   const refresh = () => setItems(listUniverses());

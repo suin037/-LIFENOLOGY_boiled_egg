@@ -6,15 +6,26 @@ import { chatTurn, composeDiary, weeklyComfort, loadSpeech, SPEECH_KEY } from ".
 import { todayQuestions } from "../data/questions.js";
 import { useResult } from "../data/ResultContext.jsx";
 import Mascot from "./Mascot.jsx";
+import storage from "../data/safeStorage.js";
 
 // 질문 영역별 대화형 일기(jy). 데일리 체크인 아래 '오늘의 질문 + 몸·마음 상태'를 대신한다.
 //  · 영역 3개: 일상 / 성향(매일 랜덤 질문) / 건강. 각 영역의 질문 리스트를 하나씩 묻고 사용자가 답한다.
 //  · embedded=true: 카드/저장버튼 없이 대화만. onMessagesChange 로 부모(체크인)에 올림 → 부모 '기록 저장'이 흡수.
 const AREAS = [
-  { key: "daily", name: "일상", mascot: "nova", role: "오늘 하루의 일상 기록을 함께 되짚는 대화다." },
-  { key: "disposition", name: "성향", mascot: "cosmo", role: "가치관·선택을 돌아보는 성향 기록 대화다." },
-  { key: "health", name: "건강", mascot: "lumi", role: "몸과 마음 상태를 살피는 건강 체크 대화다." },
+  { key: "daily", name: "오늘 돌아보기", desc: "한 일과 기억에 남은 순간을 기록해요.", mascot: "nova", role: "오늘 하루의 일상 기록을 함께 되짚는 대화다." },
+  { key: "disposition", name: "선택 정리", desc: "고민 중인 선택과 중요한 기준을 정리해요.", mascot: "cosmo", role: "가치관·선택을 돌아보는 성향 기록 대화다." },
+  { key: "health", name: "몸·마음 체크", desc: "수면·활동·스트레스 상태를 확인해요.", mascot: "lumi", role: "몸과 마음 상태를 살피는 건강 체크 대화다." },
 ];
+
+const COSMO_PROMPT_KEY = "pm.cosmoDecisionPrompt.v1";
+const COSMO_DECISION_Q = [
+  { id: "decision_options", kind: "decision", p: "요즘 두고 고민하는 두 가지 선택이 있나요? ‘A를 한다 / B를 한다’처럼 적어주세요.", c: "요즘 고민하는 두 가지 선택이 있어? ‘A를 한다 / B를 한다’처럼 적어줘." },
+  { id: "decision_criteria", kind: "decision", p: "두 선택을 비교할 때 가장 중요한 기준과 현실적인 제약은 무엇인가요?", c: "두 선택을 비교할 때 제일 중요한 기준과 현실적인 제약은 뭐야?" },
+];
+
+function shouldAskCosmoDecision() {
+  try { return localStorage.getItem(COSMO_PROMPT_KEY) !== weekStartKey(todayKey()); } catch { return true; }
+}
 
 // 말투(loadSpeech/SPEECH_KEY)는 dispositionApi 에서 온다 — 마스코트가 말하는 화면이
 // 여럿이라(대화·주간 위로·N년 뒤) 한 곳에서 정해야 어긋나지 않는다.
@@ -53,7 +64,7 @@ function areaQuestions(key) {
   if (key === "disposition") {
     try {
       const qs = todayQuestions().map((q) => ({ text: q.text, id: q.id })).filter((q) => q.text);
-      if (qs.length) return qs;
+      if (qs.length) return shouldAskCosmoDecision() ? [...qs, ...COSMO_DECISION_Q] : qs;
     } catch {
       /* 로드 실패 시 기본 */
     }
@@ -88,14 +99,14 @@ function lastWeekEntries() {
 }
 
 function loadComfort() {
-  try { return JSON.parse(localStorage.getItem(COMFORT_KEY) || "null"); } catch { return null; }
+  try { return JSON.parse(storage.getItem(COMFORT_KEY) || "null"); } catch { return null; }
 }
 
 // 하루 단위 대화 드래프트 — 챗봇을 닫아도 그날 대화가 유지되고, 날이 바뀌면 새로 시작.
 const DRAFT_KEY = "pm.chatDraft.v1";
 function loadDraft() {
   try {
-    const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null");
+    const d = JSON.parse(storage.getItem(DRAFT_KEY) || "null");
     if (d && d.date === todayKey()) return d; // 오늘 것만 유효 → 다음날 자동 새 기록
   } catch { /* 무시 */ }
   return { date: todayKey(), d: {} };
@@ -106,7 +117,7 @@ function draftFor(area) {
 function saveDraftArea(area, msgs, qi) {
   const d = loadDraft();
   d.d[area] = { msgs, qi };
-  try { localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch { /* 무시 */ }
+  try { storage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch { /* 무시 */ }
 }
 
 function recentChatContext() {
@@ -158,7 +169,7 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
 
   const mascot = AREAS.find((a) => a.key === area)?.mascot || "nova";
   const hasUser = msgs.some((m) => m.role === "user");
-  const done = suggestCompose;
+  const done = qi >= qs.length;
 
   useEffect(() => {
     if (threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight;
@@ -178,7 +189,7 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
         if (!alive || !text) return;
         const next = { week, speech, text };
         setComfort(next);
-        try { localStorage.setItem(COMFORT_KEY, JSON.stringify(next)); } catch { /* 무시 */ }
+        try { storage.setItem(COMFORT_KEY, JSON.stringify(next)); } catch { /* 무시 */ }
       })
       .finally(() => { if (alive) setThinking(false); });
     return () => { alive = false; };
@@ -200,7 +211,7 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
   function toggleSpeech() {
     const next = speech === "casual" ? "polite" : "casual";
     setSpeech(next);
-    try { localStorage.setItem(SPEECH_KEY, next); } catch { /* 무시 */ }
+    try { storage.setItem(SPEECH_KEY, next); } catch { /* 무시 */ }
     if (!msgs.some((m) => m.role === "user")) {
       setMsgs([{ role: "bot", text: qText(qs[0], next) }]);
     }
@@ -230,6 +241,9 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
     // 성향 질문(D2/D1/D4 등 id 있는 것)에 답하면 프로필 psych_answers에 저장
     // → buildDisposition → 모든 시뮬 시나리오 개인화에 반영.
     const cur = qs[qi];
+    if (cur?.kind === "decision") {
+      try { localStorage.setItem(COSMO_PROMPT_KEY, weekStartKey(todayKey())); } catch { /* 무시 */ }
+    }
     if (cur?.id && setProfile) {
       setProfile((p) => ({ ...p, psych_answers: { ...(p.psych_answers || {}), [cur.id]: v } }));
     }
@@ -246,9 +260,9 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
         speech,
         role: active?.role || null,
       });
-      const fallback = next < qs.length ? qText(qs[next], speech) : CLOSING[speech];
-      setMsgs([...conversation, { role: "bot", text: result?.reply?.trim() || fallback }]);
-      setSuggestCompose(Boolean(result?.suggest_compose));
+      const nextQuestion = next < qs.length ? qText(qs[next], speech) : CLOSING[speech];
+      setMsgs([...conversation, { role: "bot", text: nextQuestion }]);
+      setSuggestCompose(next >= qs.length || Boolean(result?.suggest_compose && next >= qs.length));
       setQi(next);
     } catch {
       const fallback = next < qs.length ? qText(qs[next], speech) : CLOSING[speech];
@@ -266,8 +280,10 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
     try {
       const c = await composeDiary(msgs);
       const today = todayKey();
-      addCheckin({ date: today, text: c.text, mood: c.mood, keyword: c.emotion, domains: c.domains });
-      if (c.domains) setDomains(today, c.domains);
+      const verifiedDomains = detectLifeDomains(c.text);
+      addCheckin({ date: today, text: c.text, mood: c.mood, keyword: c.emotion,
+        domains: verifiedDomains, insights: c.insights || null, chatSummary: c.text });
+      if (verifiedDomains.length) setDomains(today, verifiedDomains);
       setSaved(c);
       onSaved?.();
     } finally {
@@ -303,6 +319,9 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
           ))}
         </div>}
       </div>
+      {showAreas && (
+        <div className="mb-2 text-[11px] text-mut">{AREAS.find((item) => item.key === area)?.desc}</div>
+      )}
 
       {/* 지난 한 주를 읽고 건네는 말 — 주 1회. 분석·할 거리는 주간 리포트가 따로 한다. */}
       {comfort?.text && (

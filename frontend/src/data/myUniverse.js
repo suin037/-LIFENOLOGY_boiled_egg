@@ -9,6 +9,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { listUniverses } from "./savedUniverses.js";
+import storage from "./safeStorage.js";
 
 const KEY = "pm.myuniverse.v1";
 const HIGHEST_LEVEL_KEY = "pm.highestLevel.v1";
@@ -29,7 +30,7 @@ const DEFAULTS = {
 // ── 저장/로드 ────────────────────────────────────────────────
 export function loadUniverse() {
   try {
-    const raw = JSON.parse(localStorage.getItem(KEY) || "{}");
+    const raw = JSON.parse(storage.getItem(KEY) || "{}");
     return {
       ...DEFAULTS,
       ...raw,
@@ -44,7 +45,7 @@ export function loadUniverse() {
 
 function persist(state) {
   try {
-    localStorage.setItem(KEY, JSON.stringify(state));
+    storage.setItem(KEY, JSON.stringify(state));
   } catch {
     /* localStorage 불가 환경(사파리 프라이빗 등) — 메모리로만 동작 */
   }
@@ -113,6 +114,8 @@ export function addCheckin(entry = {}) {
     text: entry.text ?? "", // 일기 본문
     answers: entry.answers ?? null, // 질문별 답 [{ q, a }]
     domains: entry.domains ?? null, // 자동 분류 영역(행성) key 배열 — /tag 결과
+    insights: entry.insights ?? null,
+    chatSummary: entry.chatSummary ?? null,
     diaryId: entry.diaryId ?? null,
     hasDiary: Boolean(
       entry.text?.trim() || entry.note?.trim()
@@ -125,6 +128,8 @@ export function addCheckin(entry = {}) {
     if (previous) {
       star.domains = entry.domains ?? previous.domains ?? null;
       star.experiments = entry.experiments ?? previous.experiments ?? [];
+      star.insights = entry.insights ?? previous.insights ?? null;
+      star.chatSummary = entry.chatSummary ?? previous.chatSummary ?? null;
     }
     const rest = s.checkins.filter((c) => c.date !== date);
     s.checkins = [...rest, star].sort((a, b) => a.date.localeCompare(b.date));
@@ -158,6 +163,8 @@ export function syncDiaryEntries(entries = []) {
         note,
         text,
         answers,
+        insights: entry.insights ?? previous.insights ?? null,
+        chatSummary: entry.chatSummary ?? previous.chatSummary ?? null,
         diaryId: entry.id ?? entry.diaryId ?? previous.diaryId ?? `e-${entry.date}`,
         domains: previous.domains ?? entry.domains ?? null,
         experiments: previous.experiments ?? entry.experiments ?? [],
@@ -200,7 +207,7 @@ export function noteSimulationRun() {
 
 export function resetUniverse() {
   try {
-    localStorage.removeItem(KEY);
+    storage.removeItem(KEY);
   } catch {
     /* 무시 */
   }
@@ -455,7 +462,7 @@ export function levelFrom(xp) {
 
 function storedHighestLevel() {
   try {
-    return Math.max(1, Number(localStorage.getItem(HIGHEST_LEVEL_KEY) || 1));
+    return Math.max(1, Number(storage.getItem(HIGHEST_LEVEL_KEY) || 1));
   } catch {
     return 1;
   }
@@ -464,7 +471,7 @@ function storedHighestLevel() {
 function rememberHighestLevel(level) {
   const highest = Math.max(storedHighestLevel(), level);
   try {
-    localStorage.setItem(HIGHEST_LEVEL_KEY, String(highest));
+    storage.setItem(HIGHEST_LEVEL_KEY, String(highest));
   } catch {
     // localStorage 불가 환경에서는 현재 계산 레벨만 사용한다.
   }

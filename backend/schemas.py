@@ -14,8 +14,18 @@ class Profile(BaseModel):
     """
 
     age: int = Field(..., ge=18, le=70)
-    sex: str = Field(..., description="'1'=남 / '2'=여 (GOMS 코드)")
-    major: str = Field(..., description="전공 계열 코드")
+    sex: Optional[str] = Field(None,
+        description="'1'=남 / '2'=여 (GOMS 코드). **선택** — 없으면 성별을 나누지 "
+                    "않은 전체 표본으로 떨어진다. 필수로 두면 성별을 고른 적 없는 "
+                    "기존 사용자가 비교 버튼을 누르는 순간 422 로 막혔다(프론트는 "
+                    "성별을 '선택 정보'로 설계해 진행을 허용한다). 임의 기본값을 "
+                    "채우지 않는 이유는, 고른 적 없는 성별의 유사집단 통계가 "
+                    "그대로 결과로 나가기 때문이다")
+    major: Optional[str] = Field(None,
+        description="전공 계열(인문·사회·교육·공학·자연·의약·예체능). 프론트에서 전공을 "
+                    "묻는 건 교육 영역 비교뿐이라 대개 비어 온다. 필수로 두면 호출부가 "
+                    "기본값을 지어 채우게 되므로(그 값이 서사에 '전공 배경'으로 새어나갔다) "
+                    "선택으로 둔다. 없으면 계열 지표는 '전체' 행으로 떨어진다")
     gpa: Optional[float] = Field(None, ge=0, le=4.5)
 
     # --- 온보딩 상태·성향 (선택) ---
@@ -64,6 +74,10 @@ class CompareRequest(BaseModel):
     """
 
     profile: Profile
+    future_years: int = Field(
+        3, ge=1, le=10,
+        description="결과 서사와 이미지가 초점을 맞출 미래 시점(1/3/5/10년)",
+    )
     choice_a: str = Field(..., description="선택지 A (예: 이직)")
     choice_b: str = Field(..., description="선택지 B (예: 대학원 진학)")
     # 삶의 영역(9개 domain key: career/education/business/finance/health/housing/
@@ -88,12 +102,13 @@ class CompareRequest(BaseModel):
 class SimulateRequest(CompareRequest):
     """전체 파이프라인(`/simulate`) 요청 = 비교 요청 + (선택) 일기 텍스트.
 
-    diary 를 주면 일기모듈(2번)이 감정신호를 뽑아 profile(satis_*)을 개인화하고
-    서사 컨텍스트로도 쓴다. 위기(L3) 감지 시 서사 대신 상담 안내를 반환한다.
+    diary 를 주면 일기모듈(2번)이 감정신호를 뽑아 심리근거·서사 컨텍스트와
+    안전 분기에 사용한다. 예측 수치는 바꾸지 않으며, 위기(L3) 감지 시 서사 대신
+    상담 안내를 반환한다.
     """
 
     diary: Optional[str] = Field(
-        None, description="사용자 일기 텍스트(선택). 있으면 감정신호로 개인화 + 서사 반영"
+        None, description="사용자 일기 텍스트(선택). 예측 수치는 바꾸지 않고 심리근거·서사·안전 안내에 반영"
     )
     emotions: Optional[list[str]] = Field(
         None, description="감정 키워드(선택). 심리카드 검색·안전분기에 사용"
@@ -343,3 +358,15 @@ class AvatarGenerateRequest(BaseModel):
 
 class AvatarGenerateResponse(BaseModel):
     image: str = Field(..., description="생성된 실사 아바타. PNG dataURL")
+
+
+class AvatarFromPhotoRequest(BaseModel):
+    """카메라 프레임 + 프론트가 가진 선택지 목록."""
+
+    image: str = Field(..., description="'data:image/jpeg;base64,...' 형식. 저장하지 않는다.")
+    options: dict = Field(..., description="{필드: [허용값...]} — avatarOptions.js 가 원본")
+
+
+class AvatarFromPhotoResponse(BaseModel):
+    config: dict = Field(..., description="아바타 설정. 프론트가 그대로 빌더에 적용한다.")
+    face_visible: bool = Field(True, description="얼굴이 또렷하게 잡혔는지. false 면 적용하지 말고 다시 찍게 한다.")

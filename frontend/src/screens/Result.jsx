@@ -4,6 +4,7 @@ import { useResult } from "../data/ResultContext.jsx";
 import { useDiary } from "../data/DiaryContext.jsx";
 import { labelOf } from "../data/prediction.js";
 import { detectLifeDomains } from "../data/choices.js";
+import { occupationLabel } from "../data/profileOptions.js";
 import { redactPII, redactEntries } from "../data/piiRedact.js";
 import { saveMe, getScenario, getThirdPath } from "../data/api.js";
 import { listUniverses, saveUniverse, universeFromResult } from "../data/savedUniverses.js";
@@ -11,7 +12,7 @@ import { Eyebrow } from "../components/ui.jsx";
 import { Bookmark, Check, ChevronLeft, ChevronRight, LockKeyhole } from "lucide-react";
 import LifeView from "../components/result/LifeView.jsx";
 import ChangeView from "../components/result/ChangeView.jsx";
-import EvidenceView from "../components/result/EvidenceView.jsx";
+import EvidenceView, { hasEvidenceDetail } from "../components/result/EvidenceView.jsx";
 import ActionView from "../components/result/ActionView.jsx";
 import AvatarComparison from "../components/result/AvatarComparison.jsx";
 import DiarySignalCard from "../components/result/DiarySignalCard.jsx";
@@ -19,6 +20,7 @@ import KowepsEvidenceCard from "../components/result/KowepsEvidenceCard.jsx";
 import JobAnalysisView from "../components/result/JobAnalysisView.jsx";
 import RelationshipView from "../components/result/RelationshipView.jsx";
 import SoftCompareView from "../components/result/SoftCompareView.jsx";
+import ResultQuickStats from "../components/result/ResultQuickStats.jsx";
 import { softDomainOf } from "../data/softCompare.js";
 import { DOMAIN_LABEL } from "../data/diarySignals.js";
 
@@ -28,6 +30,8 @@ export default function Result() {
   const navigate = useNavigate();
   const { result, profile, scenarioDomains, retryVisuals, jobAnalyses, postings, relResults, talks } = useResult();
   const { a, b } = result;
+  // 온보딩·설정의 직종(8분류) → 없으면 입력 화면의 KSCO 대분류. 둘 다 없으면 빈 문자열.
+  const myOccupation = occupationLabel(profile);
 
   // 진로가 아닌 영역(관계·건강·일상·성장)은 KLIPS 수치가 맞지 않는다.
   // 그대로 두면 지표 필터에 하나도 안 걸려 '핵심 지표'가 빈 화면이 된다(관계가 그랬다).
@@ -42,7 +46,11 @@ export default function Result() {
       : []),
     { key: "indicators", label: softPlanet ? "참고 지표" : "핵심 지표", View: LifeView },
     { key: "change", label: "변화 흐름", View: ChangeView },
-    { key: "evidence", label: "분석 상세", View: EvidenceView },
+    // 내용이 없으면 탭 자체를 만들지 않는다 — 열어봐야 "없습니다" 한 줄인 탭은
+    // 고를 것만 늘린다. 공고·관계 분석이 이미 같은 방식이다.
+    ...(hasEvidenceDetail(a, b, result.dataMode || "demo")
+      ? [{ key: "evidence", label: "분석 상세", View: EvidenceView }]
+      : []),
     // 입력에서 공고를 분석했을 때만 — 예측 수치 옆에서 그 공고를 다시 확인한다.
     ...(jobAnalyses?.length || postings?.length
       ? [{ key: "job", label: `공고 분석${(jobAnalyses?.length || postings?.length) > 1 ? ` ${jobAnalyses?.length || postings?.length}` : ""}`, View: JobAnalysisView }]
@@ -77,15 +85,19 @@ export default function Result() {
     <div>
       <Eyebrow>결과 · CHART No.0427</Eyebrow>
       <h1 className="text-[21px] font-bold leading-[1.2] lg:text-[28px]">
-        {a.meta.age}세 · {a.meta.occupation}
+        {/* 헤더는 '지금 내 프로필'을 그대로 보여준다. 예전엔 결과 객체 안의 스냅샷
+            (a.meta)을 읽어서, 설정에서 나이·직종을 고친 뒤 결과 화면으로 돌아오면
+            시뮬레이션을 돌리던 시점의 옛 값이 그대로 남아 있었다. */}
+        {profile.age}세{myOccupation ? ` · ${myOccupation}` : ""}
       </h1>
       <p className="mt-1 text-[13px]">
         <span className="font-bold text-cyan">{labelOf(a.choice)}</span>
         <span className="text-mut"> vs </span>
         <span className="font-bold text-gold">{labelOf(b.choice)}</span>
       </p>
-      <EvidenceModeBadge a={a} b={b} domains={result.domains || scenarioDomains} />
-
+      <div className="mt-2 inline-flex items-center rounded-full border border-violet-400/30 bg-violet-500/10 px-3 py-1 text-[11px] font-semibold text-violet-200">
+        지금부터 {result.futureYears ?? 3}년 뒤의 두 미래
+      </div>
       <ol className="mt-5 grid grid-cols-4 gap-2" aria-label="결과 확인 단계">
         {RESULT_STEPS.map((label, index) => (
           <li key={label} className="min-w-0">
@@ -95,7 +107,12 @@ export default function Result() {
         ))}
       </ol>
 
+      {/* 근거 모드 배지는 '비교 분석'에서는 빼둔다 — 그 단계에는 항목별 근거가
+          바로 아래에 있고, 배지는 A·B 중 가장 강한 근거만 골라 한 줄로 쓴 것이라
+          나란히 놓으면 실제보다 단단해 보인다. 다른 단계에는 이 한 줄이 유일한
+          "확정 예측이 아니다" 표시라 그대로 둔다. */}
       {step === 0 && <section className="mt-5 animate-fade">
+      <EvidenceModeBadge a={a} b={b} domains={result.domains || scenarioDomains} />
       <AvatarComparison
         avatar={profile.avatarConfig}
         a={a}
@@ -107,6 +124,7 @@ export default function Result() {
         error={result.visualError || result.narrativeError}
         onRetry={result.visualError ? retryVisuals : null}
       />
+      <ResultQuickStats a={a} b={b} futureYears={result.futureYears ?? 3} />
       </section>}
 
       {step === 1 && <section className="mt-5 animate-fade lg:grid lg:grid-cols-[minmax(280px,.7fr)_minmax(0,1.3fr)] lg:items-start lg:gap-7">
@@ -138,11 +156,14 @@ export default function Result() {
         </div>
       </section>}
 
-      {step === 2 && <section className="mt-5 animate-fade lg:grid lg:grid-cols-2 lg:items-start lg:gap-7">
-        <div><ActionView a={a} b={b} domains={result.domains || scenarioDomains} dataMode={result.dataMode || "demo"} /></div>
-        <div>
-          <PersonaScenario a={a} b={b} />
-          <ThirdPath a={a} b={b} />
+      {step === 2 && <section className="mt-5 animate-fade">
+        <EvidenceModeBadge a={a} b={b} domains={result.domains || scenarioDomains} />
+        <div className="mt-4 lg:grid lg:grid-cols-2 lg:items-start lg:gap-7">
+          <div><ActionView a={a} b={b} domains={result.domains || scenarioDomains} dataMode={result.dataMode || "demo"} /></div>
+          <div>
+            <PersonaScenario a={a} b={b} />
+            <ThirdPath a={a} b={b} />
+          </div>
         </div>
       </section>}
 
@@ -245,8 +266,10 @@ function ThirdPath({ a, b }) {
       const r = await getThirdPath({
         choice_a: redactPII(a.choice, known).masked,
         choice_b: redactPII(b.choice, known).masked,
-        age: a.meta?.age,
-        major: a.meta?.occupation,
+        // 결과 스냅샷(a.meta)이 아니라 지금 프로필을 보낸다 — 프로필을 고친 뒤
+        // 생성하면 옛 나이·직종으로 서사가 쓰이던 자리다.
+        age: profile.age,
+        major: occupationLabel(profile),
         entries: isJob ? redactEntries(rawEntries, known).entries : [],
       });
       if (!r.ok) throw new Error(r.reason === "no_api_key" ? "서버에 ANTHROPIC_API_KEY 미설정" : r.reason || "생성 실패");
@@ -318,7 +341,7 @@ function PersonaScenario({ a, b }) {
         expected_wage: jc.expected_wage || 0,
         causal_effect: jc.causal_effect || 0,
         survival_months: jc.survival_months || 0,
-        age: jc.meta?.age, major: jc.meta?.occupation,
+        age: profile.age, major: occupationLabel(profile),
       });
       setRes(r);
     } catch (e) {

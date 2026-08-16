@@ -4,20 +4,21 @@
 // 로컬(localStorage)만. 추상 XP를 이 육성 재미로 대체한다.
 // ─────────────────────────────────────────────────────────────
 import { todayKey, hasCheckedInToday } from "./myUniverse.js";
+import storage from "./safeStorage.js";
 
 const KEY = "pm.petCare.v1";
 const DEF = { which: "cosmo", bond: 15, happiness: 60, snacks: 3, lastClaim: null, lastPat: null };
 
 export function loadPet() {
   try {
-    return { ...DEF, ...(JSON.parse(localStorage.getItem(KEY) || "{}")) };
+    return { ...DEF, ...(JSON.parse(storage.getItem(KEY) || "{}")) };
   } catch {
     return { ...DEF };
   }
 }
 export function savePet(p) {
   try {
-    localStorage.setItem(KEY, JSON.stringify(p));
+    storage.setItem(KEY, JSON.stringify(p));
   } catch { /* 무시 */ }
   return p;
 }

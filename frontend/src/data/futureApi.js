@@ -6,6 +6,7 @@ import { doneExpeditions } from "./expeditions.js";
 import { domainAnalysis } from "./diarySignals.js";
 import { localPersonaBlock } from "./jobAnalysis.js";
 import { API_BASE } from "./apiBase.js";
+import storage from "./safeStorage.js";
 
 const BASE = API_BASE;
 
@@ -15,7 +16,7 @@ const KEY = "pm.future.v1";
 const cacheKey = (planetKey, years) => `${planetKey}:${years}`;
 
 export function loadFutureCache() {
-  try { return JSON.parse(localStorage.getItem(KEY) || "{}"); } catch { return {}; }
+  try { return JSON.parse(storage.getItem(KEY) || "{}"); } catch { return {}; }
 }
 export function getCachedFuture(planetKey, years) {
   return loadFutureCache()[cacheKey(planetKey, years)] || null;
@@ -24,7 +25,7 @@ function putCachedFuture(planetKey, years, value) {
   try {
     const all = loadFutureCache();
     all[cacheKey(planetKey, years)] = value;
-    localStorage.setItem(KEY, JSON.stringify(all));
+    storage.setItem(KEY, JSON.stringify(all));
   } catch { /* 저장 실패는 무시 — 화면엔 이미 떠 있다 */ }
 }
 
@@ -103,13 +104,13 @@ export function futureMaterials(planetKey, s = loadUniverse()) {
 const OPP_KEY = "pm.opportunity.v1";
 
 export function getCachedOpportunities(planetKey) {
-  try { return JSON.parse(localStorage.getItem(OPP_KEY) || "{}")[planetKey] || null; } catch { return null; }
+  try { return JSON.parse(storage.getItem(OPP_KEY) || "{}")[planetKey] || null; } catch { return null; }
 }
 function putCachedOpportunities(planetKey, value) {
   try {
-    const all = JSON.parse(localStorage.getItem(OPP_KEY) || "{}");
+    const all = JSON.parse(storage.getItem(OPP_KEY) || "{}");
     all[planetKey] = value;
-    localStorage.setItem(OPP_KEY, JSON.stringify(all));
+    storage.setItem(OPP_KEY, JSON.stringify(all));
   } catch { /* 무시 */ }
 }
 

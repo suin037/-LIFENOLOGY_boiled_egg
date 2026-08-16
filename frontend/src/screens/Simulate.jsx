@@ -1,49 +1,44 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, GitCompareArrows, Search, Sparkles, TrendingUp } from "lucide-react";
+import { GitCompareArrows, Search, Sparkles, TrendingUp } from "lucide-react";
 import { useResult } from "../data/ResultContext.jsx";
 import { labelOf } from "../data/prediction.js";
 import Stars from "../components/Stars.jsx";
 import { PLANET_TEXTURES } from "../data/planetSurface.js";
 import { toPlanetKey } from "../data/choices.js";
 
-const STEPS = [
+const STATUS_MESSAGES = [
   { label: "입력한 선택 이해하기", icon: Search },
   { label: "관련 데이터 연결하기", icon: TrendingUp },
   { label: "두 선택 비교하기", icon: GitCompareArrows },
   { label: "결과 화면 준비하기", icon: Sparkles },
 ];
 
-// 단계당 표시 시간. 4단계 × 1400ms = 최소 5.6초 — 체크되는 항목을 읽을 수 있을 만큼 머문다.
-const STEP_MS = 1400;
-
 export default function Simulate() {
   const navigate = useNavigate();
   const { runSimulation, choices, scenarioTexts, scenarioDomains } = useResult();
-  const [done, setDone] = useState(0);
+  const [messageIndex, setMessageIndex] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    // 백엔드 /simulate 호출 — 결과가 준비된 뒤 결과 화면으로 이동(레이스 방지).
+    // 실제 비교 요청이 끝날 때까지만 유지한다. 가짜 퍼센트나 최소 대기시간 없이
+    // 처리 중이라는 연속 애니메이션만 보여준다.
     const sim = runSimulation();
-    let i = 0;
-    const tick = setInterval(() => {
-      i += 1;
-      setDone(Math.min(i, STEPS.length));
-      if (i >= STEPS.length) clearInterval(tick);
-    }, STEP_MS);
-    // 애니메이션(최소 표시시간)과 실제 호출이 모두 끝나면 이동.
-    Promise.all([sim, new Promise((r) => setTimeout(r, STEPS.length * STEP_MS))]).finally(() => {
-      if (!cancelled) setTimeout(() => navigate("/result", { replace: true }), 400);
+    const ticker = setInterval(() => {
+      setMessageIndex((current) => (current + 1) % STATUS_MESSAGES.length);
+    }, 1800);
+    sim.finally(() => {
+      if (!cancelled) navigate("/result", { replace: true });
     });
     return () => {
       cancelled = true;
-      clearInterval(tick);
+      clearInterval(ticker);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const progress = Math.max(8, Math.round((done / STEPS.length) * 100));
+  const activeStatus = STATUS_MESSAGES[messageIndex];
+  const ActiveStatusIcon = activeStatus.icon;
   const planetA = PLANET_TEXTURES[toPlanetKey(scenarioDomains.a) || "career"];
   const planetB = PLANET_TEXTURES[toPlanetKey(scenarioDomains.b) || "growth"];
 
@@ -101,34 +96,18 @@ export default function Simulate() {
       <div className="mt-4 rounded-[18px] bg-card p-4 lg:rounded-[24px] lg:border lg:border-white/10 lg:p-6">
         <div className="mb-3 flex items-center justify-between">
           <span className="text-[13px] font-semibold text-ink">분석 진행</span>
-          <span className="text-[11px] font-semibold tabular-nums text-cyan">{progress}%</span>
+          <span className="flex items-center gap-1 text-[10px] font-semibold text-cyan"><i className="h-1.5 w-1.5 animate-pulse rounded-full bg-cyan" /> 처리 중</span>
         </div>
-        <div className="h-1.5 overflow-hidden rounded-full bg-[#223047]">
-          <div
-            className="h-full rounded-full bg-[#8B6CCF] transition-[width] duration-500 ease-out"
-            style={{ width: `${progress}%` }}
-          />
+        <div className="relative h-1.5 overflow-hidden rounded-full bg-[#223047]">
+          <div className="absolute inset-0 animate-pulse rounded-full bg-gradient-to-r from-violet-600/25 via-[#A783FF] to-violet-600/25" />
         </div>
 
-        <div className="mt-4 space-y-1">
-          {STEPS.map(({ label, icon: Icon }, i) => {
-            const isDone = i < done;
-            const isActive = i === done;
-            return (
-              <div
-                key={label}
-                className={`flex min-h-9 items-center gap-2.5 rounded-xl px-2.5 text-[12px] transition-colors ${
-                  isActive ? "bg-card2 text-ink" : isDone ? "text-sub" : "text-mut"
-                }`}
-              >
-                <span className={`flex h-6 w-6 items-center justify-center rounded-full ${isDone ? "bg-violet-500/15 text-violet-400" : isActive ? "bg-violet-500/10 text-violet-300" : "text-violet-400/50"}`}>
-                  {isDone ? <Check size={14} strokeWidth={2.5} /> : <Icon size={14} strokeWidth={1.8} />}
-                </span>
-                <span>{label}</span>
-                {isActive && <span className="ml-auto flex gap-1"><i className="h-1 w-1 animate-pulse rounded-full bg-cyan" /><i className="h-1 w-1 animate-pulse rounded-full bg-cyan [animation-delay:150ms]" /><i className="h-1 w-1 animate-pulse rounded-full bg-cyan [animation-delay:300ms]" /></span>}
-              </div>
-            );
-          })}
+        <div key={activeStatus.label} className="mt-4 flex min-h-10 animate-fade items-center gap-2.5 rounded-xl bg-card2 px-3 text-[12px] text-ink">
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-violet-500/10 text-violet-300">
+            <ActiveStatusIcon size={14} strokeWidth={1.8} />
+          </span>
+          <span>{activeStatus.label}</span>
+          <span className="ml-auto flex gap-1"><i className="h-1 w-1 animate-pulse rounded-full bg-cyan" /><i className="h-1 w-1 animate-pulse rounded-full bg-cyan [animation-delay:150ms]" /><i className="h-1 w-1 animate-pulse rounded-full bg-cyan [animation-delay:300ms]" /></span>
         </div>
       </div>
 

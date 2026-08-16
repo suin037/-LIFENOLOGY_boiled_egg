@@ -6,6 +6,7 @@ import UserGuide from "./UserGuide.jsx";
 import ReminderBell from "./ReminderBell.jsx";
 import ReminderToast from "./ReminderToast.jsx";
 import { useResult } from "../data/ResultContext.jsx";
+import storage from "../data/safeStorage.js";
 
 // 탭바를 숨기는 경로 (랜딩·온보딩·로딩)
 // /resume 은 다른 기기 링크로 처음 들어오는 자리다. 아직 이 기기엔 기록이 없으므로
@@ -33,6 +34,8 @@ export default function Layout() {
 
   const showTabBar = !NO_TABBAR.includes(pathname);
   const showProfile = !NO_PROFILE.includes(pathname);
+  // 알람 종·토스트는 메인 화면(탭바 있는 곳)에서만 — 랜딩·온보딩·로딩엔 안 뜬다.
+  // 비교 진행 중(isSimulationFlow)에는 종·프로필도 접는다.
   const showReminders = showTabBar;
   const useWideDesktop = WIDE_DESKTOP.includes(pathname);
   const isLanding = pathname === "/";
@@ -42,10 +45,10 @@ export default function Layout() {
   const isSimulationFlow = pathname === "/simulate";
   const useFullDesktop = isDesktopWorkspace || isOnboarding || pathname === "/simulate";
   const [guideOpen, setGuideOpen] = useState(() => {
-    try { return localStorage.getItem("pm.guide.seen.v1") !== "1"; } catch { return true; }
+    try { return storage.getItem("pm.guide.seen.v1") !== "1"; } catch { return true; }
   });
   const closeGuide = () => {
-    try { localStorage.setItem("pm.guide.seen.v1", "1"); } catch { /* 저장 불가 환경 */ }
+    try { storage.setItem("pm.guide.seen.v1", "1"); } catch { /* 저장 불가 환경 */ }
     setGuideOpen(false);
   };
   // /resume 은 링크로 곧장 들어오는 자리라 돌아갈 이전 화면이 없다.
@@ -125,8 +128,13 @@ export default function Layout() {
         </main>
 
         {showTabBar && <TabBar />}
+
+        {/* 오버레이(알람 패널·꾸미기 상점 등) 포탈 루트 — 프레임 전체를 덮는다 */}
         <div id="pm-overlay-root" />
+
+        {/* 하루 한 번 '오늘의 한 걸음' 토스트 (포탈로 상단에 렌더) */}
         {showReminders && <ReminderToast />}
+
         {isLanding && <button type="button" onClick={() => setGuideOpen(true)} className="tap absolute right-5 top-5 z-30 flex items-center gap-1.5 rounded-full border border-white/15 bg-black/20 px-3 py-2 text-[11px] font-semibold text-white/80 backdrop-blur-md"><HelpCircle size={15}/> 사용 방법</button>}
         <UserGuide open={guideOpen} onClose={closeGuide} />
       </div>

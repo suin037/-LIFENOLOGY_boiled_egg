@@ -10,17 +10,18 @@
 //   프라이버시·연합학습은 로드맵(구현 전이면 구현했다 하지 않는다).
 // ─────────────────────────────────────────────────────────────
 import { computeDiarySignals, dominantDomain } from "./diarySignals.js";
+import storage from "./safeStorage.js";
 
 const ANON_KEY = "pm.anonId.v1";
 const CONSENT_KEY = "pm.contribConsent.v1";
 
 function anonId() {
   try {
-    let id = localStorage.getItem(ANON_KEY);
+    let id = storage.getItem(ANON_KEY);
     if (!id) {
       const rnd = crypto.getRandomValues(new Uint8Array(8));
       id = "anon_" + [...rnd].map((b) => b.toString(16).padStart(2, "0")).join("");
-      localStorage.setItem(ANON_KEY, id);
+      storage.setItem(ANON_KEY, id);
     }
     return id;
   } catch {
@@ -30,14 +31,14 @@ function anonId() {
 
 export function getConsent() {
   try {
-    return localStorage.getItem(CONSENT_KEY) === "1";
+    return storage.getItem(CONSENT_KEY) === "1";
   } catch {
     return false;
   }
 }
 export function setConsent(on) {
   try {
-    localStorage.setItem(CONSENT_KEY, on ? "1" : "0");
+    storage.setItem(CONSENT_KEY, on ? "1" : "0");
   } catch {
     /* 무시 */
   }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Card, Caption } from "./ui.jsx";
+import { Caption } from "./ui.jsx";
 import { useDiary, MOODS } from "../data/DiaryContext.jsx";
 import { CHECKIN } from "../data/questions.js";
 import ChatDiary from "./ChatDiary.jsx";
@@ -16,7 +16,7 @@ const GUIDES = [
   { key: "health", mascot: "lumi", name: "루미", topic: "몸과 마음", color: "#FFD97A", prompt: "몸과 마음의 신호를 천천히 살펴봐요." },
 ];
 
-// 홈 "체크인" 카드 — 2층 일기.
+// 일기 화면의 기록 작성 영역 — 2층 일기.
 //  · 30초 데일리: 기분 5단계(→ 그날 별 밝기) + 에너지·역량·감정키워드 칩
 //  · '자세히 답하기' 버튼 → 오늘의 질문(고정2+랜덤2) 펼침 → 성향 신호
 export default function DiaryToday() {
@@ -58,6 +58,14 @@ export default function DiaryToday() {
     // 감정/기분을 안 골랐으면 → 내가 만든 감정모델로 일기에서 추론(우선).
     let finalMood = mood;
     let finalEmotion = emotion;
+    let composed = null;
+    if (chatHasUser) {
+      try {
+        composed = await composeDiary(chatMsgs);
+      } catch {
+        composed = null;
+      }
+    }
     if ((finalMood == null || !finalEmotion) && bodyText) {
       const em = await analyzeEmotion(bodyText);
       if (em) {
@@ -67,17 +75,16 @@ export default function DiaryToday() {
     }
     // 감정모델 불가(체크포인트 없음 등)로 기분이 여전히 비었으면 → LLM compose 폴백.
     if (finalMood == null && chatHasUser) {
-      try {
-        const c = await composeDiary(chatMsgs);
-        if (c) {
-          finalMood = c.mood ?? 3;
-          if (!finalEmotion) finalEmotion = c.emotion || null;
-        }
-      } catch {
-        finalMood = 3;
-      }
+      finalMood = composed?.mood ?? 3;
+      if (!finalEmotion) finalEmotion = composed?.emotion || null;
     }
-    saveToday(finalMood, bodyText, null, { energy, competency, emotion: finalEmotion });
+    saveToday(finalMood, bodyText, null, {
+      energy,
+      competency,
+      emotion: finalEmotion,
+      insights: composed?.insights || null,
+      chatSummary: composed?.text || null,
+    });
     if (activeGoal && experimentResult) {
       const actionId = `checkin:${activeGoal.side || "goal"}:${activeGoal.createdAt || activeGoal.choice}`;
       saveActionResponse(actionId, experimentResult);
@@ -89,19 +96,13 @@ export default function DiaryToday() {
   }
 
   return (
-    <Card className="w-full lg:flex lg:h-full lg:flex-col lg:p-5">
-      <div className="mb-4 rounded-[18px] border border-violet-400/20 bg-violet-500/[.07] px-4 py-3">
-        <div className="text-[12px] font-bold text-violet-200">기록은 다음 미래 비교에 이어져요</div>
-        <p className="mt-1 text-[10px] leading-relaxed text-sub">
-          반복되는 고민과 감정 흐름을 파악해 비교 주제 추천·심리 해석·결과 설명을 개인화해요. 예측 숫자를 임의로 바꾸지는 않아요.
-        </p>
-      </div>
+    <section className="w-full">
       <GuideCarousel onOpen={setActiveGuide} />
       <WeekStrip entries={entries} />
 
-      <div className="flex items-center justify-between">
+      <div className="mt-6 flex items-center justify-between border-t border-white/[.08] pt-6">
         <div>
-          <div className="text-sm font-bold">오늘의 기록</div>
+          <div className="text-sm font-bold">오늘 기록하기</div>
           <div className="mt-0.5 text-[10px] text-mut">가볍게 한 줄만 남겨도 괜찮아요.</div>
         </div>
         {checkinDone && <span className="rounded-full bg-cyan/10 px-2.5 py-1.5 text-[10px] font-semibold text-cyan">체크인 완료</span>}
@@ -306,7 +307,7 @@ export default function DiaryToday() {
           </div>
         </div>
       )}
-    </Card>
+    </section>
   );
 }
 

@@ -12,6 +12,7 @@ export default function ActionView({ a, b, domains = { a: [], b: [] } }) {
   const sig = useMemo(() => computeDiarySignals({ windowDays: 28 }), []);
   const selected = goal?.side === "A" && goal.choice === a.choice ? { side: "A", result: a, domains: domains.a || [] }
     : goal?.side === "B" && goal.choice === b.choice ? { side: "B", result: b, domains: domains.b || [] } : null;
+  // 신호 게이팅(진로 계열에만 주입)은 actionsForGoal 안에 있다 — 보관함·알람과 같은 규칙.
   const actions = useMemo(
     () => selected ? actionsForGoal(selected.result.choice, selected.domains, sig) : [],
     [selected?.result.choice, selected?.domains.join("|"), sig],

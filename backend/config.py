@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     # 환경변수 CLAUDE_MODEL 로 덮어쓸 수 있음(예: claude-sonnet-5 / claude-opus-4-8).
     claude_model: str = "claude-haiku-4-5"
 
+    # 셀카 → 아바타 설정 분석용. 사진을 "보고" 우리 선택지 중에서 고른다.
+    # 서사용 모델(claude_model)보다 정확도가 중요한 작업이라 따로 둔다.
+    avatar_vision_model: str = "claude-opus-5"
+
     # ── 서사 생성 지연 ──
     # 서사 호출 지연은 입력 처리가 아니라 출력 토큰 생성이 전부다(측정: 입력
     # 4,057tok 처리는 무시할 수준, 출력 1,266tok ÷ ~100tok/s = 12.4s).

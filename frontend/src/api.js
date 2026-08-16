@@ -131,12 +131,21 @@ export function mapSimulateToResult(sim) {
   };
 }
 
-function buildSimulateBody({ profile, choiceA, choiceB, choiceADetail, choiceBDetail, choiceADomains, choiceBDomains, choiceAContext, choiceBContext, diary }) {
+function buildSimulateBody({ profile, choiceA, choiceB, choiceADetail, choiceBDetail, choiceADomains, choiceBDomains, choiceAContext, choiceBContext, futureYears = 3, diary }) {
   const body = {
     profile: {
       age: profile.age,
-      sex: profile.sex,
-      major: profile.major || profile.occupation || "공학",
+      // 성별은 선택 정보다. 없으면 그대로 비워 보내고 백엔드가 전체 표본으로
+      // 떨어뜨린다. 예전엔 `|| "1"` 로 남성을 채웠는데, 고른 적 없는 성별의
+      // 유사집단 통계가 붙었다.
+      sex: profile.sex || null,
+      // 전공 계열은 '사용자가 실제로 고른 경우'에만 보낸다.
+      // 예전엔 `profile.major || profile.occupation || "공학"` 이었다. major 는 교육
+      // 영역 비교에서만 뜨는 조건부 입력이라 대부분 비어 있는데, 그때 조용히 "공학"이
+      // 들어가 서사가 "공학 배경은 창업의 기술적 기초가 될 수 있지만…" 처럼 없는
+      // 사실을 말했다. 직종(occupation, 8분류)으로 대신 채우는 것도 안 된다 —
+      // 백엔드 major 는 계열명(인문·사회·…)을 기대하는 자리라 값의 종류가 다르다.
+      ...(profile.major ? { major: profile.major } : {}),
       monthly_wage: Number(profile.income ?? profile.monthly_wage) > 0 ? Number(profile.income ?? profile.monthly_wage) : null,
       edu_level: profile.edu_level ?? 7,
       occupation_group: profile.occupation_group ?? null,
@@ -149,6 +158,7 @@ function buildSimulateBody({ profile, choiceA, choiceB, choiceADetail, choiceBDe
     },
     choice_a: choiceA,
     choice_b: choiceB,
+    future_years: futureYears,
   };
   if (profile.value_ranking?.length) body.value_ranking = profile.value_ranking;
   if (choiceADetail?.trim()) body.choice_a_detail = choiceADetail.trim();
@@ -156,8 +166,8 @@ function buildSimulateBody({ profile, choiceA, choiceB, choiceADetail, choiceBDe
   // 새 삶의 영역 계약용 필드. 현재 백엔드는 extra 필드를 무시하므로 기존 API와 호환된다.
   if (choiceADomains?.length) body.choice_a_domains = choiceADomains;
   if (choiceBDomains?.length) body.choice_b_domains = choiceBDomains;
-  if (choiceAContext?.event) body.choice_a_context = choiceAContext;
-  if (choiceBContext?.event) body.choice_b_context = choiceBContext;
+  if (choiceAContext && Object.keys(choiceAContext).length) body.choice_a_context = choiceAContext;
+  if (choiceBContext && Object.keys(choiceBContext).length) body.choice_b_context = choiceBContext;
   if (diary) body.diary = diary;
 
   // 심리 성향 서술(MBTI + 서술형 답변) → disposition_block + 답변 수(확신도).
@@ -192,6 +202,7 @@ export async function runCompareRaw(args) {
       profile: body.profile,
       choice_a: body.choice_a,
       choice_b: body.choice_b,
+      future_years: body.future_years,
       ...(body.choice_a_detail ? { choice_a_detail: body.choice_a_detail } : {}),
       ...(body.choice_b_detail ? { choice_b_detail: body.choice_b_detail } : {}),
       // 삶의 영역(항목3·4) — /compare 도 영역지표·근거수준·그래프 가드를 반환하도록 함께 전송
@@ -233,7 +244,7 @@ export async function runSimulate(args) {
   return mapSimulateToResult(await runSimulateRaw(args));
 }
 
-export async function generateSceneImages({ avatarBlob, avatarSpec, choiceA, choiceB, narrative, timeoutMs = 60000 }) {
+export async function generateSceneImages({ avatarBlob, avatarSpec, choiceA, choiceB, futureYears = 3, narrative, timeoutMs = 60000 }) {
   const storyText = (story) => {
     if (typeof story === "string") return story;
     const detail = story?.detail || {};
@@ -242,10 +253,18 @@ export async function generateSceneImages({ avatarBlob, avatarSpec, choiceA, cho
       .join(" ");
   };
   const form = new FormData();
+  const desktopImage = typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches;
+  const visualSize = desktopImage
+    ? { width: 768, height: 432, format: "landscape 16:9" }
+    : { width: 512, height: 640, format: "portrait 4:5" };
   form.append("avatar", avatarBlob, "avatar.png");
   form.append("avatar_spec", JSON.stringify(avatarSpec || {}));
   form.append("choice_a", choiceA);
   form.append("choice_b", choiceB);
+  form.append("future_years", String(futureYears));
+  form.append("visual_width", String(visualSize.width));
+  form.append("visual_height", String(visualSize.height));
+  form.append("visual_format", visualSize.format);
   form.append("narrative_a", storyText(narrative.a));
   form.append("narrative_b", storyText(narrative.b));
   form.append("visual_a", JSON.stringify(narrative.visual_a || {}));

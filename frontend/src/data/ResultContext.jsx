@@ -7,6 +7,7 @@ import { avatarToPngBlob } from "./avatarImage.js";
 import { avatarGenerationSpec } from "./avatarOptions.js";
 import { initDemoFromUrl, noteSimulationRun, recordScenario, loadUniverse } from "./myUniverse.js";
 import { toPlanetKey } from "./choices.js";
+import storage from "./safeStorage.js";
 
 // 결과 데이터 + 온보딩 프로필을 한 곳에 모으는 컨텍스트.
 // runSimulation() 이 선택(choices)+심정(diary)으로 결과 쌍{a,b}을 만든다.
@@ -23,7 +24,10 @@ const DEFAULT_PROFILE = {
   sex: null, // GOMS 코드: "1" 남 / "2" 여. 입력 없이 임의 기본값을 사용하지 않는다.
   sexConfirmed: false,
   major: "사회", // 전공 계열
-  occupation: "사회계열",
+  // 직종은 기본값을 두지 않는다. 예전 기본값 "사회계열" 은 온보딩 직종 목록
+  // (profileOptions.OCCUPATIONS)에 아예 없는 값이라, 사용자는 고른 적도 없고
+  // 드롭다운에서 찾을 수도 없는 직종이 화면에 박혀 있었다.
+  occupation: "",
   income: null, // 온보딩에서 직접 입력 → 백엔드 monthly_wage
   edu_level: 7, // 대졸
   occupation_group: null, // KSCO 직종 대분류 1~9 — 이직 시뮬레이션에서 수집
@@ -43,7 +47,7 @@ const PROFILE_KEY = "pm.profile.v1";
 
 function loadProfile() {
   try {
-    const saved = JSON.parse(localStorage.getItem(PROFILE_KEY) || "null");
+    const saved = JSON.parse(storage.getItem(PROFILE_KEY) || "null");
     if (!saved) return DEFAULT_PROFILE;
     const merged = { ...DEFAULT_PROFILE, ...saved };
     // 이전 버전은 입력 없이 sex="2"를 저장했다. 사용자가 직접 고른 기록이 없는
@@ -55,17 +59,41 @@ function loadProfile() {
   }
 }
 
+function collectDiaryInsights(limit = 7) {
+  const checkins = loadUniverse().checkins || [];
+  const recent = checkins.filter((item) => item?.insights).slice(-limit);
+  if (!recent.length) return null;
+
+  const unique = (items, max = 8) => [...new Set(items.filter(Boolean))].slice(0, max);
+  const pick = (key) => unique(recent.flatMap((item) => item.insights?.[key] || []));
+  const preferenceSignals = recent
+    .flatMap((item) => item.insights?.preference_signals || [])
+    .filter((item) => item?.label && item?.evidence)
+    .slice(-8);
+
+  return {
+    source: "recent_chat_diaries",
+    decision_topics: unique(recent.map((item) => item.insights?.decision_topic)),
+    goals: pick("goals"),
+    priorities: pick("priorities"),
+    constraints: pick("constraints"),
+    concerns: pick("concerns"),
+    preference_signals: preferenceSignals,
+  };
+}
+
 export function ResultProvider({ children }) {
   const [profile, setProfile] = useState(loadProfile);
   useEffect(() => {
     try {
-      localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+      storage.setItem(PROFILE_KEY, JSON.stringify(profile));
     } catch { /* 저장 실패는 무시 — 기능은 계속 동작 */ }
   }, [profile]);
   const [choices, setChoices] = useState({ a: "이직", b: "유지" });
   const [scenarioTexts, setScenarioTexts] = useState({ a: "", b: "" });
   const [scenarioDomains, setScenarioDomains] = useState({ a: [], b: [] });
   const [scenarioContexts, setScenarioContexts] = useState({ a: {}, b: {} });
+  const [futureYears, setFutureYears] = useState(3);
   const [diary, setDiary] = useState("");
   const [result, setResult] = useState(() =>
     ({ ...getPredictionPair({ profile: DEFAULT_PROFILE, choiceA: "이직", choiceB: "유지" }), dataMode: "demo" }),
@@ -137,6 +165,11 @@ export function ResultProvider({ children }) {
       ...(opts.choiceBDomains ?? scenarioDomains.b ?? []),
     ];
     const scenarioDomain = toPlanetKey(domainsForScenario) || loadUniverse().planet || "career";
+    const diaryInsights = collectDiaryInsights();
+    const withDiaryInsights = (context) => ({
+      ...(context || {}),
+      ...(diaryInsights ? { diary_insights: diaryInsights } : {}),
+    });
     noteSimulationRun();
     // 그 날 그 영역(현재 행성)에서 시나리오를 만들었음을 기록 → 지구본에 ◆ 로 표시.
     try {
@@ -150,19 +183,21 @@ export function ResultProvider({ children }) {
     // 이 시뮬레이션이 어느 행성 얘기였는지 결과에 남긴다 — 보관함에 저장한 뒤
     // 회고까지 붙으면 '그 영역의 N년 뒤'를 쓸 때 재료로 다시 꺼내 쓴다.
     const pair = { ...getPredictionPair({ profile, choiceA, choiceB, detail: currentDiary }),
-                   dataMode: "demo", planetDomain: scenarioDomain };
+                   dataMode: "demo", planetDomain: scenarioDomain,
+                   futureYears: opts.futureYears ?? futureYears };
     setResult(pair);
     setHasSimulationResult(true);
     const requestArgs = {
       profile,
+      futureYears: opts.futureYears ?? futureYears,
       choiceA,
       choiceB,
       choiceADetail: opts.choiceADetail ?? scenarioTexts.a,
       choiceBDetail: opts.choiceBDetail ?? scenarioTexts.b,
       choiceADomains: opts.choiceADomains ?? scenarioDomains.a,
       choiceBDomains: opts.choiceBDomains ?? scenarioDomains.b,
-      choiceAContext: opts.choiceAContext ?? scenarioContexts.a,
-      choiceBContext: opts.choiceBContext ?? scenarioContexts.b,
+      choiceAContext: withDiaryInsights(opts.choiceAContext ?? scenarioContexts.a),
+      choiceBContext: withDiaryInsights(opts.choiceBContext ?? scenarioContexts.b),
       diary: currentDiary,
     };
     let preview;
@@ -184,6 +219,7 @@ export function ResultProvider({ children }) {
         },
         narrativeLoading: true,
         imageLoading: true,
+        futureYears: requestArgs.futureYears,
       };
       setResult(preview);
       setHasSimulationResult(true);
@@ -221,6 +257,7 @@ export function ResultProvider({ children }) {
         avatarSpec: avatarGenerationSpec(profile.avatarConfig),
         choiceA,
         choiceB,
+        futureYears: requestArgs.futureYears,
         narrative: {
           a: requestArgs.choiceADetail || choiceA,
           b: requestArgs.choiceBDetail || choiceB,
@@ -282,6 +319,7 @@ export function ResultProvider({ children }) {
         avatarSpec: avatarGenerationSpec(profile.avatarConfig),
         choiceA: result.a.choice,
         choiceB: result.b.choice,
+        futureYears: result.futureYears ?? futureYears,
         narrative,
       });
       setResult((current) => ({
@@ -296,13 +334,27 @@ export function ResultProvider({ children }) {
     }
   }
 
+  /**
+   * 저장소의 프로필을 다시 읽어온다 — 페르소나 슬롯을 갈아끼운 직후에 부른다.
+   *
+   * 예전에는 전환 뒤 window.location.reload() 로 컨텍스트를 새로 띄웠다. 그런데
+   * iframe·사파리에서는 저장소가 메모리라(safeStorage) **새로고침하면 방금 심은
+   * 1년치가 통째로 날아간다.** 그래서 새로고침 대신 이 함수로 상태만 갈아끼운다.
+   * 기록(pm.myuniverse.v1)은 restoreLive 가 쏘는 'pm:universe' 이벤트로 각 화면이
+   * 알아서 다시 읽으므로, 여기서는 프로필만 맡는다.
+   */
+  function reloadProfile() {
+    setProfile(loadProfile());
+  }
+
   const value = useMemo(
     () => ({
-      profile, setProfile,
+      profile, setProfile, reloadProfile,
       choices, setChoices,
       scenarioTexts, setScenarioTexts,
       scenarioDomains, setScenarioDomains,
       scenarioContexts, setScenarioContexts,
+      futureYears, setFutureYears,
       diary, setDiary,
       result, setResult,
       hasSimulationResult,
@@ -311,7 +363,7 @@ export function ResultProvider({ children }) {
       jobAnalyses, setJobAnalyses, jobBusy, analyzePostings,
       talks, setTalks, relResults, relBusy, analyzeTalks,
     }),
-    [profile, choices, scenarioTexts, scenarioDomains, scenarioContexts, diary, result, hasSimulationResult, onboarded,
+    [profile, choices, scenarioTexts, scenarioDomains, scenarioContexts, futureYears, diary, result, hasSimulationResult, onboarded,
      postings, jobAnalyses, jobBusy, talks, relResults, relBusy],
   );
 

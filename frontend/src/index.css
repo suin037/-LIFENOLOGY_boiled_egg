@@ -43,4 +43,26 @@
   .tap {
     min-height: 44px;
   }
+
+  /* 입력 화면의 progressive disclosure: 내용 높이와 투명도를 함께 전환한다. */
+  .smooth-details > .details-body {
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transition: grid-template-rows 280ms cubic-bezier(.22,.8,.25,1), opacity 180ms ease-out;
+  }
+  .smooth-details[open] > .details-body {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+  .smooth-details > .details-body > .details-body-inner {
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .smooth-details > .details-body {
+      transition: none;
+    }
+  }
 }
