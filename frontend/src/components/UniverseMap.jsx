@@ -189,8 +189,10 @@ function BackdropConstellations({ count = 14 }) {
   }, [count]);
   return <group>{figures.map((f)=><group key={f.key} position={f.position} onUpdate={(g)=>g.lookAt(0,0,0)}>
     <group rotation={[0,0,f.rotation]}>
-    <lineSegments geometry={f.line}><lineBasicMaterial color={f.color} transparent opacity={.14} depthWrite={false}/></lineSegments>
-    <points geometry={f.dots}><pointsMaterial color={f.color} size={.25} sizeAttenuation transparent opacity={.62} map={starSprite()} depthWrite={false} blending={THREE.AdditiveBlending}/></points>
+    {/* 장식이다. 기록 별자리(Constellation3D)와 생김새가 같아서 세기까지 비슷하면
+        사용자가 둘을 구분할 수 없다 — 반드시 기록 쪽보다 확실히 어두워야 한다. */}
+    <lineSegments geometry={f.line}><lineBasicMaterial color={f.color} transparent opacity={.07} depthWrite={false}/></lineSegments>
+    <points geometry={f.dots}><pointsMaterial color={f.color} size={.2} sizeAttenuation transparent opacity={.32} map={starSprite()} depthWrite={false} blending={THREE.AdditiveBlending}/></points>
     {f.halo && <>
       <mesh><ringGeometry args={[f.haloSize,f.haloSize+.012,96]}/><meshBasicMaterial color="#d4b77b" transparent opacity={.075} side={THREE.DoubleSide} depthWrite={false}/></mesh>
       <mesh rotation={[0,0,.55]}><ringGeometry args={[f.haloSize*.72,f.haloSize*.72+.009,72,1,0,Math.PI*1.42]}/><meshBasicMaterial color="#d4b77b" transparent opacity={.09} side={THREE.DoubleSide} depthWrite={false}/></mesh>
@@ -308,13 +310,21 @@ function Constellation3D({ group, index, anchorIndex, onOpen }) {
     <group position={[orbitRadius,0,0]} onClick={(e)=>{e.stopPropagation();onOpen?.(group);}}>
       <mesh visible={false}><sphereGeometry args={[.5,10,10]}/><meshBasicMaterial transparent opacity={0}/></mesh>
       <group ref={figure}>
-        <lineSegments geometry={edgeGeo}><lineBasicMaterial color="#AEBBD8" transparent opacity={.2}/></lineSegments>
+        {/* 선이 별자리를 '모양'으로 읽게 하는 유일한 요소다. 예전엔 .2 라 배경의
+            장식 별자리(.14)와 세기가 거의 같아, 어느 게 내 기록인지 눈이 구분할
+            근거가 없었다. 가산 블렌딩으로 어두운 배경 위에서 선이 발광하게 한다.
+            ※ 이 값은 배경(BackdropConstellations·StarLayer)보다 반드시 높아야 한다.
+              배경을 밝히려거든 여기도 같이 올릴 것 — 위계가 뒤집히면 원래 문제로 돌아간다. */}
+        <lineSegments geometry={edgeGeo}>
+          <lineBasicMaterial color="#CBD8F5" transparent opacity={.4}
+            blending={THREE.AdditiveBlending} depthWrite={false}/>
+        </lineSegments>
         {/* 기록은 하얀 별. 시나리오(마름모)와 한눈에 갈라지도록 색을 섞지 않는다.
             별을 Points 하나로 그린다 — 별마다 mesh + pointLight 를 두면 기록이 늘수록
             드로우콜과 동적 광원이 같이 늘어난다(1년치면 광원만 100개가 넘어 프레임이 무너졌다). */}
         <points geometry={starGeo}>
           <pointsMaterial
-            color="#EEF3FF" size={.13} sizeAttenuation transparent opacity={.72}
+            color="#EEF3FF" size={.17} sizeAttenuation transparent opacity={.85}
             map={starSprite()} depthWrite={false} blending={THREE.AdditiveBlending}
           />
         </points>
@@ -437,7 +447,9 @@ function Scene({ planets, groups, scenarios = [], selectedKey, onPlanetSelect, o
     <Nebulae reduced={reduced}/>
     <StarLayer count={reduced?700:1500} radius={48} size={.025} opacity={.38} seed={2} color="#bfc9e8"/>
     <StarLayer count={reduced?320:760} radius={27} size={.052} opacity={.58} seed={7} color="#e1e8ff"/>
-    <StarLayer count={reduced?95:260} radius={14} size={.095} opacity={.78} seed={13} color="#fff5df"/>
+    {/* 가장 가까운 배경 별층. 예전엔 opacity .78 로 기록 별자리의 별(.72)보다 밝아서,
+        사용자의 일기가 된 별이 아무 뜻 없는 배경 별에 밀렸다. 배경은 배경답게 물린다. */}
+    <StarLayer count={reduced?95:260} radius={14} size={.078} opacity={.52} seed={13} color="#fff5df"/>
     <Sparkles count={reduced?22:48} scale={[25,14,25]} size={.72} speed={.045} opacity={.16} color="#bac8ff" noise={1.8}/>
     <Galaxy reduced={reduced}/><OrbitRings/><BackdropConstellations count={reduced?8:14}/>
     {planets.map((planet,i)=><Planet key={planet.key} planet={planet} index={i} selected={planet.key===selectedKey} onSelect={onPlanetSelect} skin={skin}/>) }
