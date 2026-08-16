@@ -39,6 +39,7 @@ export const HAIR_STYLES = [
   { id: "menFringe", label: "남자 앞머리", hair: "menFringe", rear: null, custom: true },
   { id: "menPerm", label: "남자 펌", hair: "menPerm", rear: null, custom: true },
   { id: "menPermFringe", label: "남자 펌 · 앞머리", hair: "menPermFringe", rear: null, custom: true },
+  { id: "menPermPart", label: "남자 펌 · 5대5 가르마", hair: "menPermPart", rear: null, custom: true },
   { id: "menCrop", label: "남자 크롭컷", hair: "menCrop", rear: null, custom: true },
   // 단발도 긴머리처럼 가르마/앞머리 두 갈래로 둔다. 가르마 쪽은 빌트인 파츠 조합이라
   // 새로 그린 게 없다(sideComed + 짧은 뒷머리).
