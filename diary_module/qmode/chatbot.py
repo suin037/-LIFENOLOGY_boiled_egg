@@ -399,7 +399,54 @@ _COMPOSE_SYSTEM = (
 )
 
 
-def compose(messages, model=None, max_tokens=400):
+def _clean_insights(value):
+    """Keep only grounded, non-diagnostic signals that can be safely reused."""
+    value = value if isinstance(value, dict) else {}
+
+    def clean_text(item, limit=160):
+        return str(item or "").strip()[:limit]
+
+    def clean_list(key, limit=5):
+        items = value.get(key) if isinstance(value.get(key), list) else []
+        return [clean_text(item) for item in items if clean_text(item)][:limit]
+
+    signals = []
+    raw_signals = value.get("preference_signals", [])
+    for item in raw_signals if isinstance(raw_signals, list) else []:
+        if not isinstance(item, dict):
+            continue
+        label = clean_text(item.get("label"), 80)
+        evidence = clean_text(item.get("evidence"), 160)
+        if not label or not evidence:
+            continue
+        try:
+            confidence = max(0.0, min(1.0, float(item.get("confidence", 0.5))))
+        except (TypeError, ValueError):
+            confidence = 0.5
+        signals.append({"label": label, "evidence": evidence, "confidence": confidence})
+
+    future_options = []
+    raw_options = value.get("future_options", [])
+    for item in raw_options if isinstance(raw_options, list) else []:
+        if not isinstance(item, dict):
+            continue
+        label = clean_text(item.get("label"), 100)
+        detail = clean_text(item.get("detail"), 240)
+        if label:
+            future_options.append({"label": label, "detail": detail or label})
+
+    return {
+        "decision_topic": clean_text(value.get("decision_topic")),
+        "goals": clean_list("goals"),
+        "priorities": clean_list("priorities"),
+        "constraints": clean_list("constraints"),
+        "concerns": clean_list("concerns"),
+        "preference_signals": signals[:5],
+        "future_options": future_options[:2],
+    }
+
+
+def compose(messages, model=None, max_tokens=700):
     """대화 → {text(1인칭 일기), mood(1~5), emotion(한 단어), domains, primary}."""
     user_text = " ".join(
         (m.get("text") or "") for m in (messages or []) if m.get("role") not in ("bot", "assistant")
@@ -418,8 +465,16 @@ def compose(messages, model=None, max_tokens=400):
     )
     schema = ('반드시 이 JSON만:\n{"text":"1인칭 일기 2~3문장","mood":1~5(오늘 기분,높을수록 좋음),'
               '"emotion":"오늘을 한 단어로"}\n대화에 없는 내용은 넣지 말 것.')
+    schema += '''\nAlso include this object in the same JSON:
+"insights":{"decision_topic":"","goals":[],"priorities":[],"constraints":[],
+"concerns":[],"preference_signals":[{"label":"","evidence":"","confidence":0.0}],
+"future_options":[]}
+If and only if the user explicitly describes two alternative futures, also include
+two items in insights.future_options: [{"label":"short option A","detail":"grounded detail"},{"label":"short option B","detail":"grounded detail"}].
+Only extract information explicitly grounded in the user's words. Do not diagnose or infer personality,
+mental health, or other sensitive traits. Use empty values when there is no evidence.'''
     model = model or "claude-sonnet-5"
-    text, mood, emotion = user_text, 3, ""
+    text, mood, emotion, insights = user_text, 3, "", _clean_insights({})
     try:
         resp = client.messages.create(
             model=model, max_tokens=max_tokens, system=_COMPOSE_SYSTEM,
@@ -433,11 +488,13 @@ def compose(messages, model=None, max_tokens=400):
         mood = int(obj.get("mood") or 3)
         mood = max(1, min(5, mood))
         emotion = (obj.get("emotion") or "").strip()
+        insights = _clean_insights(obj.get("insights"))
     except Exception:      # noqa: BLE001
         pass
     dom = DT.tag(text)
     return {"text": text, "mood": mood, "emotion": emotion,
-            "domains": dom["domains"], "primary": dom["primary"], "method": "llm"}
+            "domains": dom["domains"], "primary": dom["primary"], "method": "llm",
+            "insights": insights}
 
 
 if __name__ == "__main__":

@@ -255,8 +255,8 @@ def _coverage(kind: str, layers: list[str], survival, effect, wb_meta: dict,
         # 못하므로(기타는 그 문구가 있는데 이 유형들은 없었다) 여기서 밝힌다.
         parts.append(
             f"커리어 예측(L2·L3·L5) 미적용 — {kind}은 임금·근속 경로의 선택이 아님. "
-            "KOWEPS 종단 처치효과(만족·건강·정신건강)로 답하며 "
-            "근거는 artifacts/koweps_life_effects.json"
+            "KOWEPS 최초 사건 전후의 기술통계(만족·건강·정신건강)를 참고하며 "
+            "인과효과나 개인예측이 아님. 근거는 artifacts/koweps_scenario_evidence.json"
         )
     elif kind == "창업":
         if survival is not None:

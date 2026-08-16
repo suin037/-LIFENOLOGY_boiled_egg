@@ -114,6 +114,8 @@ export function addCheckin(entry = {}) {
     text: entry.text ?? "", // 일기 본문
     answers: entry.answers ?? null, // 질문별 답 [{ q, a }]
     domains: entry.domains ?? null, // 자동 분류 영역(행성) key 배열 — /tag 결과
+    insights: entry.insights ?? null,
+    chatSummary: entry.chatSummary ?? null,
     diaryId: entry.diaryId ?? null,
     hasDiary: Boolean(
       entry.text?.trim() || entry.note?.trim()
@@ -126,6 +128,8 @@ export function addCheckin(entry = {}) {
     if (previous) {
       star.domains = entry.domains ?? previous.domains ?? null;
       star.experiments = entry.experiments ?? previous.experiments ?? [];
+      star.insights = entry.insights ?? previous.insights ?? null;
+      star.chatSummary = entry.chatSummary ?? previous.chatSummary ?? null;
     }
     const rest = s.checkins.filter((c) => c.date !== date);
     s.checkins = [...rest, star].sort((a, b) => a.date.localeCompare(b.date));
@@ -159,6 +163,8 @@ export function syncDiaryEntries(entries = []) {
         note,
         text,
         answers,
+        insights: entry.insights ?? previous.insights ?? null,
+        chatSummary: entry.chatSummary ?? previous.chatSummary ?? null,
         diaryId: entry.id ?? entry.diaryId ?? previous.diaryId ?? `e-${entry.date}`,
         domains: previous.domains ?? entry.domains ?? null,
         experiments: previous.experiments ?? entry.experiments ?? [],

@@ -64,11 +64,13 @@ export default function JobPostingInput({ postings, setPostings }) {
   const list = postings || [];
 
   return (
-    <details className="mt-3 rounded-2xl border border-white/10 bg-[#0B1423]/80 px-3.5 py-3">
+    <details className="smooth-details mt-3 rounded-2xl border border-white/10 bg-[#0B1423]/80 px-3.5 py-3">
       <summary className="cursor-pointer text-[11px] font-semibold text-sub">
         지원하려는 공고 담기 · 선택
         {list.length > 0 && <span className="ml-1 text-[10px] text-[#C7B5F2]">{list.length}개</span>}
       </summary>
+      <div className="details-body">
+        <div className="details-body-inner">
       <p className="mt-2 text-[10px] leading-relaxed text-mut">
         여기서는 담아두기만 해요. 시뮬레이션을 돌리면 결과 화면에서 요구 역량과
         <b className="text-sub"> 내 성향과 맞는 지점·부딪힐 지점</b>을 공고별로 보여드려요.
@@ -112,21 +114,24 @@ export default function JobPostingInput({ postings, setPostings }) {
           </div>
 
           {mode === "url" && (
-            <div className="mt-2 flex gap-1.5">
-              <input
-                value={url}
-                onChange={(event) => setUrl(event.target.value)}
-                placeholder="채용 공고 주소 붙여넣기"
-                className="min-w-0 flex-1 rounded-xl border border-line bg-bg px-3 py-2 text-[11px] text-ink outline-none placeholder:text-mut focus:border-cyan"
-              />
-              <button
-                type="button"
-                onClick={loadUrl}
-                disabled={!url.trim() || busy}
-                className="tap shrink-0 rounded-xl bg-white/10 px-3 text-[11px] font-bold text-ink disabled:opacity-40"
-              >
-                불러오기
-              </button>
+            <div className="mt-2">
+              <p className="mb-1.5 text-[9px] leading-4 text-mut">URL에서 공개된 공고 본문을 자동으로 읽어요. 로그인이나 화면 렌더링이 필요한 사이트는 본문 붙여넣기가 더 정확해요.</p>
+              <div className="flex gap-1.5">
+                <input
+                  value={url}
+                  onChange={(event) => setUrl(event.target.value)}
+                  placeholder="채용 공고 주소 붙여넣기"
+                  className="min-w-0 flex-1 rounded-xl border border-line bg-bg px-3 py-2 text-[11px] text-ink outline-none placeholder:text-mut focus:border-cyan"
+                />
+                <button
+                  type="button"
+                  onClick={loadUrl}
+                  disabled={!url.trim() || busy}
+                  className="tap shrink-0 rounded-xl bg-white/10 px-3 text-[11px] font-bold text-ink disabled:opacity-40"
+                >
+                  본문 불러오기
+                </button>
+              </div>
             </div>
           )}
 
@@ -172,6 +177,8 @@ export default function JobPostingInput({ postings, setPostings }) {
           </div>
         </>
       )}
+        </div>
+      </div>
     </details>
   );
 }

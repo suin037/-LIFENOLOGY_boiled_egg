@@ -137,6 +137,8 @@ export function DiaryProvider({ children }) {
       note: text,
       text,
       answers,
+      insights: extra.insights ?? null,
+      chatSummary: extra.chatSummary ?? null,
       domains: immediateDomains.length ? immediateDomains : null,
       diaryId: `e-${today}`,
     });

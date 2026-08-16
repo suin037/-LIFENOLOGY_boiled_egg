@@ -1,140 +1,65 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Orbit, ChevronRight, GitCompareArrows, BookOpen, Sparkles } from "lucide-react";
-import { useResult } from "../data/ResultContext.jsx";
+import { BookOpen, ChevronRight, LockKeyhole, Sparkles } from "lucide-react";
 import DiaryToday from "../components/DiaryToday.jsx";
-import DailySuggest from "../components/DailySuggest.jsx";
-import ExpeditionBoard from "../components/ExpeditionBoard.jsx";
 import ApiStatus from "../components/ApiStatus.jsx";
-import { loadUniverse, universeSummary } from "../data/myUniverse.js";
-import { domainAlerts } from "../data/diarySignals.js";
-import { toChoiceDomains } from "../data/choices.js";
+import { loadUniverse } from "../data/myUniverse.js";
 
-// 홈 = 진입 허브. 인사 + 마스코트 + 오늘 기록 + 새 시뮬 + 나의 우주 요약.
 export default function HomeHub() {
   const navigate = useNavigate();
-  const { profile, setChoices, setScenarioTexts, setScenarioDomains } = useResult();
-  const universe = universeSummary();
   const [universeState, setUniverseState] = useState(loadUniverse);
-  const [alerts, setAlerts] = useState(() => domainAlerts({ windowDays: 28 }).slice(0, 3));
 
   useEffect(() => {
-    const refresh = () => {
-      setAlerts(domainAlerts({ windowDays: 28 }).slice(0, 3));
-      setUniverseState(loadUniverse());
-    };
+    const refresh = () => setUniverseState(loadUniverse());
     window.addEventListener("pm:universe", refresh);
     return () => window.removeEventListener("pm:universe", refresh);
   }, []);
 
-  function startCompare(alert) {
-    setChoices({ a: alert.choiceA, b: alert.choiceB });
-    setScenarioTexts({ a: alert.choiceA, b: alert.choiceB });
-    // 결과 화면의 지표 필터는 선택지 영역 어휘를 쓴다 — 행성 key 를 그대로 주면 걸러진다.
-    const ds = toChoiceDomains(alert.domain);
-    setScenarioDomains({ a: ds, b: ds });
-    navigate("/input");
-  }
-
-  const recentActivity = [
-    ...(universeState.scenarios || []).map((item) => ({ type: "simulation", date: item.date, title: item.title || "새로운 미래를 비교했어요" })),
-    ...(universeState.checkins || []).filter((item) => !item.empty).map((item) => ({ type: "record", date: item.date, title: item.text || item.note || "오늘의 기록을 남겼어요" })),
-  ].filter((item) => item.date).sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 4);
+  const recentEntries = (universeState.checkins || [])
+    .filter((entry) => !entry.empty && (entry.text || entry.note || entry.emotion))
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)))
+    .slice(0, 5);
 
   return (
-    <div className="pb-2 lg:min-h-full lg:pb-10">
-      {/* 가이드 캐러셀 + 이번 주 기록 + 오늘 체크인 */}
-      <div className="lg:grid lg:grid-cols-[minmax(0,1.8fr)_minmax(360px,.8fr)] lg:items-stretch lg:gap-8 xl:gap-12">
-        <section className="min-w-0 lg:flex lg:flex-col">
-          <div className="mb-0.5 mt-1 text-[13px] text-sub lg:text-[15px]">안녕하세요, {profile.name?.trim() ? `${profile.name.trim()}님` : "탐험가님"} 👋</div>
-          <h1 className="text-[25px] font-bold leading-[1.22] tracking-[-.02em] lg:text-[42px] xl:text-[48px]">오늘도 어떤 갈림길을<br />비춰볼까요?</h1>
-          <div className="mt-5 lg:flex lg:flex-1 lg:mt-7"><DiaryToday /></div>
-        </section>
-        <aside className="lg:flex lg:h-full lg:flex-col lg:border-l lg:border-white/[.08] lg:pb-2 lg:pl-8 lg:pt-[174px] xl:pl-10 xl:pt-[202px]">
+    <div className="pb-4 lg:pb-12">
+      <header className="pb-5 lg:pb-7">
+        <div className="flex items-center gap-2 text-[11px] font-bold tracking-[.12em] text-violet-300"><BookOpen size={14} /> DIARY</div>
+        <h1 className="mt-2 text-[26px] font-black tracking-[-.04em] text-ink lg:text-[38px]">오늘의 기록</h1>
+        <p className="mt-1.5 max-w-[650px] text-[11px] leading-5 text-sub lg:text-[13px]">오늘 있었던 일과 마음을 한곳에 남겨보세요.</p>
+      </header>
 
-      {/* 영역별 알림 — 일기에서 문제가 드러난 영역마다 하나씩. 근거(무거웠던 날·신호 일수)를
-          카드에 그대로 적는다. 넘겨짚은 말이 아니라 기록에서 나온 말이어야 한다. */}
-      {alerts.map((alert) => (
-        <button
-          key={alert.domain}
-          onClick={() => startCompare(alert)}
-          className="tap mt-2.5 flex w-full items-center gap-3 rounded-[18px] border border-cyan/40 bg-[#1D1730] px-4 py-3.5 text-left transition-colors hover:bg-[#16264a] lg:max-w-[560px]"
-        >
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-500/15 text-violet-300">
-            <GitCompareArrows size={18} strokeWidth={2} />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-[13px] font-semibold text-cyan">
-              {alert.domainLabel} · 최근 {alert.windowDays}일 {alert.reason}
-            </span>
-            <span className="block text-[11px] text-sub">{alert.ask}</span>
-          </span>
-          <ChevronRight size={18} className="text-violet-400" />
-        </button>
-      ))}
+      <div className="grid items-start gap-8 border-t border-white/[.08] pt-6 lg:grid-cols-[minmax(0,1.55fr)_minmax(300px,.65fr)] lg:gap-10 lg:pt-8">
+        <main className="min-w-0 lg:pr-2"><DiaryToday /></main>
 
-      {/* 나의 우주 요약 */}
-      <div className="mb-2 mt-4 flex items-center justify-between px-1 lg:mt-0">
-        <span className="text-[15px] font-bold text-ink">나의 우주</span>
-        <button
-          onClick={() => navigate("/my")}
-          className="tap flex items-center gap-0.5 text-[12px] text-mut"
-        >
-          전체 보기 <ChevronRight size={14} className="text-violet-400" />
-        </button>
-      </div>
+        <aside className="space-y-4 lg:sticky lg:top-[100px]">
+          <section className="rounded-[20px] border border-white/[.08] bg-white/[.025] p-4">
+            <div className="flex items-center gap-2 text-[12px] font-bold text-ink"><LockKeyhole size={15} className="text-violet-300" /> 기록은 이렇게 활용돼요</div>
+            <ul className="mt-3 space-y-2.5 text-[10px] leading-4 text-sub">
+              <li>· 자주 반복되는 고민과 삶의 영역을 찾아요.</li>
+              <li>· 시뮬레이션 주제와 결과 설명을 개인화해요.</li>
+              <li>· 일기만으로 예측 숫자를 임의로 바꾸지는 않아요.</li>
+            </ul>
+          </section>
 
-      <div className="grid grid-cols-3 gap-2">
-        <Stat label="시뮬레이션" value={universe.stats.simulations} />
-        <Stat label="수집한 별" value={universe.stats.stars} />
-        <Stat label="탐험한 우주" value={universe.stats.universes} />
-      </div>
+          <section className="overflow-hidden rounded-[20px] border border-white/[.08] bg-white/[.025]">
+            <div className="flex items-center justify-between border-b border-white/[.07] px-4 py-3.5">
+              <h2 className="text-[12px] font-bold text-ink">최근 기록</h2>
+              <button type="button" onClick={() => navigate("/my")} className="tap flex items-center gap-1 text-[9px] text-mut">나의 우주에서 보기 <ChevronRight size={12} /></button>
+            </div>
+            {recentEntries.length ? recentEntries.map((entry) => (
+              <button key={entry.date} type="button" onClick={() => navigate("/my")} className="tap flex w-full items-center gap-3 border-b border-white/[.06] px-4 py-3 text-left last:border-0 hover:bg-white/[.03]">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-500/10 text-violet-300"><Sparkles size={13} /></span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[11px] font-semibold text-ink">{entry.text || entry.note || entry.emotion || "오늘의 기록"}</span>
+                  <span className="mt-0.5 block text-[9px] text-mut">{entry.date}</span>
+                </span>
+              </button>
+            )) : <p className="px-4 py-7 text-center text-[10px] text-mut">첫 기록을 남기면 여기에 모여요.</p>}
+          </section>
 
-      <button
-        onClick={() => navigate("/my")}
-        className="tap mt-2 flex w-full items-center gap-3 rounded-[18px] bg-card px-4 py-3.5 text-left transition-colors hover:bg-card2 lg:mt-3 lg:py-5"
-      >
-        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-violet-500/15 text-violet-400">
-          <Orbit size={18} strokeWidth={2} />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-[14px] font-semibold text-ink">나의 우주 열기</span>
-          <span className="block text-[11px] text-mut">별자리·행성·저장한 평행우주</span>
-        </span>
-        <ChevronRight size={18} className="text-violet-400/70" />
-      </button>
-
-      {/* AI 서버가 안 잡히면 조용히 사라지지 않고 알려준다 */}
-      <ApiStatus />
-
-      {/* 떠나 있는 작은 탐험 — 나의 우주에서 고른 길을 잊지 않게 여기 걸어둔다 */}
-      <ExpeditionBoard />
-
-      {/* 오늘 해볼 만한 것 — 인생 갈림길(기회 카드)보다 작은, 오늘 크기의 제안 */}
-      <DailySuggest />
-
-      <div className="mb-2 mt-7 flex items-center justify-between border-t border-white/[.08] px-1 pt-5">
-        <span className="text-[15px] font-bold text-ink">최근 활동</span>
-        <button onClick={() => navigate("/archive")} className="tap text-[11px] text-mut">전체 보기</button>
-      </div>
-      <div className="overflow-hidden rounded-[18px] border border-white/[.07] bg-card/70 lg:flex-1">
-        {recentActivity.length ? recentActivity.map((item, index) => {
-          const Icon = item.type === "simulation" ? Sparkles : BookOpen;
-          return <button key={`${item.type}-${item.date}-${index}`} onClick={() => navigate(item.type === "simulation" ? "/archive" : "/my")} className="tap flex w-full items-center gap-3 border-b border-white/[.06] px-4 py-3 text-left last:border-0 hover:bg-white/[.03]"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-500/15"><Icon size={15}/></span><span className="min-w-0 flex-1"><span className="block truncate text-[12px] font-semibold text-ink">{item.title}</span><span className="mt-0.5 block text-[10px] text-mut">{item.type === "simulation" ? "미래 비교" : "오늘의 기록"}</span></span><span className="shrink-0 text-[10px] text-mut">{String(item.date).slice(5).replace("-", ".")}</span></button>;
-        }) : <p className="px-4 py-6 text-center text-[11px] text-mut">기록이나 시뮬레이션을 시작하면 최근 활동이 표시돼요.</p>}
-      </div>
-
+          <ApiStatus />
         </aside>
       </div>
-    </div>
-  );
-}
-
-function Stat({ label, value }) {
-  return (
-    <div className="rounded-[18px] border border-white/[.04] bg-card px-2 py-3.5 text-center lg:py-7">
-      <div className="text-[20px] font-bold text-ink lg:text-[24px]">{value}</div>
-      <div className="mt-0.5 text-[10px] text-mut">{label}</div>
     </div>
   );
 }

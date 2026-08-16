@@ -52,18 +52,29 @@ const maxYear = (rows, fallback) =>
 
 function buildSide(scenario, choice, detail, profile, evidence, domainCov, domainStats, validatedPrediction, indicatorEvidence, kowepsEvidence, side) {
   const raw = scenario?.raw || {};
+  // 자유입력 원문 대신 백엔드가 정규화한 유형을 사용한다. "개발자로 이직" 같은
+  // 문구도 kind="이직"이면 개인모델 결과를 버리지 않아야 한다.
+  const kind = scenario?.kind || raw.kind || choice;
   const { rows: trajectory, isBaseline } = pickTrajectory(raw, choice);
   const wellbeing = raw.wellbeing_trajectory || [];
 
   // 이직은 개인단위 모델, 창업은 artifact가 배포된 경우 개인단위 자영 이탈모델을 쓴다.
   // artifact가 없더라도 창업 risk_timeline에는 업종·규모별 기업생멸 통계가 들어온다.
   // 휴식(쉬어가기)도 개인단위다 — KLIPS 직업력 공백 스펠의 L3/L4.
-  const hasIndividual = choice === "이직"
-    || (["창업", "휴식"].includes(choice) && raw.survival_months != null);
-  const hasRisk = choice === "창업" || hasIndividual;
+  const hasIndividualPayload = raw.expected_wage != null
+    || raw.causal_effect != null
+    || raw.survival_months != null
+    || (Array.isArray(raw.neighbors) && raw.neighbors.length > 0);
+  const hasIndividual = kind === "이직"
+    || hasIndividualPayload
+    || (["창업", "휴식"].includes(kind) && raw.survival_months != null);
+  const hasRisk = kind === "창업"
+    || hasIndividual
+    || (raw.risk_timeline && Object.keys(raw.risk_timeline).length > 0);
 
   return {
     choice,
+    kind,
     detail,
     meta: {
       age: profile?.age ?? null,
@@ -153,6 +164,14 @@ export function mapSimulateToPair(sim, { choiceA, choiceB, detailA = "", detailB
   const keB = ke?.comparison_mode === "independent_events" ? ke.side_evidence?.B : ke;
   const a = buildSide(A, choiceA, detailA, profile, ev.A, dc.A, ds.A, vp.A, ie.A, keA, "A");
   const b = buildSide(B, choiceB, detailB, profile, ev.B, dc.B, ds.B, vp.B, ie.B, keB, "B");
+  const measuredScores = (side) => {
+    const scores = sim.indicators?.[side] || {};
+    const unmeasured = new Set(sim.indicator_detail?.[side]?.unmeasured || []);
+    return Object.fromEntries(Object.entries(scores).filter(([key, value]) =>
+      !unmeasured.has(key) && Number.isFinite(Number(value))));
+  };
+  a.indicator_scores = measuredScores("A");
+  b.indicator_scores = measuredScores("B");
   // 장기 가치는 별도 미래점수가 아니라 어떤 결과를 먼저 읽을지 정하는 개인화 축이다.
   // /compare 미리보기에는 없고 /simulate 최종 응답부터 적용된다.
   a.personalization = sim.personalization || null;

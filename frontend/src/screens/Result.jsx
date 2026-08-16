@@ -20,6 +20,7 @@ import KowepsEvidenceCard from "../components/result/KowepsEvidenceCard.jsx";
 import JobAnalysisView from "../components/result/JobAnalysisView.jsx";
 import RelationshipView from "../components/result/RelationshipView.jsx";
 import SoftCompareView from "../components/result/SoftCompareView.jsx";
+import ResultQuickStats from "../components/result/ResultQuickStats.jsx";
 import { softDomainOf } from "../data/softCompare.js";
 import { DOMAIN_LABEL } from "../data/diarySignals.js";
 
@@ -94,6 +95,9 @@ export default function Result() {
         <span className="text-mut"> vs </span>
         <span className="font-bold text-gold">{labelOf(b.choice)}</span>
       </p>
+      <div className="mt-2 inline-flex items-center rounded-full border border-violet-400/30 bg-violet-500/10 px-3 py-1 text-[11px] font-semibold text-violet-200">
+        지금부터 {result.futureYears ?? 3}년 뒤의 두 미래
+      </div>
       <ol className="mt-5 grid grid-cols-4 gap-2" aria-label="결과 확인 단계">
         {RESULT_STEPS.map((label, index) => (
           <li key={label} className="min-w-0">
@@ -120,6 +124,7 @@ export default function Result() {
         error={result.visualError || result.narrativeError}
         onRetry={result.visualError ? retryVisuals : null}
       />
+      <ResultQuickStats a={a} b={b} futureYears={result.futureYears ?? 3} />
       </section>}
 
       {step === 1 && <section className="mt-5 animate-fade lg:grid lg:grid-cols-[minmax(280px,.7fr)_minmax(0,1.3fr)] lg:items-start lg:gap-7">

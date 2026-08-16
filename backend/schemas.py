@@ -74,6 +74,10 @@ class CompareRequest(BaseModel):
     """
 
     profile: Profile
+    future_years: int = Field(
+        3, ge=1, le=10,
+        description="결과 서사와 이미지가 초점을 맞출 미래 시점(1/3/5/10년)",
+    )
     choice_a: str = Field(..., description="선택지 A (예: 이직)")
     choice_b: str = Field(..., description="선택지 B (예: 대학원 진학)")
     # 삶의 영역(9개 domain key: career/education/business/finance/health/housing/
@@ -98,12 +102,13 @@ class CompareRequest(BaseModel):
 class SimulateRequest(CompareRequest):
     """전체 파이프라인(`/simulate`) 요청 = 비교 요청 + (선택) 일기 텍스트.
 
-    diary 를 주면 일기모듈(2번)이 감정신호를 뽑아 profile(satis_*)을 개인화하고
-    서사 컨텍스트로도 쓴다. 위기(L3) 감지 시 서사 대신 상담 안내를 반환한다.
+    diary 를 주면 일기모듈(2번)이 감정신호를 뽑아 심리근거·서사 컨텍스트와
+    안전 분기에 사용한다. 예측 수치는 바꾸지 않으며, 위기(L3) 감지 시 서사 대신
+    상담 안내를 반환한다.
     """
 
     diary: Optional[str] = Field(
-        None, description="사용자 일기 텍스트(선택). 있으면 감정신호로 개인화 + 서사 반영"
+        None, description="사용자 일기 텍스트(선택). 예측 수치는 바꾸지 않고 심리근거·서사·안전 안내에 반영"
     )
     emotions: Optional[list[str]] = Field(
         None, description="감정 키워드(선택). 심리카드 검색·안전분기에 사용"

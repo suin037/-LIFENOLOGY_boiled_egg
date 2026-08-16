@@ -131,7 +131,7 @@ export function mapSimulateToResult(sim) {
   };
 }
 
-function buildSimulateBody({ profile, choiceA, choiceB, choiceADetail, choiceBDetail, choiceADomains, choiceBDomains, choiceAContext, choiceBContext, diary }) {
+function buildSimulateBody({ profile, choiceA, choiceB, choiceADetail, choiceBDetail, choiceADomains, choiceBDomains, choiceAContext, choiceBContext, futureYears = 3, diary }) {
   const body = {
     profile: {
       age: profile.age,
@@ -158,6 +158,7 @@ function buildSimulateBody({ profile, choiceA, choiceB, choiceADetail, choiceBDe
     },
     choice_a: choiceA,
     choice_b: choiceB,
+    future_years: futureYears,
   };
   if (profile.value_ranking?.length) body.value_ranking = profile.value_ranking;
   if (choiceADetail?.trim()) body.choice_a_detail = choiceADetail.trim();
@@ -165,8 +166,8 @@ function buildSimulateBody({ profile, choiceA, choiceB, choiceADetail, choiceBDe
   // 새 삶의 영역 계약용 필드. 현재 백엔드는 extra 필드를 무시하므로 기존 API와 호환된다.
   if (choiceADomains?.length) body.choice_a_domains = choiceADomains;
   if (choiceBDomains?.length) body.choice_b_domains = choiceBDomains;
-  if (choiceAContext?.event) body.choice_a_context = choiceAContext;
-  if (choiceBContext?.event) body.choice_b_context = choiceBContext;
+  if (choiceAContext && Object.keys(choiceAContext).length) body.choice_a_context = choiceAContext;
+  if (choiceBContext && Object.keys(choiceBContext).length) body.choice_b_context = choiceBContext;
   if (diary) body.diary = diary;
 
   // 심리 성향 서술(MBTI + 서술형 답변) → disposition_block + 답변 수(확신도).
@@ -201,6 +202,7 @@ export async function runCompareRaw(args) {
       profile: body.profile,
       choice_a: body.choice_a,
       choice_b: body.choice_b,
+      future_years: body.future_years,
       ...(body.choice_a_detail ? { choice_a_detail: body.choice_a_detail } : {}),
       ...(body.choice_b_detail ? { choice_b_detail: body.choice_b_detail } : {}),
       // 삶의 영역(항목3·4) — /compare 도 영역지표·근거수준·그래프 가드를 반환하도록 함께 전송
@@ -242,7 +244,7 @@ export async function runSimulate(args) {
   return mapSimulateToResult(await runSimulateRaw(args));
 }
 
-export async function generateSceneImages({ avatarBlob, avatarSpec, choiceA, choiceB, narrative, timeoutMs = 60000 }) {
+export async function generateSceneImages({ avatarBlob, avatarSpec, choiceA, choiceB, futureYears = 3, narrative, timeoutMs = 60000 }) {
   const storyText = (story) => {
     if (typeof story === "string") return story;
     const detail = story?.detail || {};
@@ -251,10 +253,18 @@ export async function generateSceneImages({ avatarBlob, avatarSpec, choiceA, cho
       .join(" ");
   };
   const form = new FormData();
+  const desktopImage = typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches;
+  const visualSize = desktopImage
+    ? { width: 768, height: 432, format: "landscape 16:9" }
+    : { width: 512, height: 640, format: "portrait 4:5" };
   form.append("avatar", avatarBlob, "avatar.png");
   form.append("avatar_spec", JSON.stringify(avatarSpec || {}));
   form.append("choice_a", choiceA);
   form.append("choice_b", choiceB);
+  form.append("future_years", String(futureYears));
+  form.append("visual_width", String(visualSize.width));
+  form.append("visual_height", String(visualSize.height));
+  form.append("visual_format", visualSize.format);
   form.append("narrative_a", storyText(narrative.a));
   form.append("narrative_b", storyText(narrative.b));
   form.append("visual_a", JSON.stringify(narrative.visual_a || {}));

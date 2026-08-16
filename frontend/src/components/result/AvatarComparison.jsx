@@ -13,7 +13,7 @@ export default function AvatarComparison({ avatar, a, b, visuals, narrative, nar
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2.5">
+      <div className="grid gap-3 sm:grid-cols-2 lg:gap-5">
         <StoryCard side="A" result={a} image={visuals?.a} story={narrative?.a} storyLoading={narrativeLoading} avatar={avatar} open={expanded === "A"} onToggle={() => setExpanded((v) => v === "A" ? null : "A")} />
         <StoryCard side="B" result={b} image={visuals?.b} story={narrative?.b} storyLoading={narrativeLoading} avatar={avatar} open={expanded === "B"} onToggle={() => setExpanded((v) => v === "B" ? null : "B")} />
       </div>
@@ -51,10 +51,10 @@ function StoryCard({ side, result, image, story, storyLoading, avatar, open, onT
   );
   return (
     <article className="overflow-hidden rounded-2xl border border-line bg-card">
-      <div className="relative h-[190px] overflow-hidden bg-[#0E1424] sm:h-[220px] lg:h-[240px] xl:h-[260px]">
+      <div className="relative aspect-[4/5] overflow-hidden bg-[#0E1424] sm:aspect-video">
         {image ? (
           <>
-            <img src={image} alt={`${labelOf(result.choice)} 시나리오 상상도`} className="h-full w-full object-contain" />
+            <img src={image} alt={`${labelOf(result.choice)} 시나리오 상상도`} className="h-full w-full object-cover" />
             <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/65 to-transparent px-3 pb-3 pt-12 text-white lg:px-4 lg:pb-4 lg:pt-16">
               <p className="text-[9px] font-bold uppercase tracking-[.14em] text-white/70">{side} Universe · {labelOf(result.choice)}</p>
               {structured && story.title && <h3 className="mt-1 text-[13px] font-bold leading-snug drop-shadow lg:text-[15px]">{story.title}</h3>}
