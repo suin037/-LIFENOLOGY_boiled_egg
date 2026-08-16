@@ -11,16 +11,22 @@ import { createAvatar } from "@dicebear/core";
 import { toonHead } from "@dicebear/collection";
 import {
   DEFAULT_AVATAR,
+  SMALL_EYE,
   hairStyleById,
   toDicebearOptions,
 } from "../data/avatarOptions.js";
 import {
   fitBeard,
+  HAIR_COVERS_EARS,
   overlayCustomHair,
   overlayEars,
+  cleanClothes,
+  overlayClothesPattern,
   overlayGlasses,
   replaceBrows,
+  removeLashes,
   replaceFaceShape,
+  scaleEyes,
 } from "../data/customParts.js";
 
 export { DEFAULT_AVATAR };
@@ -69,7 +75,13 @@ export function renderAvatarSvg(config, options = {}) {
   //   1) 얼굴형·눈썹은 원본 조각을 '교체'
   //   2) 수염은 바뀐 턱에 맞춰 늘림
   //   3) 커스텀 앞머리 → 그 위에 귀 → 안경 순으로 '덧그림'
+  svg = cleanClothes(svg);
   svg = replaceFaceShape(svg, c.face);
+  // 속눈썹 제거는 눈 축소보다 먼저다 — 축소가 눈 구간을 transform 으로 감싸고 나면
+  // 꼬리 좌표는 그대로 남지만, 굳이 감싼 뒤에 손댈 이유가 없다.
+  if (c.lashes === false) svg = removeLashes(svg);
+  // 눈 축소는 눈썹 교체보다 먼저다 — 눈 구간의 끝을 '원본 눈썹'으로 찾기 때문이다.
+  if (c.eyes === "small") svg = scaleEyes(svg, SMALL_EYE.scale, SMALL_EYE.base, SMALL_EYE.inset);
   svg = replaceBrows(svg, c.eyebrows, c.browThickness, "#" + c.hairColor);
   svg = fitBeard(svg, c.beard, c.eyes, c.face);
   if (style.custom) {
@@ -80,8 +92,11 @@ export function renderAvatarSvg(config, options = {}) {
       clothes: "#" + c.clothesColor,
     });
     // 커스텀 앞머리가 귀를 덮으므로 귀만 다시 위에 그려 앞으로 빼낸다.
-    svg = overlayEars(svg, "#" + c.skinColor);
+    // 다만 리프컷처럼 귀를 덮는 게 디자인인 머리는 예외다 — 귀가 머리를 뚫고 나온다.
+    if (!HAIR_COVERS_EARS.has(style.hair)) svg = overlayEars(svg, "#" + c.skinColor);
   }
+  // 옷 무늬는 옷 바로 위, 얼굴보다 아래에 들어간다.
+  svg = overlayClothesPattern(svg, c.pattern, c.clothes);
   svg = overlayGlasses(svg, c.glasses);
   return svg;
 }

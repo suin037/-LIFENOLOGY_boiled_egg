@@ -17,14 +17,28 @@ import {
   randomToonHead,
 } from "../data/avatarOptions.js";
 import { FACE_SHAPES } from "../data/customParts.js";
+import AvatarFromPhoto from "./AvatarFromPhoto.jsx";
 
 // 탭(기본/헤어/얼굴/스타일)으로 묶고, 각 항목은 화살표로 넘긴다.
 // 가운데에는 그 선택을 적용한 아바타를 실제로 그려 보여준다 — 이름만으로는
 // '옆가르마'와 '언더컷' 같은 것들이 구분되지 않는다.
 
 const NONE = (label = "없음") => ({ id: null, label });
+// 빌트인 눈에는 속눈썹이 늘 붙어 있어 남자 아바타가 여성적으로 보인다. 끌 수 있게 한다.
+const LASHES = [
+  { id: true, label: "있음" },
+  { id: false, label: "없음" },
+];
 const FACE_ITEMS = Object.entries(FACE_SHAPES).map(([id, v]) => ({ id, label: v.label }));
-const colorItems = (hexes) => hexes.map((id, i) => ({ id, label: `${i + 1}번` }));
+// 사진에서 뽑은 색은 프리셋에 없을 수 있다. 목록에 없으면 맨 앞에 끼워 넣는다 —
+// 안 그러면 스테퍼가 그 색을 못 찾아 첫 프리셋으로 조용히 되돌려버린다.
+const colorItems = (hexes, current) => {
+  const base = hexes.map((id, i) => ({ id, label: `${i + 1}번` }));
+  if (current && !hexes.includes(current)) {
+    return [{ id: current, label: "사진에서" }, ...base];
+  }
+  return base;
+};
 const CATEGORIES = [
   ["base", "기본"],
   ["hair", "헤어"],
@@ -94,6 +108,7 @@ function Stepper({ label, items, value, onPick, field, config, swatch = false })
 export default function AvatarBuilder({ config, onChange }) {
   const avatar = normalizeAvatar(config);
   const [category, setCategory] = useState("base");
+  const [camera, setCamera] = useState(false);
   const set = (patch) => onChange({ ...avatar, ...patch });
 
   // 미리보기용 config — 항목별 차이가 잘 보이도록 가리는 요소(안경·수염)를 걷어낸다.
@@ -111,6 +126,13 @@ export default function AvatarBuilder({ config, onChange }) {
             className="tap mt-2 rounded-full border border-violet-400/25 bg-violet-500/10 px-3 py-1.5 text-[10px] font-semibold text-violet-300"
           >
             🎲 다른 조합 보기
+          </button>
+          <button
+            type="button"
+            onClick={() => setCamera((v) => !v)}
+            className="tap mt-1.5 rounded-full border border-white/10 bg-white/[.04] px-3 py-1.5 text-[10px] font-semibold text-sub"
+          >
+            📷 카메라로 맞추기
           </button>
         </div>
 
@@ -142,7 +164,7 @@ export default function AvatarBuilder({ config, onChange }) {
               />
               <Stepper
                 label="피부색"
-                items={colorItems(SKIN_COLORS)}
+                items={colorItems(SKIN_COLORS, avatar.skinColor)}
                 value={avatar.skinColor}
                 onPick={(v) => set({ skinColor: v })}
                 swatch
@@ -162,7 +184,7 @@ export default function AvatarBuilder({ config, onChange }) {
               />
               <Stepper
                 label="헤어 컬러"
-                items={colorItems(HAIR_COLORS)}
+                items={colorItems(HAIR_COLORS, avatar.hairColor)}
                 value={avatar.hairColor}
                 onPick={(v) => set({ hairColor: v })}
                 swatch
@@ -179,6 +201,14 @@ export default function AvatarBuilder({ config, onChange }) {
                 field="eyes"
                 config={bare}
                 onPick={(v) => set({ eyes: v })}
+              />
+              <Stepper
+                label="속눈썹"
+                items={LASHES}
+                value={avatar.lashes !== false}
+                field="lashes"
+                config={bare}
+                onPick={(v) => set({ lashes: v })}
               />
               <Stepper
                 label="눈썹 모양"
@@ -235,7 +265,7 @@ export default function AvatarBuilder({ config, onChange }) {
               />
               <Stepper
                 label="의상 컬러"
-                items={colorItems(CLOTHES_COLORS)}
+                items={colorItems(CLOTHES_COLORS, avatar.clothesColor)}
                 value={avatar.clothesColor}
                 onPick={(v) => set({ clothesColor: v })}
                 swatch
@@ -244,6 +274,18 @@ export default function AvatarBuilder({ config, onChange }) {
           )}
         </div>
       </div>
+
+      {camera && (
+        <AvatarFromPhoto
+          current={avatar}
+          onResult={(cfg) => {
+            // 모델이 고른 값만 덮어쓴다. 나머지(의상 등)는 사용자가 고른 걸 유지한다.
+            onChange({ ...avatar, ...cfg });
+            setCamera(false);
+          }}
+          onClose={() => setCamera(false)}
+        />
+      )}
 
       {/* CC BY 4.0 — 저작자·라이선스·변경 사실 세 가지 모두 의무. 지우지 말 것. */}
       <p className="mt-4 text-center text-[8px] leading-relaxed text-mut">

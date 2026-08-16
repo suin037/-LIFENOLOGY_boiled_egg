@@ -343,3 +343,15 @@ class AvatarGenerateRequest(BaseModel):
 
 class AvatarGenerateResponse(BaseModel):
     image: str = Field(..., description="생성된 실사 아바타. PNG dataURL")
+
+
+class AvatarFromPhotoRequest(BaseModel):
+    """카메라 프레임 + 프론트가 가진 선택지 목록."""
+
+    image: str = Field(..., description="'data:image/jpeg;base64,...' 형식. 저장하지 않는다.")
+    options: dict = Field(..., description="{필드: [허용값...]} — avatarOptions.js 가 원본")
+
+
+class AvatarFromPhotoResponse(BaseModel):
+    config: dict = Field(..., description="아바타 설정. 프론트가 그대로 빌더에 적용한다.")
+    face_visible: bool = Field(True, description="얼굴이 또렷하게 잡혔는지. false 면 적용하지 말고 다시 찍게 한다.")

@@ -19,8 +19,11 @@ import traceback
 
 log = logging.getLogger("parallel-me")
 
+import avatar_vision
 from config import ROOT, settings
 from schemas import (
+    AvatarFromPhotoRequest,
+    AvatarFromPhotoResponse,
     Profile,
     PredictRequest,
     PredictResponse,
@@ -638,3 +641,12 @@ def simulate(req: SimulateRequest) -> dict:
         "api_used": not narrative.get("_skipped", False),
         "model": settings.claude_model,
     }
+
+
+@app.post("/avatar/from-photo", response_model=AvatarFromPhotoResponse)
+def avatar_from_photo(req: AvatarFromPhotoRequest) -> AvatarFromPhotoResponse:
+    """셀카 한 장 → 아바타 설정. 사진은 디스크에 쓰지 않고 응답 후 버린다."""
+    try:
+        return AvatarFromPhotoResponse(**avatar_vision.analyze(req.image, req.options))
+    except avatar_vision.AvatarVisionError as e:
+        raise HTTPException(status_code=400, detail=str(e))
