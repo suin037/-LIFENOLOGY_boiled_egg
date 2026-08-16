@@ -39,7 +39,6 @@ export const HAIR_STYLES = [
   { id: "menCover", label: "남자 덮머", hair: "menCover", rear: null, custom: true },
   { id: "menFringe", label: "남자 앞머리", hair: "menFringe", rear: null, custom: true },
   { id: "menPerm", label: "남자 펌", hair: "menPerm", rear: null, custom: true },
-  { id: "menPermFringe", label: "남자 펌 · 앞머리", hair: "menPermFringe", rear: null, custom: true },
   { id: "menPermPart", label: "남자 펌 · 5대5 가르마", hair: "menPermPart", rear: null, custom: true },
   { id: "menBowl", label: "남자 바가지컷", hair: "menBowl", rear: null, custom: true },
   { id: "menCrop", label: "남자 크롭컷", hair: "menCrop", rear: null, custom: true },
