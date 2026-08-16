@@ -12,6 +12,7 @@
 import { activateSlot, hasSlot, saveActiveSlot, activeSlotId, MY_SLOT } from "./personaSlots.js";
 import { getPersona } from "./personas/index.js";
 import { seedYear } from "./personas/seed.js";
+import storage from "./safeStorage.js";
 
 const PROFILE_KEY = "pm.profile.v1";
 
@@ -22,8 +23,8 @@ export const STARTER_SOURCE = "jiwon";
 function writeProfile(profile) {
   try {
     // 기존 값 위에 얹는다 — 아바타처럼 사용자가 이미 고른 게 있으면 지키기 위해.
-    const prev = JSON.parse(localStorage.getItem(PROFILE_KEY) || "{}");
-    localStorage.setItem(PROFILE_KEY, JSON.stringify({ ...prev, ...profile }));
+    const prev = JSON.parse(storage.getItem(PROFILE_KEY) || "{}");
+    storage.setItem(PROFILE_KEY, JSON.stringify({ ...prev, ...profile }));
   } catch { /* 무시 */ }
 }
 
@@ -33,7 +34,10 @@ function writeProfile(profile) {
  * @returns {Promise<{ok: boolean, reason?: string, restored?: boolean, planted?: number}>}
  */
 export async function enterPersona(id, opts = {}) {
-  const { reload = true } = opts;
+  // 기본값이 false 인 이유: iframe·사파리에서는 저장소가 메모리라(safeStorage)
+  // 새로고침이 방금 심은 1년치를 통째로 날린다. 호출측이 reloadProfile() + navigate 로
+  // 화면을 갱신한다(Personas.jsx 참조).
+  const { reload = false } = opts;
   const persona = getPersona(id);
   if (!persona) return { ok: false, reason: "unknown-persona" };
   if (persona.dataStatus !== "ready" || !persona.load) {

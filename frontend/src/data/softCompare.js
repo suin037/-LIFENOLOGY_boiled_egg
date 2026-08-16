@@ -7,6 +7,7 @@ import { API_BASE } from "./apiBase.js";
 import { loadUniverse, hasRecord, todayKey } from "./myUniverse.js";
 import { localPersonaBlock } from "./jobAnalysis.js";
 import { DOMAIN_LABEL } from "./diarySignals.js";
+import storage from "./safeStorage.js";
 
 // 진로 계열은 예측 수치가 실제로 있으니 그대로 둔다. 나머지가 이 화면의 대상이다.
 const SOFT_PLANETS = ["relation", "health", "life", "growth"];
@@ -30,15 +31,15 @@ const KEY = "pm.softCompare.v1";
 const cacheKey = (planet, a, b) => `${planet}|${a}|${b}`;
 
 export function getCachedSoft(planet, a, b) {
-  try { return JSON.parse(localStorage.getItem(KEY) || "{}")[cacheKey(planet, a, b)] || null; }
+  try { return JSON.parse(storage.getItem(KEY) || "{}")[cacheKey(planet, a, b)] || null; }
   catch { return null; }
 }
 
 function putCached(planet, a, b, value) {
   try {
-    const all = JSON.parse(localStorage.getItem(KEY) || "{}");
+    const all = JSON.parse(storage.getItem(KEY) || "{}");
     all[cacheKey(planet, a, b)] = value;
-    localStorage.setItem(KEY, JSON.stringify(all));
+    storage.setItem(KEY, JSON.stringify(all));
   } catch { /* 무시 */ }
 }
 

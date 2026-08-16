@@ -5,6 +5,7 @@
 // MVP: 배경·소품 중심 + 간식/가구는 뼈대 몇 개. 렌더는 이모지(추후 SVG 교체 가능).
 // ─────────────────────────────────────────────────────────────
 import { totalXp } from "./myUniverse.js";
+import storage from "./safeStorage.js";
 
 const KEY = "pm.petShop.v1";
 // 가구(furniture)는 배열 — 여러 개 동시 배치. 배경·소품·행성스킨은 단일.
@@ -49,7 +50,7 @@ export function itemById(id) {
 
 export function loadShop() {
   try {
-    const s = JSON.parse(localStorage.getItem(KEY) || "{}");
+    const s = JSON.parse(storage.getItem(KEY) || "{}");
     const merged = { ...DEF, ...s, equipped: { ...DEF.equipped, ...(s.equipped || {}) } };
     // 구버전(단일 가구) → 배열로 마이그레이션
     const f = merged.equipped.furniture;
@@ -61,7 +62,7 @@ export function loadShop() {
 }
 export function saveShop(x) {
   try {
-    localStorage.setItem(KEY, JSON.stringify(x));
+    storage.setItem(KEY, JSON.stringify(x));
   } catch { /* 무시 */ }
   // 같은 탭에선 storage 이벤트가 안 뜬다 — 마스코트·나의 우주가 바로 반영되게 직접 알린다.
   if (typeof window !== "undefined") window.dispatchEvent(new Event("pm:pet-shop"));

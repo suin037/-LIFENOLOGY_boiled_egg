@@ -9,6 +9,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { listUniverses } from "./savedUniverses.js";
+import storage from "./safeStorage.js";
 
 const KEY = "pm.myuniverse.v1";
 const HIGHEST_LEVEL_KEY = "pm.highestLevel.v1";
@@ -29,7 +30,7 @@ const DEFAULTS = {
 // ── 저장/로드 ────────────────────────────────────────────────
 export function loadUniverse() {
   try {
-    const raw = JSON.parse(localStorage.getItem(KEY) || "{}");
+    const raw = JSON.parse(storage.getItem(KEY) || "{}");
     return {
       ...DEFAULTS,
       ...raw,
@@ -44,7 +45,7 @@ export function loadUniverse() {
 
 function persist(state) {
   try {
-    localStorage.setItem(KEY, JSON.stringify(state));
+    storage.setItem(KEY, JSON.stringify(state));
   } catch {
     /* localStorage 불가 환경(사파리 프라이빗 등) — 메모리로만 동작 */
   }
@@ -200,7 +201,7 @@ export function noteSimulationRun() {
 
 export function resetUniverse() {
   try {
-    localStorage.removeItem(KEY);
+    storage.removeItem(KEY);
   } catch {
     /* 무시 */
   }
@@ -455,7 +456,7 @@ export function levelFrom(xp) {
 
 function storedHighestLevel() {
   try {
-    return Math.max(1, Number(localStorage.getItem(HIGHEST_LEVEL_KEY) || 1));
+    return Math.max(1, Number(storage.getItem(HIGHEST_LEVEL_KEY) || 1));
   } catch {
     return 1;
   }
@@ -464,7 +465,7 @@ function storedHighestLevel() {
 function rememberHighestLevel(level) {
   const highest = Math.max(storedHighestLevel(), level);
   try {
-    localStorage.setItem(HIGHEST_LEVEL_KEY, String(highest));
+    storage.setItem(HIGHEST_LEVEL_KEY, String(highest));
   } catch {
     // localStorage 불가 환경에서는 현재 계산 레벨만 사용한다.
   }

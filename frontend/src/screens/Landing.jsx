@@ -1,16 +1,20 @@
 import { useNavigate } from "react-router-dom";
 import { Button } from "../components/ui.jsx";
 import { startMyAccount } from "../data/personaSession.js";
+import { useResult } from "../data/ResultContext.jsx";
 
 export default function Landing() {
   const navigate = useNavigate();
+  const { reloadProfile } = useResult();
 
   // 내 계정으로 가기 전에 슬롯을 먼저 비운다 — 순서가 바뀌면(온보딩 뒤에 부르면)
   // activateSlot 의 restoreLive({}) 가 방금 입력한 pm.profile.v1 을 지운다.
-  // 하드 이동으로 ResultContext 를 다시 띄워 이전 프로필 잔상도 없앤다.
+  // 전체 새로고침 대신 reloadProfile() 로 이전 프로필 잔상을 지운다 — iframe·사파리에서는
+  // 저장소가 메모리라(safeStorage) 새로고침하면 세션이 통째로 날아간다.
   function makeMyAccount() {
     startMyAccount();
-    window.location.assign("/onboarding");
+    reloadProfile();
+    navigate("/onboarding");
   }
 
   return (

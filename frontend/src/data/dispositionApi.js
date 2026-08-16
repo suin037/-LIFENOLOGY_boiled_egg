@@ -1,4 +1,5 @@
 import { API_BASE } from "./apiBase.js";
+import storage from "./safeStorage.js";
 // 내 성향모델 로컬 API 연결 (diary_module/qmode/api.py, uvicorn :8000).
 // 체크인(별) → 진짜 DispositionModel + report.py → 주간 리포트 서사 + 내일 할 거리.
 //
@@ -44,7 +45,7 @@ export async function tagDomain(text) {
 export const SPEECH_KEY = "pm.speech.v1";
 export function loadSpeech() {
   try {
-    return localStorage.getItem(SPEECH_KEY) === "casual" ? "casual" : "polite"; // 기본 존댓말
+    return storage.getItem(SPEECH_KEY) === "casual" ? "casual" : "polite"; // 기본 존댓말
   } catch {
     return "polite";
   }

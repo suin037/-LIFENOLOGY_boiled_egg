@@ -6,6 +6,7 @@ import { chatTurn, composeDiary, weeklyComfort, loadSpeech, SPEECH_KEY } from ".
 import { todayQuestions } from "../data/questions.js";
 import { useResult } from "../data/ResultContext.jsx";
 import Mascot from "./Mascot.jsx";
+import storage from "../data/safeStorage.js";
 
 // 질문 영역별 대화형 일기(jy). 데일리 체크인 아래 '오늘의 질문 + 몸·마음 상태'를 대신한다.
 //  · 영역 3개: 일상 / 성향(매일 랜덤 질문) / 건강. 각 영역의 질문 리스트를 하나씩 묻고 사용자가 답한다.
@@ -88,14 +89,14 @@ function lastWeekEntries() {
 }
 
 function loadComfort() {
-  try { return JSON.parse(localStorage.getItem(COMFORT_KEY) || "null"); } catch { return null; }
+  try { return JSON.parse(storage.getItem(COMFORT_KEY) || "null"); } catch { return null; }
 }
 
 // 하루 단위 대화 드래프트 — 챗봇을 닫아도 그날 대화가 유지되고, 날이 바뀌면 새로 시작.
 const DRAFT_KEY = "pm.chatDraft.v1";
 function loadDraft() {
   try {
-    const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null");
+    const d = JSON.parse(storage.getItem(DRAFT_KEY) || "null");
     if (d && d.date === todayKey()) return d; // 오늘 것만 유효 → 다음날 자동 새 기록
   } catch { /* 무시 */ }
   return { date: todayKey(), d: {} };
@@ -106,7 +107,7 @@ function draftFor(area) {
 function saveDraftArea(area, msgs, qi) {
   const d = loadDraft();
   d.d[area] = { msgs, qi };
-  try { localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch { /* 무시 */ }
+  try { storage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch { /* 무시 */ }
 }
 
 function recentChatContext() {
@@ -178,7 +179,7 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
         if (!alive || !text) return;
         const next = { week, speech, text };
         setComfort(next);
-        try { localStorage.setItem(COMFORT_KEY, JSON.stringify(next)); } catch { /* 무시 */ }
+        try { storage.setItem(COMFORT_KEY, JSON.stringify(next)); } catch { /* 무시 */ }
       })
       .finally(() => { if (alive) setThinking(false); });
     return () => { alive = false; };
@@ -200,7 +201,7 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
   function toggleSpeech() {
     const next = speech === "casual" ? "polite" : "casual";
     setSpeech(next);
-    try { localStorage.setItem(SPEECH_KEY, next); } catch { /* 무시 */ }
+    try { storage.setItem(SPEECH_KEY, next); } catch { /* 무시 */ }
     if (!msgs.some((m) => m.role === "user")) {
       setMsgs([{ role: "bot", text: qText(qs[0], next) }]);
     }

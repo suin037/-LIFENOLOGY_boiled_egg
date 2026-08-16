@@ -1,3 +1,4 @@
+import storage from "./safeStorage.js";
 // ─────────────────────────────────────────────────────────────
 // 개인정보 암호화 모듈 — 일기·감정·이직조건·회사요건 등 민감정보를 기기에서 암호화.
 //
@@ -29,10 +30,10 @@ export function hasCrypto() {
 }
 
 function getSalt() {
-  let s = localStorage.getItem(SALT_KEY);
+  let s = storage.getItem(SALT_KEY);
   if (!s) {
     s = b64(crypto.getRandomValues(new Uint8Array(16)));
-    localStorage.setItem(SALT_KEY, s);
+    storage.setItem(SALT_KEY, s);
   }
   return s;
 }
@@ -68,17 +69,17 @@ export async function decryptJSON(blob, key) {
 export async function setupPassphrase(passphrase) {
   const key = await deriveKey(passphrase);
   const token = await encryptJSON({ ok: true, t: "pm-verify" }, key);
-  localStorage.setItem(VERIFY_KEY, JSON.stringify(token));
+  storage.setItem(VERIFY_KEY, JSON.stringify(token));
   return key;
 }
 
 export function isPassphraseSet() {
-  return !!localStorage.getItem(VERIFY_KEY);
+  return !!storage.getItem(VERIFY_KEY);
 }
 
 /** 입력한 암호문구가 맞는지 검증 토큰 복호로 확인. 맞으면 세션 키 반환, 틀리면 null. */
 export async function unlock(passphrase) {
-  const raw = localStorage.getItem(VERIFY_KEY);
+  const raw = storage.getItem(VERIFY_KEY);
   if (!raw) return null;
   try {
     const key = await deriveKey(passphrase);

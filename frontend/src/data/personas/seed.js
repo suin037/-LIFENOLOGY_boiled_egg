@@ -11,6 +11,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { addCheckin, resetUniverse, todayKey, weekStartKey } from "../myUniverse.js";
+import storage from "../safeStorage.js";
 
 const UNIVERSE_KEY = "pm.myuniverse.v1";
 
@@ -68,10 +69,10 @@ export function seedYear(YEAR, FINALE = null, opts = {}) {
 
   // demo 플래그 세우기(배지 유지) — addCheckin 이 persist 하므로 마지막에 한 번 더.
   try {
-    const s = JSON.parse(localStorage.getItem(UNIVERSE_KEY) || "{}");
+    const s = JSON.parse(storage.getItem(UNIVERSE_KEY) || "{}");
     s.demo = true;
     s.demoKind = demoKind;
-    localStorage.setItem(UNIVERSE_KEY, JSON.stringify(s));
+    storage.setItem(UNIVERSE_KEY, JSON.stringify(s));
     if (typeof window !== "undefined") window.dispatchEvent(new Event("pm:universe"));
   } catch { /* 무시 */ }
 

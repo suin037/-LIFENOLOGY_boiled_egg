@@ -1,3 +1,4 @@
+import storage from "./safeStorage.js";
 // 로컬 환경설정(알림·아바타) — localStorage 지속. 설정 화면(수인) 소관.
 const KEY = "pm.prefs.v1";
 
@@ -8,7 +9,7 @@ const DEFAULTS = {
 
 export function loadPrefs() {
   try {
-    return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(KEY) || "{}") };
+    return { ...DEFAULTS, ...JSON.parse(storage.getItem(KEY) || "{}") };
   } catch {
     return { ...DEFAULTS };
   }
@@ -16,7 +17,7 @@ export function loadPrefs() {
 
 export function savePrefs(prefs) {
   try {
-    localStorage.setItem(KEY, JSON.stringify(prefs));
+    storage.setItem(KEY, JSON.stringify(prefs));
   } catch {
     /* localStorage 불가 환경 무시 */
   }

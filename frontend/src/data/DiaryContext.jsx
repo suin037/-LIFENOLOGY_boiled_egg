@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { addCheckin, setDomains, syncDiaryEntries } from "./myUniverse.js";
 import { tagDomain } from "./dispositionApi.js";
 import { LIFE_DOMAINS, detectLifeDomains } from "./choices.js";
+import storage from "./safeStorage.js";
 
 // ─────────────────────────────────────────────────────────────
 // 일기(오늘 기록) — 매일 한 줄 + 기분(1~5). localStorage로 영속.
@@ -101,7 +102,7 @@ function seedEntries() {
 
 function load() {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = storage.getItem(KEY);
     if (raw) return JSON.parse(raw);
   } catch (_) {}
   return seedEntries();
@@ -112,7 +113,7 @@ export function DiaryProvider({ children }) {
 
   useEffect(() => {
     try {
-      localStorage.setItem(KEY, JSON.stringify(entries));
+      storage.setItem(KEY, JSON.stringify(entries));
     } catch (_) {}
     // JY 일기 저장소의 기존 기록까지 나의 우주 별/별자리 데이터로 연결한다.
     syncDiaryEntries(entries);
