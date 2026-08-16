@@ -1,8 +1,17 @@
 import { useNavigate } from "react-router-dom";
 import { Button } from "../components/ui.jsx";
+import { startMyAccount } from "../data/personaSession.js";
 
 export default function Landing() {
   const navigate = useNavigate();
+
+  // 내 계정으로 가기 전에 슬롯을 먼저 비운다 — 순서가 바뀌면(온보딩 뒤에 부르면)
+  // activateSlot 의 restoreLive({}) 가 방금 입력한 pm.profile.v1 을 지운다.
+  // 하드 이동으로 ResultContext 를 다시 띄워 이전 프로필 잔상도 없앤다.
+  function makeMyAccount() {
+    startMyAccount();
+    window.location.assign("/onboarding");
+  }
 
   return (
     <div className="relative flex min-h-full flex-col overflow-hidden">
@@ -35,11 +44,11 @@ export default function Landing() {
         </div>
 
         <div className="mt-5 flex flex-col gap-3 lg:mt-0 lg:w-auto lg:min-w-[380px] lg:flex-row-reverse lg:items-center lg:justify-end lg:gap-3">
-          <Button className="lg:min-w-[150px] lg:px-7 lg:py-4" onClick={() => navigate("/onboarding")}> 
-            시작하기
+          <Button className="lg:min-w-[150px] lg:px-7 lg:py-4" onClick={() => navigate("/personas")}>
+            체험하기
           </Button>
-          <Button variant="ghost" className="whitespace-nowrap lg:min-w-[190px] lg:bg-white/10 lg:px-7 lg:py-4 lg:backdrop-blur-md" onClick={() => navigate("/onboarding")}> 
-            이미 계정이 있어요
+          <Button variant="ghost" className="whitespace-nowrap lg:min-w-[190px] lg:bg-white/10 lg:px-7 lg:py-4 lg:backdrop-blur-md" onClick={makeMyAccount}>
+            나만의 계정 만들기
           </Button>
         </div>
       </div>

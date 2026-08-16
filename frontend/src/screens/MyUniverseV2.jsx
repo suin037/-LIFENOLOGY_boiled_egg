@@ -5,7 +5,8 @@ import UniverseMap from "../components/UniverseMap.jsx";
 import Constellation from "../components/Constellation.jsx";
 import { PLANETS } from "../data/result.js";
 import { adaptiveGroups, hasRecord, loadUniverse, resetUniverse, scenariosByPlanet, seedDemoCheckins, starGroupsOf, todayKey } from "../data/myUniverse.js";
-import { seedDemoEunwoo, seedDemoYear } from "../data/demoYear.js";
+// demoYear.js 는 1년치 기록(87KB)을 들고 있다. 개발용 데모 버튼에서만 쓰므로
+// 정적 import 하지 않는다 — 하면 첫 화면 번들에 그대로 실린다.
 import { domainAnalysis, domainMonths, domainReport } from "../data/diarySignals.js";
 import { futureMaterials, getCachedFuture, writeFuture, getCachedOpportunities, scanOpportunities } from "../data/futureApi.js";
 import { expeditionsFor, startExpedition } from "../data/expeditions.js";
@@ -94,13 +95,17 @@ export default function MyUniverseV2() {
     () => (planet ? scenariosByPlanet(planet.key, state) : []), [planet, state]);
 
   function openPlanet(key) { setPlanet(PLANETS.find((item) => item.key === key)); setCluster(null); }
-  function runDemo(kind) {
+  async function runDemo(kind) {
     clearSavedReports(REPORT_UID);
     setPlanet(null); setCluster(null);
     if (kind === "clear") resetUniverse();
     else if (kind === "6w") { resetUniverse(); seedDemoCheckins(); }
-    else if (kind === "1y") seedDemoYear();
-    else if (kind === "eunwoo") seedDemoEunwoo();
+    else if (kind === "1y" || kind === "eunwoo") {
+      // 누르는 순간에만 1년치를 받아온다.
+      const demo = await import("../data/demoYear.js");
+      if (kind === "1y") demo.seedDemoYear();
+      else demo.seedDemoEunwoo();
+    }
     setState(loadUniverse());
   }
 

@@ -37,22 +37,27 @@ KNOWN = {
     "econml_klips.pkl":   ("L3", "이직→소득 인과효과 (KLIPS 종단)"),
     "econml_yp.pkl":      ("L3", "이직→소득 인과효과 (YP 청년패널 종단)"),
     "econml_klips_startup.pkl": ("L3", "창업(임금근로→자영)→소득 인과효과 (KLIPS 종단)"),
+    "econml_klips_break.pkl": ("L3", "쉬어가기(자발 퇴직 후 2개월 이상 공백)→소득 인과효과 (KLIPS 종단)"),
     "lifelines.pkl":      ("L4", "재직 생존분석 (GOMS 폴백)"),
     "lifelines_klips.pkl": ("L4", "재직 생존분석 (KLIPS 스펠)"),
     "lifelines_yp.pkl":   ("L4", "재직 생존분석 (YP 스펠)"),
     "lifelines_klips_startup.pkl": ("L4", "자영(창업) 상태 이탈 생존분석 (KLIPS 자영 스펠)"),
+    "lifelines_klips_break.pkl": ("L4", "복귀까지 걸리는 기간 (KLIPS 직업력 공백 스펠)"),
     "layer1_lookup.pkl":  ("L1", "룰베이스 생활지표 조회표"),
     "encoders.pkl":       ("-",  "GOMS 인코더/중앙값 (knn.pkl·econml.pkl 전용)"),
 }
 
 # backend/models/*.py 의 _select() 와 같은 규칙. 코드가 바뀌면 여기도 갱신할 것.
 ROUTING = {
-    "treatment": "선택 유형 → treatment: 이직=move / 창업=startup / 진학=매핑 없음(표본 부족)",
+    "treatment": "선택 유형 → treatment: 이직=move / 창업=startup / 쉬어가기=break / "
+                 "진학=매핑 없음(표본 부족)",
     "L2 (knn)": "이직에만 적용. age ≤ 31 이면 GOMS + YP 를 절반씩 섞고, 그 외엔 GOMS 단독",
     "L3 (econml)": "move: age ≤ 31 → yp → klips → goms, 그 외 → klips → yp → goms / "
-                   "startup: klips 단독(연령 라우팅 대상 없음)",
+                   "startup: klips 단독(연령 라우팅 대상 없음) / break: klips 단독",
     "L4 (lifelines)": "move: age ≤ 31 → yp → klips → goms, 그 외 → klips → yp → goms / "
-                      "startup: klips 자영 스펠 단독",
+                      "startup: klips 자영 스펠 단독 / "
+                      "break: klips 공백 스펠 단독. **이벤트가 '복귀' 라 방향이 반대** — "
+                      "곡선을 그대로 후회 리스크로 부르면 뒤집힌다(core.py 의 return_timeline 참조)",
     "동적효과": "dynamic_effects.json 의 상대시간별 ATE 로 연차별 효과·CI 밴드 구성 "
                 "(관측 밖 연차는 마지막 관측값 유지 + extrapolated 표시)",
     "L5 (궤적 매칭)": "가중 z-거리 + 직종 목적변수 인코딩. 요청에 없는 항목은 거리에서 제외"
