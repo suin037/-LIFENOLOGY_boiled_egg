@@ -24,10 +24,12 @@ import AvatarFromPhoto from "./AvatarFromPhoto.jsx";
 // '옆가르마'와 '언더컷' 같은 것들이 구분되지 않는다.
 
 const NONE = (label = "없음") => ({ id: null, label });
-// 빌트인 눈에는 속눈썹이 늘 붙어 있어 남자 아바타가 여성적으로 보인다. 끌 수 있게 한다.
-const LASHES = [
-  { id: true, label: "있음" },
-  { id: false, label: "없음" },
+// 성별은 지금 속눈썹 하나만 좌우한다. 그래서 따로 저장하지 않고 lashes 를 그대로 쓴다 —
+// 값이 하나뿐이라 '성별은 남자인데 속눈썹은 켜짐' 같은 어긋남이 생길 수 없다.
+// 빌트인 눈에는 속눈썹이 늘 붙어 있어서, 끄지 않으면 남자 아바타가 여성적으로 보인다.
+const GENDER = [
+  { id: true, label: "여자" },
+  { id: false, label: "남자" },
 ];
 const FACE_ITEMS = Object.entries(FACE_SHAPES).map(([id, v]) => ({ id, label: v.label }));
 const CATEGORIES = [
@@ -190,6 +192,14 @@ export default function AvatarBuilder({ config, onChange }) {
           {category === "base" && (
             <>
               <Stepper
+                label="성별"
+                items={GENDER}
+                value={avatar.lashes !== false}
+                field="lashes"
+                config={bare}
+                onPick={(v) => set({ lashes: v })}
+              />
+              <Stepper
                 label="얼굴형"
                 items={FACE_ITEMS}
                 value={avatar.face}
@@ -234,14 +244,6 @@ export default function AvatarBuilder({ config, onChange }) {
                 field="eyes"
                 config={bare}
                 onPick={(v) => set({ eyes: v })}
-              />
-              <Stepper
-                label="속눈썹"
-                items={LASHES}
-                value={avatar.lashes !== false}
-                field="lashes"
-                config={bare}
-                onPick={(v) => set({ lashes: v })}
               />
               <Stepper
                 label="눈썹 모양"
