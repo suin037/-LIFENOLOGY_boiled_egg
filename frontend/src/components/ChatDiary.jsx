@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Card, Caption } from "./ui.jsx";
 import { addCheckin, setDomains, todayKey, loadUniverse, weekStartKey } from "../data/myUniverse.js";
 import { detectLifeDomains } from "../data/choices.js";
-import { composeDiary, weeklyComfort, loadSpeech, SPEECH_KEY } from "../data/dispositionApi.js";
+import { chatTurn, composeDiary, weeklyComfort, loadSpeech, SPEECH_KEY } from "../data/dispositionApi.js";
 import { todayQuestions } from "../data/questions.js";
 import { useResult } from "../data/ResultContext.jsx";
 import Mascot from "./Mascot.jsx";
@@ -109,6 +109,29 @@ function saveDraftArea(area, msgs, qi) {
   try { localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch { /* 무시 */ }
 }
 
+function recentChatContext() {
+  try {
+    const rows = (loadUniverse().checkins || [])
+      .filter((item) => (item.text || item.note || "").trim())
+      .slice(-7);
+    let hardStreak = 0;
+    for (let i = rows.length - 1; i >= 0; i -= 1) {
+      if (Number(rows[i].mood) > 2) break;
+      hardStreak += 1;
+    }
+    return {
+      recent: rows.map((item) => ({
+        date: item.date,
+        emotion: item.keyword || item.emotion || "",
+        text: (item.text || item.note || "").slice(0, 240),
+      })),
+      hardStreak,
+    };
+  } catch {
+    return { recent: [], hardStreak: 0 };
+  }
+}
+
 export default function ChatDiary({ onSaved, embedded = false, onMessagesChange, initialArea = "daily", showAreas = true }) {
   const { setProfile } = useResult(); // 성향 답변을 프로필에 반영(모든 시나리오 개인화 재료)
   const [speech, setSpeech] = useState(loadSpeech);
@@ -125,7 +148,9 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [thinking, setThinking] = useState(false); // 마스코트가 위로를 만드는 중
+  const [chatBusy, setChatBusy] = useState(false);
   const [comfort, setComfort] = useState(() => loadComfort()); // {week, speech, text}
+  const [suggestCompose, setSuggestCompose] = useState(false);
   const [saved, setSaved] = useState(null);
   const [editIdx, setEditIdx] = useState(null); // 수정 중인 답변 인덱스
   const [editText, setEditText] = useState("");
@@ -133,7 +158,7 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
 
   const mascot = AREAS.find((a) => a.key === area)?.mascot || "nova";
   const hasUser = msgs.some((m) => m.role === "user");
-  const done = qi >= qs.length;
+  const done = suggestCompose;
 
   useEffect(() => {
     if (threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight;
@@ -167,6 +192,7 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
     setQi(dr?.qi ?? 0);
     setMsgs(dr?.msgs?.length ? dr.msgs : [{ role: "bot", text: qText(list[0], speech) }]);
     setSaved(null);
+    setSuggestCompose(false);
     setEditIdx(null);
   }
 
@@ -198,9 +224,9 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
     casual: "다 답해줘서 고마워! 아래 ‘기록 저장’을 누르면 오늘 일기로 정리할게.",
   };
 
-  function answer(raw) {
+  async function answer(raw) {
     const v = (raw ?? input).trim();
-    if (!v || thinking) return;
+    if (!v || chatBusy) return;
     // 성향 질문(D2/D1/D4 등 id 있는 것)에 답하면 프로필 psych_answers에 저장
     // → buildDisposition → 모든 시뮬 시나리오 개인화에 반영.
     const cur = qs[qi];
@@ -208,11 +234,29 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
       setProfile((p) => ({ ...p, psych_answers: { ...(p.psych_answers || {}), [cur.id]: v } }));
     }
     const next = qi + 1;
-    const nextText = next < qs.length ? qText(qs[next], speech) : CLOSING[speech];
-    // 답마다 마스코트가 반응하면 말이 너무 많아진다. 위로는 주 1회(주간 위로)로 모은다.
-    setMsgs([...msgs, { role: "user", text: v }, { role: "bot", text: nextText }]);
-    setQi(next);
+    const conversation = [...msgs, { role: "user", text: v }];
+    setMsgs(conversation);
     setInput("");
+    setChatBusy(true);
+    try {
+      const active = AREAS.find((item) => item.key === area);
+      const result = await chatTurn(conversation, {
+        persona: active?.mascot || mascot,
+        context: recentChatContext(),
+        speech,
+        role: active?.role || null,
+      });
+      const fallback = next < qs.length ? qText(qs[next], speech) : CLOSING[speech];
+      setMsgs([...conversation, { role: "bot", text: result?.reply?.trim() || fallback }]);
+      setSuggestCompose(Boolean(result?.suggest_compose));
+      setQi(next);
+    } catch {
+      const fallback = next < qs.length ? qText(qs[next], speech) : CLOSING[speech];
+      setMsgs([...conversation, { role: "bot", text: fallback }]);
+      setQi(next);
+    } finally {
+      setChatBusy(false);
+    }
   }
 
   // 단독 모드 전용 저장(임베드 때는 부모의 '기록 저장'이 대신한다).
@@ -272,6 +316,9 @@ export default function ChatDiary({ onSaved, embedded = false, onMessagesChange,
       )}
       {thinking && !comfort?.text && (
         <div className="mb-2 text-[11px] text-mut">지난 한 주를 읽고 있어요…</div>
+      )}
+      {chatBusy && (
+        <div className="mb-2 text-[11px] text-mut">마스코트가 답변을 생각하고 있어요…</div>
       )}
 
       <div ref={threadRef} className="flex flex-col gap-2 overflow-y-auto" style={{ maxHeight: 220 }}>

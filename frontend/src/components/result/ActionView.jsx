@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Card, Caption } from "../ui.jsx";
-import { actionsFor, clearActiveGoal, loadActiveGoal, saveActionResponse, saveActiveGoal } from "../../data/actionBridge.js";
+import { actionsForGoal, clearActiveGoal, loadActiveGoal, saveActionResponse, saveActiveGoal } from "../../data/actionBridge.js";
 import { computeDiarySignals } from "../../data/diarySignals.js";
 import { logExperiment } from "../../data/myUniverse.js";
 import { domainLabel, labelOf } from "../../data/choices.js";
@@ -12,15 +12,9 @@ export default function ActionView({ a, b, domains = { a: [], b: [] } }) {
   const sig = useMemo(() => computeDiarySignals({ windowDays: 28 }), []);
   const selected = goal?.side === "A" && goal.choice === a.choice ? { side: "A", result: a, domains: domains.a || [] }
     : goal?.side === "B" && goal.choice === b.choice ? { side: "B", result: b, domains: domains.b || [] } : null;
-  // 이직 신호(직무불만·이직고민 등)는 '진로' 방향일 때만 주입한다. 관계·건강 목표에
-  // 이직 실험이 끼면 엉뚱하므로 도메인으로 게이팅.
-  const isJobGoal = !!selected && (
-    ["career", "finance", "business"].some((k) => selected.domains.includes(k)) ||
-    /이직|퇴사|유지|창업|진학|직장|커리어/.test(selected.result.choice || "")
-  );
   const actions = useMemo(
-    () => selected ? actionsFor(selected.result.choice, selected.domains, isJobGoal ? sig : null) : [],
-    [selected?.result.choice, selected?.domains.join("|"), sig, isJobGoal],
+    () => selected ? actionsForGoal(selected.result.choice, selected.domains, sig) : [],
+    [selected?.result.choice, selected?.domains.join("|"), sig],
   );
   // 다음 단계에 반영된 일기 신호(로컬 계산) — "화면용 아님"을 보여주는 근거.
   const reflected = actions.filter((x) => x.domain === "signal");

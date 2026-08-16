@@ -25,6 +25,25 @@ import {
 
 export { DEFAULT_AVATAR };
 
+function hairOutlineColor(hex) {
+  const clean = String(hex || "").replace("#", "").padEnd(6, "0").slice(0, 6);
+  const rgb = [0, 2, 4].map((at) => Number.parseInt(clean.slice(at, at + 2), 16) || 0);
+  // 검정 외곽선 대신 현재 머리색을 약 48% 어둡게 한다. 밝은 금발에서도 경계는
+  // 남지만 별도 검은 모자처럼 분리되어 보이지 않는다.
+  return `#${rgb.map((value) => Math.round(value * .52).toString(16).padStart(2, "0")).join("")}`;
+}
+
+function softenBuiltInHairOutline(svg, hairHex) {
+  const fill = `#${String(hairHex).replace("#", "")}`;
+  const outline = hairOutlineColor(fill);
+  return svg.replace(/<(g|path|ellipse|circle|polygon)\b[^>]*>/gi, (tag) => {
+    if (!tag.toLowerCase().includes(`fill="${fill.toLowerCase()}"`)) return tag;
+    return tag
+      .replace(/stroke="(?:black|#000(?:000)?)"/gi, `stroke="${outline}"`)
+      .replace(/stroke-width="(?:6|7|8)"/gi, 'stroke-width="4"');
+  });
+}
+
 /**
  * config → SVG 문자열.
  *
@@ -44,6 +63,8 @@ export function renderAvatarSvg(config, options = {}) {
     ...options,
   }).toString();
 
+  svg = softenBuiltInHairOutline(svg, c.hairColor);
+
   // 순서가 중요하다.
   //   1) 얼굴형·눈썹은 원본 조각을 '교체'
   //   2) 수염은 바뀐 턱에 맞춰 늘림
@@ -54,6 +75,7 @@ export function renderAvatarSvg(config, options = {}) {
   if (style.custom) {
     svg = overlayCustomHair(svg, style.hair, {
       hair: "#" + c.hairColor,
+      hairOutline: hairOutlineColor(c.hairColor),
       skin: "#" + c.skinColor,
       clothes: "#" + c.clothesColor,
     });

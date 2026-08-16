@@ -1,5 +1,6 @@
 // ─────────────────────────────────────────────────────────────
 // 백엔드 /simulate 연동 + 응답 → 화면(MOCK_RESULT) 형태 어댑터.
+import { occupationGroupLabel } from "./data/occupationGroups.js";
 // 엔진(L1~L5) 수치 + RAG 근거 + Claude 서사를 프론트 컴포넌트가 읽는 형태로 매핑한다.
 // ─────────────────────────────────────────────────────────────
 
@@ -108,7 +109,7 @@ export function mapSimulateToResult(sim) {
   return {
     meta: {
       age: prof.age,
-      occupation: prof.major || "—",
+      occupation: occupationGroupLabel(prof.occupation_group) || prof.occupation || prof.major || "—",
       n_sample: nSample,
       observe_years: incYears.length ? Math.max(...incYears) : 5,
       source: "GOMS · YP2021 · KLIPS (L1~L5)",
@@ -134,7 +135,7 @@ function buildSimulateBody({ profile, choiceA, choiceB, choiceADetail, choiceBDe
   const body = {
     profile: {
       age: profile.age,
-      sex: profile.sex || "1",
+      sex: profile.sex,
       major: profile.major || profile.occupation || "공학",
       monthly_wage: Number(profile.income ?? profile.monthly_wage) > 0 ? Number(profile.income ?? profile.monthly_wage) : null,
       edu_level: profile.edu_level ?? 7,
