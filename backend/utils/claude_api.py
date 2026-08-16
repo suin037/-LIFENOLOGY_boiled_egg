@@ -443,7 +443,10 @@ def generate_narrative(
         return "(ANTHROPIC_API_KEY 미설정 — 내러티브 생략)"
     prompt = (
         f"한 사용자가 '{req.choice}'라는 진로를 택한 평행우주를 상상합니다.\n"
-        f"- 전공: {req.major}, 나이: {req.age}\n"
+        # 전공은 사용자가 실제로 고른 경우에만 넣는다. 없는데 넣으면 모델이 그걸
+        # 사실로 받아 "○○ 배경은 …" 같은 문장을 만든다.
+        + (f"- 전공: {req.major}\n" if req.major else "")
+        + f"- 나이: {req.age}\n"
         f"- 예상 월급: {expected_wage:,.0f}만원\n"
         f"- 그 선택의 인과효과: {causal_effect:,.0f}\n"
         f"- 예상 재직기간: {survival_months:.1f}개월\n\n"

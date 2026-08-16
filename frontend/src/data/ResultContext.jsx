@@ -22,7 +22,10 @@ const DEFAULT_PROFILE = {
   age: 29,
   sex: "2",
   major: "사회", // 전공 계열
-  occupation: "사회계열",
+  // 직종은 기본값을 두지 않는다. 예전 기본값 "사회계열" 은 온보딩 직종 목록
+  // (profileOptions.OCCUPATIONS)에 아예 없는 값이라, 사용자는 고른 적도 없고
+  // 드롭다운에서 찾을 수도 없는 직종이 화면에 박혀 있었다.
+  occupation: "",
   income: null, // 온보딩에서 직접 입력 → 백엔드 monthly_wage
   edu_level: 7, // 대졸
   occupation_group: null, // KSCO 직종 대분류 1~9 — 이직 시뮬레이션에서 수집

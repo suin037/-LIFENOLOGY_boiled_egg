@@ -15,7 +15,11 @@ class Profile(BaseModel):
 
     age: int = Field(..., ge=18, le=70)
     sex: str = Field(..., description="'1'=남 / '2'=여 (GOMS 코드)")
-    major: str = Field(..., description="전공 계열 코드")
+    major: Optional[str] = Field(None,
+        description="전공 계열(인문·사회·교육·공학·자연·의약·예체능). 프론트에서 전공을 "
+                    "묻는 건 교육 영역 비교뿐이라 대개 비어 온다. 필수로 두면 호출부가 "
+                    "기본값을 지어 채우게 되므로(그 값이 서사에 '전공 배경'으로 새어나갔다) "
+                    "선택으로 둔다. 없으면 계열 지표는 '전체' 행으로 떨어진다")
     gpa: Optional[float] = Field(None, ge=0, le=4.5)
 
     # --- 온보딩 상태·성향 (선택) ---

@@ -13,6 +13,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { ACTION_CARDS } from "./prediction.js";
+import { occupationLabel } from "./profileOptions.js";
 
 // 백엔드 생활지표의 dimension 표기 → 프론트 LIFE_DIMENSIONS 키
 const DIMENSION_ALIAS = {
@@ -66,7 +67,12 @@ function buildSide(scenario, choice, detail, profile, evidence, domainCov, domai
     detail,
     meta: {
       age: profile?.age ?? null,
-      occupation: profile?.major || profile?.occupation || "—",
+      // 헤더에 쓰는 '나는 누구인가' 값 — 사용자가 온보딩에서 직접 고른 직종이다.
+      // 예전엔 major(전공 계열)를 먼저 봤는데, 전공 칸은 교육 영역 비교에서만
+      // 뜨는 조건부 입력이라(InputScreen.needMajor) 대부분의 사용자는 고른 적이
+      // 없는 값이 헤더에 박혔다. 데모 경로(prediction.js)는 원래 직종을 썼기에
+      // 실데이터로 붙는 순간 헤더가 직종→전공으로 바뀌는 불일치도 있었다.
+      occupation: occupationLabel(profile) || "—",
       observe_years_income: maxYear(trajectory, 0),
       observe_years_wellbeing: maxYear(wellbeing, 0),
       source: "KLIPS·GOMS·YP · KNHANES·KWCS · KOSIS·KEDI (L1~L5)",

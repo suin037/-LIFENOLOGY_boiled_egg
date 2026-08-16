@@ -6,6 +6,7 @@ import { MASCOTS } from "../data/result.js";
 import ValueRankingInput from "../components/ValueRankingInput.jsx";
 import { topAxes } from "../data/valueCards.js";
 import { loadPrefs, savePrefs } from "../data/prefs.js";
+import { OCCUPATIONS } from "../data/profileOptions.js";
 import { PSYCH_QUESTIONS } from "../data/psychQuestions.js";
 import Avatar from "../components/Avatar.jsx";
 import AvatarBuilder from "../components/AvatarBuilder.jsx";
@@ -17,18 +18,6 @@ import PetMascot from "../components/PetMascot.jsx";
 import PetShop from "../components/PetShop.jsx";
 import { Bell, ChevronRight, LockKeyhole, Palette, UserRound, LogOut } from "lucide-react";
 import { toChoiceDomains } from "../data/choices.js";
-
-const OCCUPATIONS = [
-  "연구·공학기술",
-  "경영·사무·금융·보험",
-  "교육·법률·복지·공공",
-  "보건·의료",
-  "예술·디자인·방송",
-  "영업·판매·서비스",
-  "건설·생산·운송",
-  "학생·취업준비",
-  "기타",
-];
 
 // 작은 on/off 토글 (track h-6/w-11 · thumb h-4/w-4 · translate 로 이동 — 크기 균형)
 function Toggle({ on, onClick }) {
