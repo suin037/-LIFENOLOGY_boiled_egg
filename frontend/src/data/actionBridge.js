@@ -103,7 +103,9 @@ export function actionsFor(choice, domains = [], signals = null) {
     }
   }
 
-  // 신호 행동 최대 2개를 앞에, 나머지는 도메인 행동으로 채워 3개. 같은 문구는 한 번만.
+  // 신호 행동 1개를 맨 앞에, 나머지는 시나리오·도메인 행동으로 채워 3개. 같은 문구는 한 번만.
+  // (1개인 이유: 상한이 3이라 2개를 넣으면 선택 A/B를 검증하는 영역 행동이 1개로 밀린다.
+  //  이직고민+직무불만처럼 신호는 동시에 잘 터져서 사실상 영역 행동이 사라진다.)
   const merged = [];
   const seen = new Set();
   for (const a of [...signalList.slice(0, 1), ...scenarioList, ...domainList]) {
@@ -115,6 +117,8 @@ export function actionsFor(choice, domains = [], signals = null) {
   return merged;
 }
 
+// 일기 신호(이직·번아웃 등)는 진로 계열 목표에만 주입한다.
+// 관계·건강 목표에 이직 실험이 끼면 엉뚱하므로 도메인·문구로 게이팅한다.
 export function isJobGoal(choice, domains = []) {
   return (
     ["career", "finance", "business"].some((key) => domains.includes(key)) ||
@@ -122,7 +126,14 @@ export function isJobGoal(choice, domains = []) {
   );
 }
 
-// 결과 화면·보관함·알람이 같은 행동 문구를 사용하도록 하는 단일 진입점.
+/**
+ * '오늘 할 일'의 단일 진입점 — 결과 화면·보관함·알람이 모두 이걸 통해야 한다.
+ * 완료 여부는 doneActions 의 '문구 텍스트'로 대조하므로, 셋 중 하나라도 다른 인자로
+ * actionsFor 를 부르면 서로 다른 문구가 나와 '했어요'가 어긋난다.
+ *
+ * @param signals computeDiarySignals() 결과. 생략하면 이 함수가 계산한다.
+ *   여러 우주를 도는 루프에서는 밖에서 한 번 계산해 넘길 것(매번 일기 전체를 다시 읽는다).
+ */
 export function actionsForGoal(choice, domains = [], signals) {
   const diarySignals = signals === undefined ? computeDiarySignals({ windowDays: 28 }) : signals;
   return actionsFor(choice, domains, isJobGoal(choice, domains) ? diarySignals : null);
