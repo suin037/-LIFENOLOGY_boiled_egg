@@ -36,6 +36,7 @@ export const HAIR_STYLES = [
   { id: "undercut", label: "언더컷", hair: "undercut", rear: null },
   { id: "spiky", label: "뾰족머리", hair: "spiky", rear: null },
   { id: "bun", label: "번머리", hair: "bun", rear: null },
+  { id: "menCover", label: "남자 덮머", hair: "menCover", rear: null, custom: true },
   { id: "menFringe", label: "남자 앞머리", hair: "menFringe", rear: null, custom: true },
   { id: "menPerm", label: "남자 펌", hair: "menPerm", rear: null, custom: true },
   { id: "menPermFringe", label: "남자 펌 · 앞머리", hair: "menPermFringe", rear: null, custom: true },
