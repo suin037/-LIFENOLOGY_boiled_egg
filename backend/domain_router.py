@@ -61,18 +61,42 @@ def _klips_work_health_panel() -> pd.DataFrame:
     return detail.merge(demographics, on=["pid", "wave"], how="left")
 
 
+def _sex_value(profile) -> float | None:
+    """프로필의 성별 코드 → 1.0/2.0. 없거나 못 읽으면 None(=성별로 나누지 않는다).
+
+    예전엔 `float(profile.get("sex") or 2)` 로 비어 있으면 여성을 채웠다. 성별은
+    선택 입력이라 그냥 안 고른 사용자가 많은데, 그 사람들에게 고른 적 없는 성별의
+    유사집단 수치가 '내 조건과 비슷한 집단'이라는 이름으로 나갔다.
+    """
+    value = (profile or {}).get("sex")
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _klips_matched(profile, specs: list[tuple[str, str, str]]) -> list[dict]:
-    """사용자와 같은 성별·±5세 KLIPS 26차 집단의 근로·건강 상태."""
+    """사용자와 같은 성별·±5세 KLIPS 26차 집단의 근로·건강 상태.
+
+    성별이 없으면 성별 축을 열지 않고 연령대만으로 매칭한다(전체 표본 폴백).
+    """
     try:
         panel = _klips_work_health_panel()
     except Exception:
         return []
     age = int(profile.get("age") or 29)
-    sex = float(profile.get("sex") or 2)
-    matched = panel[panel["나이"].between(age - 5, age + 5) & panel["성별"].eq(sex)]
-    conditions = f"{age - 5}~{age + 5}세·동일 성별"
+    sex = _sex_value(profile)
+    in_age = panel[panel["나이"].between(age - 5, age + 5)]
+    if sex is None:
+        matched = in_age
+        conditions = f"{age - 5}~{age + 5}세·성별 구분 없음"
+    else:
+        matched = in_age[in_age["성별"].eq(sex)]
+        conditions = f"{age - 5}~{age + 5}세·동일 성별"
     if len(matched) < 100:
-        matched = panel[panel["나이"].between(age - 5, age + 5)]
+        matched = in_age
         conditions = f"{age - 5}~{age + 5}세"
     out = []
     for column, label, kind in specs:
@@ -108,15 +132,19 @@ def _lanollab(profile, names) -> list[dict]:
     except Exception:
         return []
     age = int(profile.get("age") or 29)
-    ag, sx = _b_lanollab(age), str(float(profile.get("sex") or 2))
+    ag = _b_lanollab(age)
+    sex = _sex_value(profile)
+    sx = None if sex is None else str(sex)
     out = []
     for nm in names:
         sub = df[df["지표명"] == nm]
         if sub.empty:
             continue
         # 성별×연령대 → 연령대 → 전체 순으로 가장 구체적인 값을 고른다.
-        pick = sub[(sub["구분유형"] == "성별×연령대") & (sub["agegroup"].astype(str) == ag)
-                   & (sub["sex"].astype(str) == sx)]
+        # 성별이 없으면 첫 단계를 건너뛴다(찍지 않고 연령대·전체로 내려간다).
+        pick = sub.iloc[0:0] if sx is None else sub[
+            (sub["구분유형"] == "성별×연령대") & (sub["agegroup"].astype(str) == ag)
+            & (sub["sex"].astype(str) == sx)]
         if pick.empty:
             pick = sub[(sub["구분유형"] == "연령대") & (sub["agegroup"].astype(str) == ag)]
         if pick.empty:

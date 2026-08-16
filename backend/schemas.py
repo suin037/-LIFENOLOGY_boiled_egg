@@ -14,7 +14,13 @@ class Profile(BaseModel):
     """
 
     age: int = Field(..., ge=18, le=70)
-    sex: str = Field(..., description="'1'=남 / '2'=여 (GOMS 코드)")
+    sex: Optional[str] = Field(None,
+        description="'1'=남 / '2'=여 (GOMS 코드). **선택** — 없으면 성별을 나누지 "
+                    "않은 전체 표본으로 떨어진다. 필수로 두면 성별을 고른 적 없는 "
+                    "기존 사용자가 비교 버튼을 누르는 순간 422 로 막혔다(프론트는 "
+                    "성별을 '선택 정보'로 설계해 진행을 허용한다). 임의 기본값을 "
+                    "채우지 않는 이유는, 고른 적 없는 성별의 유사집단 통계가 "
+                    "그대로 결과로 나가기 때문이다")
     major: Optional[str] = Field(None,
         description="전공 계열(인문·사회·교육·공학·자연·의약·예체능). 프론트에서 전공을 "
                     "묻는 건 교육 영역 비교뿐이라 대개 비어 온다. 필수로 두면 호출부가 "
