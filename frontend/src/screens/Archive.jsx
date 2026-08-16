@@ -35,7 +35,7 @@ export default function Archive() {
   const chosen = items.filter((u) => chosenChoice(u));
 
   return (
-    <div>
+    <div data-tour="archive-list">
       <Eyebrow>ARCHIVE · 나의 평행우주</Eyebrow>
       <h1 className="mb-1 text-[22px] font-bold leading-[1.25]">내가 향해 가는 미래들</h1>
       <Caption>시뮬레이션을 저장하고, 마음이 기운 미래를 골라 오늘의 한 걸음으로 이어갑니다.</Caption>

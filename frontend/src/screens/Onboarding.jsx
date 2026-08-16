@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useResult } from "../data/ResultContext.jsx";
 import { Eyebrow, Button } from "../components/ui.jsx";
 import AvatarBuilder from "../components/AvatarBuilder.jsx";
+import { startTourIfNew } from "../data/tour.js";
 
 const OCCUPATIONS = [
   "연구·공학기술",
@@ -52,6 +53,7 @@ export default function Onboarding() {
   function finish() {
     setOnboarded(true); // 이후 홈 탭은 '나의 우주' 허브로 진입
     navigate("/home");
+    startTourIfNew();   // 처음 만든 계정이면 홈에서 안내가 이어진다
   }
 
   function reveal(index) {

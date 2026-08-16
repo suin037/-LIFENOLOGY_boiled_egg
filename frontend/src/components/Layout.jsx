@@ -1,5 +1,6 @@
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import TabBar from "./TabBar.jsx";
+import Tour from "./Tour.jsx";
 
 // 탭바를 숨기는 경로 (랜딩·온보딩·로딩)
 const NO_TABBAR = ["/", "/onboarding", "/simulate"];
@@ -76,6 +77,9 @@ export default function Layout() {
         </main>
 
         {showTabBar && <TabBar />}
+
+        {/* 사용 안내 — 화면을 넘나들며 이어지므로 라우트 위(Layout)에 둔다. */}
+        <Tour />
       </div>
     </div>
   );

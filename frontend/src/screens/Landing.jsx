@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, Button } from "../components/ui.jsx";
+import { markTourSeen, resetTour } from "../data/tour.js";
 
 export default function Landing() {
   const navigate = useNavigate();
@@ -60,10 +61,11 @@ export default function Landing() {
         </div>
 
         <div className="mt-5 flex flex-col gap-3 lg:mt-0 lg:w-auto lg:min-w-[300px] lg:flex-row-reverse lg:items-center lg:justify-end lg:gap-3">
-          <Button className="lg:min-w-[120px] lg:px-6" onClick={() => navigate("/onboarding")}>
+          {/* 처음 만드는 계정에만 사용 안내를 띄운다 — 쓰던 사람에게 다시 띄우면 방해다. */}
+          <Button className="lg:min-w-[120px] lg:px-6" onClick={() => { resetTour(); navigate("/onboarding"); }}>
             시작하기
           </Button>
-          <Button variant="ghost" className="whitespace-nowrap lg:min-w-[168px] lg:px-7" onClick={() => navigate("/onboarding")}>
+          <Button variant="ghost" className="whitespace-nowrap lg:min-w-[168px] lg:px-7" onClick={() => { markTourSeen(); navigate("/onboarding"); }}>
             이미 계정이 있어요
           </Button>
         </div>

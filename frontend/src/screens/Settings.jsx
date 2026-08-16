@@ -16,6 +16,7 @@ import { LEVEL_REWARDS } from "../data/unlocks.js";
 import PetMascot from "../components/PetMascot.jsx";
 import PetShop from "../components/PetShop.jsx";
 import { toChoiceDomains } from "../data/choices.js";
+import { startTour } from "../data/tour.js";
 
 const OCCUPATIONS = [
   "연구·공학기술",
@@ -203,6 +204,7 @@ export default function Settings() {
       <PetMascot onCompare={startCompare} />
 
       <Card>
+        <div className="mb-3 flex items-center justify-between gap-4 border-b border-line pb-3"><div><div className="text-xs font-semibold text-mut">사용 안내 다시 보기</div><p className="mt-1 text-[10px] leading-relaxed text-sub">홈에서 어떤 버튼이 무엇을 하는지 하나씩 짚어드려요.</p></div><button type="button" onClick={()=>{navigate("/home");startTour();}} className="tap shrink-0 rounded-xl border border-[#8B6CCF]/40 bg-[#8B6CCF]/10 px-4 text-[11px] font-bold text-[#C7B5F2]">안내 보기</button></div>
         <div className="flex items-center justify-between gap-4"><div><div className="text-xs font-semibold text-mut">꾸미기 상점</div><p className="mt-1 text-[10px] leading-relaxed text-sub">배경·소품·간식·행성 스킨을 코인으로 사서 꾸며요.</p></div><button type="button" onClick={()=>setShopOpen(true)} className="tap shrink-0 rounded-xl bg-[#8B6CCF] px-4 text-[11px] font-bold">상점 열기</button></div>
       </Card>
 

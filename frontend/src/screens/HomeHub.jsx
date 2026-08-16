@@ -47,6 +47,7 @@ export default function HomeHub() {
       {alerts.map((alert) => (
         <button
           key={alert.domain}
+          data-tour="alert"
           onClick={() => startCompare(alert)}
           className="tap mt-2.5 flex w-full items-center gap-3 rounded-[18px] border border-cyan/40 bg-[#1D1730] px-4 py-3.5 text-left transition-colors hover:bg-[#16264a] lg:max-w-[560px]"
         >
@@ -65,6 +66,7 @@ export default function HomeHub() {
 
       {/* 새 시뮬 CTA — 이 앱이 하는 일이 첫 화면에 보이도록 그리드 위에 둔다. */}
       <Button
+        data-tour="simulate"
         className="mt-3 flex items-center justify-center gap-1.5 lg:max-w-[420px] lg:py-4"
         onClick={() => navigate("/input")}
       >
@@ -75,10 +77,10 @@ export default function HomeHub() {
       {/* 왼쪽: 오늘의 기록 → 나의 우주 요약 / 오른쪽: 서버 상태·탐험·오늘의 제안 */}
       <div className="lg:mt-6 lg:grid lg:grid-cols-[minmax(0,1.45fr)_minmax(300px,.75fr)] lg:items-start lg:gap-7 xl:grid-cols-[minmax(0,1.5fr)_minmax(340px,.82fr)] xl:gap-9">
         <div>
-          <DiaryToday />
+          <div data-tour="diary"><DiaryToday /></div>
 
           {/* 나의 우주 요약 — 오늘 기록한 것이 어디에 쌓이는지 바로 밑에서 보이게 한다. */}
-          <div className="mb-2 mt-7 flex items-center justify-between px-1">
+          <div data-tour="universe" className="mb-2 mt-7 flex items-center justify-between px-1">
             <span className="text-[15px] font-bold text-ink">나의 우주</span>
             <button
               onClick={() => navigate("/my")}
@@ -117,7 +119,7 @@ export default function HomeHub() {
           <ExpeditionBoard />
 
           {/* 오늘 해볼 만한 것 — 인생 갈림길(기회 카드)보다 작은, 오늘 크기의 제안 */}
-          <DailySuggest />
+          <div data-tour="suggest"><DailySuggest /></div>
         </aside>
       </div>
     </div>

@@ -49,7 +49,8 @@ export function SourceFootnote({ meta }) {
 }
 
 // 큰 CTA 버튼
-export function Button({ children, onClick, variant = "primary", type = "button", className = "" }) {
+// rest 를 내려준다 — data-* / aria-* 가 여기서 잘리면 바깥에서 붙일 방법이 없다.
+export function Button({ children, onClick, variant = "primary", type = "button", className = "", ...rest }) {
   const base =
     "tap block w-full rounded-2xl px-4 py-3 text-[15px] font-semibold transition-all active:scale-[.98]";
   const styles =
@@ -57,7 +58,7 @@ export function Button({ children, onClick, variant = "primary", type = "button"
       ? "bg-card font-semibold text-sub hover:bg-card2"
       : "border border-[#8B6CCF] bg-[#8B6CCF] text-white shadow-[0_10px_28px_rgba(77,54,126,.34)] hover:brightness-110";
   return (
-    <button type={type} onClick={onClick} className={`${base} ${styles} ${className}`}>
+    <button type={type} onClick={onClick} className={`${base} ${styles} ${className}`} {...rest}>
       {children}
     </button>
   );

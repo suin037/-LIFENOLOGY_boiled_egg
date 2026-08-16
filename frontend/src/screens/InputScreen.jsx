@@ -147,7 +147,7 @@ export default function InputScreen() {
         </div>
       </div>
 
-      <div className="relative mt-3 flex min-h-[400px] flex-col overflow-hidden rounded-[24px] border border-white/10 bg-[#08111F]/70 shadow-[0_20px_50px_rgba(0,0,0,.32)] lg:min-h-[350px] lg:flex-row">
+      <div data-tour="input-choices" className="relative mt-3 flex min-h-[400px] flex-col overflow-hidden rounded-[24px] border border-white/10 bg-[#08111F]/70 shadow-[0_20px_50px_rgba(0,0,0,.32)] lg:min-h-[350px] lg:flex-row">
         <ChoicePanel
           side="A" text={textA} domains={scenarioDomains.a} domainAuto={domainAuto.a}
           active={focused === "a"} suggestions={SUGGESTIONS.a}
