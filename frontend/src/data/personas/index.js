@@ -19,25 +19,8 @@ import { profile as dohyun } from "./dohyun.profile.js";
 import { profile as seongmin } from "./seongmin.profile.js";
 import { profile as jiho } from "./jiho.profile.js";
 import { profile as eunwoo } from "./eunwoo.profile.js";
-
-// 기록이 아직 프론트로 안 넘어온 인물의 프로필. (린·다운은 백엔드에 14일치만 있다.)
-const rin = {
-  name: "린", age: 27, sex: "2", sexConfirmed: true,
-  major: "사회", occupation: "교육·법률·복지·공공", occupation_group: 4,
-  income: 90, edu_level: 8, tenure_years: 0, mbti: "ENFP",
-  value_ranking: ["growth", "freedom", "meaning", "friends", "status", "money", "family", "stability"],
-  tagline: "런던 석사 마무리 · 돌아올지 남을지",
-  choices: { a: "귀국해서 이직한다", b: "런던에 남아 현지 취업을 한다" },
-};
-
-const daun = {
-  name: "다운", age: 30, sex: "2", sexConfirmed: true,
-  major: "사회", occupation: "경영·사무·금융·보험", occupation_group: 3,
-  income: 300, edu_level: 7, tenure_years: 5, mbti: "ENFJ",
-  value_ranking: ["meaning", "friends", "family", "freedom", "growth", "status", "money", "stability"],
-  tagline: "회사원 겸 브랜드 운영 · 본업을 바꿀지 고민",
-  choices: { a: "회사를 나와 내 브랜드를 창업한다", b: "현재 직장을 유지한다" },
-};
+import { profile as rin } from "./rin.profile.js";
+import { profile as daun } from "./daun.profile.js";
 
 // 카드가 놓이는 순서. 기록이 있는 인물을 앞에 둔다.
 export const PERSONAS = [
@@ -51,8 +34,10 @@ export const PERSONAS = [
     load: () => import("./jiho.js") },
   { id: "eunwoo", profile: eunwoo, dataStatus: "ready", kind: "이직",
     load: () => import("./eunwoo.js") },
-  { id: "rin", profile: rin, dataStatus: "pending", kind: "이직", load: null },
-  { id: "daun", profile: daun, dataStatus: "pending", kind: "창업", load: null },
+  { id: "rin", profile: rin, dataStatus: "ready", kind: "이직",
+    load: () => import("./rin.js") },
+  { id: "daun", profile: daun, dataStatus: "ready", kind: "창업",
+    load: () => import("./daun.js") },
 ];
 
 export function getPersona(id) {

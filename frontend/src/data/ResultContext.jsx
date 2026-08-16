@@ -7,6 +7,7 @@ import { avatarToPngBlob } from "./avatarImage.js";
 import { avatarGenerationSpec } from "./avatarOptions.js";
 import { initDemoFromUrl, noteSimulationRun, recordScenario, loadUniverse } from "./myUniverse.js";
 import { toPlanetKey } from "./choices.js";
+import storage from "./safeStorage.js";
 
 // 결과 데이터 + 온보딩 프로필을 한 곳에 모으는 컨텍스트.
 // runSimulation() 이 선택(choices)+심정(diary)으로 결과 쌍{a,b}을 만든다.
@@ -46,7 +47,7 @@ const PROFILE_KEY = "pm.profile.v1";
 
 function loadProfile() {
   try {
-    const saved = JSON.parse(localStorage.getItem(PROFILE_KEY) || "null");
+    const saved = JSON.parse(storage.getItem(PROFILE_KEY) || "null");
     if (!saved) return DEFAULT_PROFILE;
     const merged = { ...DEFAULT_PROFILE, ...saved };
     // 이전 버전은 입력 없이 sex="2"를 저장했다. 사용자가 직접 고른 기록이 없는
@@ -62,7 +63,7 @@ export function ResultProvider({ children }) {
   const [profile, setProfile] = useState(loadProfile);
   useEffect(() => {
     try {
-      localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+      storage.setItem(PROFILE_KEY, JSON.stringify(profile));
     } catch { /* 저장 실패는 무시 — 기능은 계속 동작 */ }
   }, [profile]);
   const [choices, setChoices] = useState({ a: "이직", b: "유지" });
@@ -299,9 +300,22 @@ export function ResultProvider({ children }) {
     }
   }
 
+  /**
+   * 저장소의 프로필을 다시 읽어온다 — 페르소나 슬롯을 갈아끼운 직후에 부른다.
+   *
+   * 예전에는 전환 뒤 window.location.reload() 로 컨텍스트를 새로 띄웠다. 그런데
+   * iframe·사파리에서는 저장소가 메모리라(safeStorage) **새로고침하면 방금 심은
+   * 1년치가 통째로 날아간다.** 그래서 새로고침 대신 이 함수로 상태만 갈아끼운다.
+   * 기록(pm.myuniverse.v1)은 restoreLive 가 쏘는 'pm:universe' 이벤트로 각 화면이
+   * 알아서 다시 읽으므로, 여기서는 프로필만 맡는다.
+   */
+  function reloadProfile() {
+    setProfile(loadProfile());
+  }
+
   const value = useMemo(
     () => ({
-      profile, setProfile,
+      profile, setProfile, reloadProfile,
       choices, setChoices,
       scenarioTexts, setScenarioTexts,
       scenarioDomains, setScenarioDomains,

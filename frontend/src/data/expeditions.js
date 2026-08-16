@@ -1,3 +1,4 @@
+import storage from "./safeStorage.js";
 // 작은 탐험 — 기회(갈림길)와 결정 사이를 메우는 한 걸음.
 //
 // 기회 카드는 누르면 바로 시뮬레이션(이직 vs 유지)으로 간다. 인생 결정 크기라
@@ -10,7 +11,7 @@ const KEY = "pm.expedition.v1";
 
 function read() {
   try {
-    const v = JSON.parse(localStorage.getItem(KEY) || "null");
+    const v = JSON.parse(storage.getItem(KEY) || "null");
     return Array.isArray(v?.items) ? v.items : [];
   } catch {
     return [];
@@ -18,7 +19,7 @@ function read() {
 }
 
 function write(items) {
-  try { localStorage.setItem(KEY, JSON.stringify({ items })); } catch { /* 무시 */ }
+  try { storage.setItem(KEY, JSON.stringify({ items })); } catch { /* 무시 */ }
   if (typeof window !== "undefined") window.dispatchEvent(new Event("pm:expedition"));
   return items;
 }

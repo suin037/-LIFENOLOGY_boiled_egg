@@ -1,5 +1,6 @@
 // 보관함 저장소 — 시뮬 결과 스냅샷을 localStorage 에 보관. 보관함 화면(수인) 소관.
 import { LIFE_DOMAINS, classifyChoice, detectLifeDomains } from "./choices.js";
+import storage from "./safeStorage.js";
 
 const KEY = "pm.universes.v1";
 const DOMAIN_KEYS = new Set(LIFE_DOMAINS.map((domain) => domain.key));
@@ -42,7 +43,7 @@ function normalizeUniverse(u) {
 
 export function listUniverses() {
   try {
-    const arr = JSON.parse(localStorage.getItem(KEY) || "[]");
+    const arr = JSON.parse(storage.getItem(KEY) || "[]");
     return Array.isArray(arr) ? arr.map(normalizeUniverse) : [];
   } catch {
     return [];
@@ -51,7 +52,7 @@ export function listUniverses() {
 
 function persist(arr) {
   try {
-    localStorage.setItem(KEY, JSON.stringify(arr));
+    storage.setItem(KEY, JSON.stringify(arr));
   } catch {
     /* 무시 */
   }

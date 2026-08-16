@@ -1,3 +1,4 @@
+import storage from "./safeStorage.js";
 // ─────────────────────────────────────────────────────────────
 // 프로필 슬롯 — 넷플릭스식 프로필 전환의 저장소 레이어.
 //
@@ -11,9 +12,12 @@
 //
 //   pm.slots.v1 = { active: "dohyun", slots: { dohyun: { "pm.myuniverse.v1": …, … }, … } }
 //
-// 주의: 전환은 localStorage 만 바꾼다. React 컨텍스트(ResultContext)는 마운트 시점에
-//   프로필을 읽으므로, 전환 뒤에는 새로고침을 거쳐야 화면이 새 프로필로 뜬다.
-//   activateSlot(id, { reload: true }) 가 그 처리를 한다.
+// 주의: 전환은 저장소만 바꾼다. React 컨텍스트(ResultContext)는 마운트 시점에
+//   프로필을 읽으므로, 전환 뒤에 화면을 갱신해줘야 한다.
+//   **새로고침으로 하지 말 것** — iframe·사파리에서는 저장소가 메모리라
+//   (safeStorage.js) 새로고침이 세션을 통째로 날린다.
+//   대신 호출측에서 ResultContext 의 reloadProfile() 을 부른다(Personas.jsx 참조).
+//   기록은 restoreLive 가 쏘는 'pm:universe' 이벤트로 각 화면이 스스로 다시 읽는다.
 // ─────────────────────────────────────────────────────────────
 
 const SLOTS_KEY = "pm.slots.v1";
@@ -47,7 +51,7 @@ export const MY_SLOT = "__me__";
 
 function readSlots() {
   try {
-    const raw = JSON.parse(localStorage.getItem(SLOTS_KEY) || "null");
+    const raw = JSON.parse(storage.getItem(SLOTS_KEY) || "null");
     if (!raw || typeof raw !== "object") return { active: null, slots: {} };
     return { active: raw.active ?? null, slots: raw.slots && typeof raw.slots === "object" ? raw.slots : {} };
   } catch {
@@ -57,7 +61,7 @@ function readSlots() {
 
 function writeSlots(next) {
   try {
-    localStorage.setItem(SLOTS_KEY, JSON.stringify(next));
+    storage.setItem(SLOTS_KEY, JSON.stringify(next));
   } catch { /* 저장 실패는 무시 — 이번 세션은 메모리로만 동작 */ }
   return next;
 }
@@ -67,7 +71,7 @@ function snapshotLive() {
   const snap = {};
   for (const k of PROFILE_KEYS) {
     try {
-      const v = localStorage.getItem(k);
+      const v = storage.getItem(k);
       if (v != null) snap[k] = v;
     } catch { /* 무시 */ }
   }
@@ -78,8 +82,8 @@ function snapshotLive() {
 function restoreLive(snap = {}) {
   for (const k of PROFILE_KEYS) {
     try {
-      if (Object.prototype.hasOwnProperty.call(snap, k)) localStorage.setItem(k, snap[k]);
-      else localStorage.removeItem(k);
+      if (Object.prototype.hasOwnProperty.call(snap, k)) storage.setItem(k, snap[k]);
+      else storage.removeItem(k);
     } catch { /* 무시 */ }
   }
   if (typeof window !== "undefined") window.dispatchEvent(new Event("pm:universe"));

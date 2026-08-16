@@ -2,6 +2,7 @@
 // 기회(futureApi.scanOpportunities)가 인생 갈림길 크기라면 여기는 오늘 크기다.
 import { loadUniverse, hasRecord, todayKey } from "./myUniverse.js";
 import { API_BASE } from "./apiBase.js";
+import storage from "./safeStorage.js";
 
 const BASE = API_BASE;
 
@@ -10,7 +11,7 @@ const KEY = "pm.suggest.v1";
 
 export function getTodaySuggestion() {
   try {
-    const v = JSON.parse(localStorage.getItem(KEY) || "null");
+    const v = JSON.parse(storage.getItem(KEY) || "null");
     return v && v.date === todayKey() ? v : null;
   } catch {
     return null;
@@ -18,7 +19,7 @@ export function getTodaySuggestion() {
 }
 
 function save(value) {
-  try { localStorage.setItem(KEY, JSON.stringify(value)); } catch { /* 무시 */ }
+  try { storage.setItem(KEY, JSON.stringify(value)); } catch { /* 무시 */ }
 }
 
 // 최근 2주 기록(최신순). 그 이상 거슬러 올라가면 '오늘'의 제안이 아니게 된다.
@@ -53,7 +54,7 @@ const TRACK_KEY = "pm.tracks.v1";
 
 export function getTodayTracks() {
   try {
-    const v = JSON.parse(localStorage.getItem(TRACK_KEY) || "null");
+    const v = JSON.parse(storage.getItem(TRACK_KEY) || "null");
     return v && v.date === todayKey() ? v : null;
   } catch {
     return null;
@@ -73,7 +74,7 @@ export async function fetchTracks({ speech = "polite", state } = {}) {
     const data = await res.json();
     if (data?.ok) {
       const value = { ...data, date: todayKey() };
-      try { localStorage.setItem(TRACK_KEY, JSON.stringify(value)); } catch { /* 무시 */ }
+      try { storage.setItem(TRACK_KEY, JSON.stringify(value)); } catch { /* 무시 */ }
       return value;
     }
     return data;

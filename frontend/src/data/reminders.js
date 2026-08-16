@@ -13,6 +13,7 @@
 import { listUniverses, updateUniverse } from "./savedUniverses.js";
 import { actionsForGoal, chosenChoice } from "./actionBridge.js";
 import { computeDiarySignals } from "./diarySignals.js";
+import storage from "./safeStorage.js";
 
 const KEY = "pm.reminders.v1";
 const DEFAULT_STATE = { enabled: true, lastAutoDate: null };
@@ -20,7 +21,7 @@ let mem = null; // 스토리지 차단 환경용 메모리 폴백
 
 function readState() {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = storage.getItem(KEY);
     return raw ? { ...DEFAULT_STATE, ...JSON.parse(raw) } : { ...DEFAULT_STATE };
   } catch {
     return mem ? { ...mem } : { ...DEFAULT_STATE };
@@ -30,7 +31,7 @@ function readState() {
 function writeState(next) {
   mem = { ...next };
   try {
-    localStorage.setItem(KEY, JSON.stringify(next));
+    storage.setItem(KEY, JSON.stringify(next));
   } catch {
     /* iframe/사파리 등 저장 불가 — 메모리에만 유지 */
   }

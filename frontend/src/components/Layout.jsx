@@ -6,6 +6,7 @@ import UserGuide from "./UserGuide.jsx";
 import ReminderBell from "./ReminderBell.jsx";
 import ReminderToast from "./ReminderToast.jsx";
 import { useResult } from "../data/ResultContext.jsx";
+import storage from "../data/safeStorage.js";
 
 // 탭바를 숨기는 경로 (랜딩·온보딩·로딩)
 // /resume 은 다른 기기 링크로 처음 들어오는 자리다. 아직 이 기기엔 기록이 없으므로
@@ -44,10 +45,10 @@ export default function Layout() {
   const isSimulationFlow = pathname === "/simulate";
   const useFullDesktop = isDesktopWorkspace || isOnboarding || pathname === "/simulate";
   const [guideOpen, setGuideOpen] = useState(() => {
-    try { return localStorage.getItem("pm.guide.seen.v1") !== "1"; } catch { return true; }
+    try { return storage.getItem("pm.guide.seen.v1") !== "1"; } catch { return true; }
   });
   const closeGuide = () => {
-    try { localStorage.setItem("pm.guide.seen.v1", "1"); } catch { /* 저장 불가 환경 */ }
+    try { storage.setItem("pm.guide.seen.v1", "1"); } catch { /* 저장 불가 환경 */ }
     setGuideOpen(false);
   };
   // /resume 은 링크로 곧장 들어오는 자리라 돌아갈 이전 화면이 없다.

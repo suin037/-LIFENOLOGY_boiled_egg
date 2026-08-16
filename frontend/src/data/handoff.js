@@ -1,3 +1,4 @@
+import storage from "./safeStorage.js";
 // ─────────────────────────────────────────────────────────────
 // 기기 옮기기 — 폰에서 하던 체험을 노트북에서 이어서 한다. 서버 없이.
 //
@@ -81,10 +82,10 @@ async function gunzip(bytes) {
 export function collectState() {
   const out = {};
   try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
+    for (let i = 0; i < storage.length; i++) {
+      const key = storage.key(i);
       if (!key || !key.startsWith(PREFIX) || SKIP.has(key)) continue;
-      const value = localStorage.getItem(key);
+      const value = storage.getItem(key);
       if (value != null) out[key] = value;
     }
   } catch {
@@ -100,7 +101,7 @@ export function applyState(state) {
     // 신뢰하지 않는 링크에서 온 값이므로 우리 네임스페이스 밖은 절대 쓰지 않는다.
     if (!key.startsWith(PREFIX) || SKIP.has(key)) continue;
     try {
-      localStorage.setItem(key, String(value));
+      storage.setItem(key, String(value));
       written++;
     } catch {
       /* 용량 초과 등 — 나머지 키는 계속 시도한다 */

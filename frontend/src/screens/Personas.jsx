@@ -4,9 +4,10 @@
 // 카드에 필요한 값은 personaCards() 가 준다(1년치 기록은 안 읽는다).
 // 고른 순간에만 enterPersona() 가 동적 import 로 기록을 가져와 슬롯에 심는다.
 //
-// 새로고침이 필요한 이유: 슬롯 전환은 localStorage 만 바꾸는데 ResultContext 는
-//   마운트 시점에 프로필을 읽는다. navigate() 로는 Provider 가 안 다시 뜨므로
-//   window.location.assign() 으로 한 번 새로 띄운다(personaSlots.js 상단 주석 참조).
+// 전환 뒤 새로고침을 하지 않는다: iframe·사파리에서는 저장소가 메모리라
+//   (safeStorage.js) 새로고침하면 방금 심은 1년치가 날아간다. 대신 슬롯을 바꾸고
+//   reloadProfile() 로 컨텍스트만 갈아끼운 뒤 navigate 로 이동한다.
+//   기록은 restoreLive 가 쏘는 'pm:universe' 이벤트로 각 화면이 다시 읽는다.
 //
 // 아바타는 아직 비워둔다 — 아바타 빌더 개편이 끝나면 profile.avatarConfig 를 채워
 //   이 자리에 얼굴이 들어간다. 그때까지는 이름 첫 글자로 대신한다.
@@ -17,6 +18,7 @@ import { useNavigate } from "react-router-dom";
 import { ArrowRight, Lock, UserPlus } from "lucide-react";
 import { personaCards } from "../data/personas/index.js";
 import { enterPersona, startMyAccount } from "../data/personaSession.js";
+import { useResult } from "../data/ResultContext.jsx";
 
 // 선택 유형별 색. core.py 의 KIND_TREATMENT 와 같은 축이다.
 const KIND_TONE = {
@@ -42,6 +44,7 @@ function Face({ name, ready }) {
 
 export default function Personas() {
   const navigate = useNavigate();
+  const { reloadProfile, setOnboarded } = useResult();
   const cards = personaCards();
   const [busy, setBusy] = useState(null);
   const [error, setError] = useState("");
@@ -56,13 +59,16 @@ export default function Personas() {
       setError("이 프로필은 아직 기록이 준비되지 않았어요.");
       return;
     }
-    window.location.assign("/my");
+    reloadProfile();     // 슬롯이 넣어준 프로필을 컨텍스트에 반영
+    setOnboarded(true);  // 이제 '/' 로 돌아가도 랜딩이 아니라 우주로 간다
+    navigate("/my");
   }
 
   function makeMine() {
     // 슬롯을 먼저 비운 뒤 온보딩으로 — 순서가 바뀌면 방금 입력한 프로필이 지워진다.
     startMyAccount();
-    window.location.assign("/onboarding");
+    reloadProfile();     // 비워진 저장소를 읽어 기본 프로필로 되돌린다
+    navigate("/onboarding");
   }
 
   return (

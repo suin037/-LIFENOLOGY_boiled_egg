@@ -2,6 +2,7 @@
 // 행동 자체는 검토 가능한 큐레이션 콘텐츠이며, LLM은 향후 표현 개인화에만 사용한다.
 
 import { computeDiarySignals } from "./diarySignals.js";
+import storage from "./safeStorage.js";
 
 const GOAL_KEY = "pm.activeGoal.v1";
 
@@ -149,16 +150,16 @@ function fallbackDomains(choice) {
 
 export function saveActiveGoal(goal) {
   const value = { ...goal, createdAt: new Date().toISOString(), completedActions: [] };
-  try { localStorage.setItem(GOAL_KEY, JSON.stringify(value)); } catch { /* 저장 불가 환경 */ }
+  try { storage.setItem(GOAL_KEY, JSON.stringify(value)); } catch { /* 저장 불가 환경 */ }
   return value;
 }
 
 export function loadActiveGoal() {
-  try { return JSON.parse(localStorage.getItem(GOAL_KEY) || "null"); } catch { return null; }
+  try { return JSON.parse(storage.getItem(GOAL_KEY) || "null"); } catch { return null; }
 }
 
 export function clearActiveGoal() {
-  try { localStorage.removeItem(GOAL_KEY); } catch { /* 저장 불가 환경 */ }
+  try { storage.removeItem(GOAL_KEY); } catch { /* 저장 불가 환경 */ }
 }
 
 // 작은 실험에 적은 답을 목표의 completedActions 에 upsert(완료 기록). 빈 값이면 삭제.
@@ -169,7 +170,7 @@ export function saveActionResponse(actionId, text) {
   const rest = (goal.completedActions || []).filter((a) => a.id !== actionId);
   const completedActions = v ? [...rest, { id: actionId, text: v }] : rest;
   const value = { ...goal, completedActions };
-  try { localStorage.setItem(GOAL_KEY, JSON.stringify(value)); } catch { /* 저장 불가 환경 */ }
+  try { storage.setItem(GOAL_KEY, JSON.stringify(value)); } catch { /* 저장 불가 환경 */ }
   return value;
 }
 
