@@ -13,6 +13,7 @@ import { shapeOf, shapeLineFor, DOMAIN_THEME, MIN_RECORDS_TO_NAME, HONESTY_NOTE 
 import { useResult } from "../data/ResultContext.jsx";
 import { clearSavedReports, REPORT_UID, loadSpeech } from "../data/dispositionApi.js";
 import { planetSkin } from "../data/petShop.js";
+import { PLANET_TEXTURES } from "../data/planetSurface.js";
 
 const DESCRIPTIONS = {
   career: "나의 진로와 커리어에 대한 고민, 선택, 방향성을 기록해요.",
@@ -83,8 +84,11 @@ export default function MyUniverseV2() {
   // 고정 4개)이 돌고 있어서, 기록이 20개여도 별은 4개만 보였다.
   // "당신의 기록이 별이 되고, 별들이 연결되어 우주가 됩니다" 가 이 화면의 약속이다.
   const orbitGroups = useMemo(() => {
-    if (planet) return starGroupsOf(planet.key, state);
-    return PLANETS.flatMap((item) => starGroupsOf(item.key, state));
+    // 전체 우주에서는 행성마다 최근 별자리 두 개만 보여준다. 모든 기록을 동시에
+    // 띄우면 행성보다 선이 더 강해지고 같은 형태가 배경 무늬처럼 반복된다.
+    // 과거 별자리는 행성을 선택하거나 기록 아카이브에서 그대로 확인할 수 있다.
+    if (planet) return starGroupsOf(planet.key, state).slice(-6);
+    return PLANETS.flatMap((item) => starGroupsOf(item.key, state).slice(-2));
   }, [planet, state]);
   const planetScenarios = useMemo(
     () => (planet ? scenariosByPlanet(planet.key, state) : []), [planet, state]);
@@ -124,7 +128,11 @@ export default function MyUniverseV2() {
           비어 있어 "세부 예측 결과가 아직 저장되지 않았습니다"만 뜨는 빈 화면이었다.
           행성 모달이 그 영역의 기록·기회·N년 뒤를 실제 데이터로 다 보여준다. */}
       {cluster && <ClusterPanel group={cluster} planet={planet} onClose={()=>setCluster(null)} onWhole={()=>setCluster(null)} />}
-      {planet && !cluster && <PlanetModal planet={planet} state={state} groups={orbitGroups} scenarios={planetScenarios} onClose={() => setPlanet(null)} onSimulate={() => navigate("/input")} onArchive={() => navigate("/archive")} onOpportunity={pickOpportunity} onOpenScenario={() => {}} onOpenCluster={setCluster} profile={profile} />}
+      {planet && !cluster && <PlanetModal planet={planet} state={state} onClose={() => setPlanet(null)} onSimulate={() => {
+        setScenarioDomains({ a: [planet.key], b: [planet.key] });
+        setPlanet(null);
+        navigate("/input");
+      }} />}
     </div>
   );
 }
@@ -638,34 +646,97 @@ function FutureYears({ planet, state, profile }) {
   );
 }
 
-function PlanetModal({ planet, state, groups, scenarios, onClose, onSimulate, onArchive, onOpportunity, onOpenScenario, onOpenCluster, profile }) {
+function SummaryMetric({ label, value, suffix, accent }) {
+  return <div className="px-3 text-center"><p className="text-[9px] text-mut">{label}</p><p className="mt-1 whitespace-nowrap text-[17px] font-bold tabular-nums" style={accent ? {color:accent} : undefined}>{value}<span className="ml-1 text-[10px] font-medium text-sub">{suffix}</span></p></div>;
+}
+
+function InsightCard({ tone, title, text }) {
+  if (!text) return null;
+  const good = tone === "good";
+  const color = good ? "#65D6A6" : "#F0736F";
+  return <div className="rounded-xl border px-3 py-3" style={{borderColor:`${color}30`,background:`${color}0D`}}><p className="text-[9.5px] font-semibold" style={{color}}>{title}</p><p className="mt-1.5 line-clamp-3 text-[10px] leading-relaxed text-sub">{text}</p></div>;
+}
+
+function TrendChart({ series, accent }) {
+  const points = (series || []).slice(-24);
+  if (points.length < 2) return <div className="mt-3 flex h-[150px] items-center justify-center rounded-2xl border border-white/[.06] bg-black/15 text-[10px] text-mut">기록이 2개 이상 쌓이면 흐름이 나타나요.</div>;
+  const W=500,H=150,L=28,R=8,T=12,B=24;
+  const x=(i)=>L+i*(W-L-R)/(points.length-1);
+  const y=(v)=>T+(1-((Number(v)+1)/2))*(H-T-B);
+  const line=points.map((p,i)=>`${x(i)},${y(p.v)}`).join(" ");
+  const area=`${L},${H-B} ${line} ${x(points.length-1)},${H-B}`;
+  return <div className="mt-3 overflow-hidden rounded-2xl border border-white/[.06] bg-black/15 px-2 pt-2">
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" aria-label="최근 기분 흐름 선 그래프">
+      {[1,2,3,4,5].map((n)=>{const yy=T+(5-n)*(H-T-B)/4;return <g key={n}><line x1={L} y1={yy} x2={W-R} y2={yy} stroke="#293247" strokeWidth=".6"/><text x="4" y={yy+3} fill="#71809A" fontSize="8">{n}.0</text></g>;})}
+      <defs><linearGradient id="planetTrendArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={accent} stopOpacity=".25"/><stop offset="1" stopColor={accent} stopOpacity="0"/></linearGradient></defs>
+      <polygon points={area} fill="url(#planetTrendArea)"/>
+      <polyline points={line} fill="none" stroke={accent} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+      {points.map((p,i)=><circle key={i} cx={x(i)} cy={y(p.v)} r={i===points.length-1?4:2} fill={accent} stroke={i===points.length-1?`${accent}55`:"none"} strokeWidth="6"/>)}
+      <text x={L} y={H-7} fill="#71809A" fontSize="8">이전</text><text x={W-R} y={H-7} textAnchor="end" fill="#71809A" fontSize="8">최근</text>
+    </svg>
+  </div>;
+}
+
+function PlanetModal({ planet, state, onClose, onSimulate }) {
   const entries = useMemo(() => planetEntries(state, planet.key), [state, planet.key]);
   const recent = useMemo(() => entries.slice(-3).reverse(), [entries]);
-  const futures = useMemo(() => [...(scenarios || [])].reverse(), [scenarios]);
-  return <div className="absolute inset-y-5 right-5 z-40 w-[min(420px,calc(100%-28px))] lg:w-[520px] xl:w-[640px] overflow-y-auto rounded-[24px] border border-white/10 bg-[#09111F]/94 p-5 shadow-[0_30px_90px_rgba(0,0,0,.6)] backdrop-blur-xl"><div>
-    <div className="flex items-start justify-between"><div className="flex items-center gap-4"><PlanetOrb planet={planet} /><div><p className="text-[9px] tracking-[.16em] text-[#A88BE8]">FUTURE PLANET</p><h2 className="mt-1 text-[22px] font-bold">{planet.label}</h2></div></div><Close onClick={onClose}/></div>
-    <p className="mt-4 text-[11px] leading-relaxed text-sub">{DESCRIPTIONS[planet.key]}</p>
-    <div className="mt-5 rounded-[18px] border border-[#8B6CCF]/25 bg-[#8B6CCF]/[.07] p-4">
-      <div className="flex items-center justify-between"><p className="text-[11px] font-bold">이 영역에서 탐색한 미래</p><span className="text-[10px] text-[#A88BE8]">{futures.length}개 시나리오</span></div>
-      {/* 시나리오 카드를 눌러 시점별 패널을 연다 — 별자리는 이제 기록을 그리므로,
-          미래 패널로 가는 길은 여기다. */}
-      <div className="mt-3 space-y-2">{futures.length ? futures.slice(0,3).map((scenario, i)=><div key={`${scenario.date}-${i}`} className="w-full rounded-xl border border-white/[.07] bg-black/20 p-3 text-left"><div className="flex justify-between gap-3"><p className="text-[11px] font-semibold">{scenario.title}</p><span className="shrink-0 text-[9px] text-mut">{scenario.date}</span></div>{scenario.br?.length>0&&<p className="mt-2 line-clamp-2 text-[10px] leading-relaxed text-sub">{scenario.br.join(" · ")}</p>}</div>) : <p className="py-2 text-[10px] leading-relaxed text-mut">아직 이 영역에서 만든 미래 시뮬레이션이 없어요. 선택지를 비교하면 결과가 이 행성에 쌓입니다.</p>}</div>
-      <button onClick={onSimulate} className="tap mt-3 w-full rounded-xl bg-[#8B6CCF] text-[12px] font-bold">{futures.length ? "새 미래 시뮬레이션" : "첫 미래 시뮬레이션 시작"}</button>
-    </div>
-    {/* 이 영역의 일기 분석 — 행성이 시나리오만 담으면 '내 기록'과 끊긴다.
-        같은 영역으로 분류된 일기의 흐름·감정·대표 기록을 여기서 보여준다. */}
-    <DomainRecords planet={planet} state={state} entries={entries} recent={recent} />
-    {/* 기록에서 아직 안 가본 길을 찾아 내민다 — 누르면 그 갈림길로 시뮬레이션이 열린다. */}
-    <Opportunities planet={planet} state={state} onPick={onOpportunity} profile={profile} />
-    {/* 과거(일기)와 미래(시뮬)가 한 행성에서 만났으니, 그 둘을 이어 'N년 뒤'를 쓴다. */}
-    <FutureYears planet={planet} state={state} profile={profile} />
+  const analysis = useMemo(() => domainAnalysis(planet.key, state), [planet.key, state]);
+  const accent = planet.key === "life" ? "#F39A4A" : planet.to;
+  const average = analysis?.ok ? Number(analysis.moodAvg) : null;
+  const trend = analysis?.ok && Number.isFinite(Number(analysis.trend)) ? Number(analysis.trend) : null;
+  const stable = trend == null || Math.abs(trend) < .25;
+  const status = average == null
+    ? `아직 ${planet.label}의 상태를 알아가는 중이에요.`
+    : average >= 4 ? `요즘 ${planet.label}은 전반적으로 좋은 흐름이에요.`
+      : average >= 3 ? `요즘 ${planet.label}은 전반적으로 안정적이에요.`
+        : `요즘 ${planet.label}에 조금 더 돌봄이 필요해 보여요.`;
+  const flow = analysis?.ok
+    ? `최근 기록에는 ${stable ? "약간의 흔들림이 있지만, 전체 흐름은 비교적 안정적입니다." : trend > 0 ? "회복되는 흐름이 나타나고 있어요." : "조금 무거워지는 흐름이 보여요."}`
+    : "기록이 쌓이면 최근 변화와 흐름을 여기에서 보여드릴게요.";
+  const factors = analysis?.topEmotions?.slice(0, 3) || KEYWORDS[planet.key].slice(0, 3);
+  const changeText = trend == null ? "—" : `${trend >= 0 ? "+" : ""}${trend.toFixed(1)}`;
 
-    <div className="mt-4 grid grid-cols-3 gap-2">{[["저장한 결과",futures.length],["비교한 미래",futures.length*2],["관련 기록",entries.length]].map(([l,v])=><Mini key={l} label={l} value={v}/>)}</div>
-    {/* 3D 에서 작은 별자리를 정확히 누르기 어려워, 여기서도 열 수 있게 둔다. */}
-    {groups?.length>0 && <div className="mt-4"><p className="text-[10px] text-mut">이 영역의 별자리 {groups.length}개</p><div className="mt-1.5 flex flex-wrap gap-1.5">{groups.map((g,i)=><button key={g.weekStart||i} onClick={()=>onOpenCluster?.(g)} className="tap rounded-lg border border-white/[.09] px-2.5 py-1 text-[10px] text-sub hover:border-[#8B6CCF]">{g.label||`별자리 ${i+1}`}</button>)}</div></div>}
-    <button onClick={onArchive} className="tap mt-4 w-full rounded-xl border border-[#8B6CCF]/40 bg-[#8B6CCF]/10 text-[12px] font-bold text-[#C7B5F2]">저장한 시뮬레이션 전체 보기</button>
-    <p className="mt-4 text-[9px] leading-relaxed text-mut">이 행성에는 해당 영역의 선택지, 예측 변화와 저장한 시뮬레이션 결과가 쌓입니다.</p>
-  </div></div>;
+  return <aside className="absolute inset-y-2 right-2 z-40 w-[min(430px,calc(100%-16px))] overflow-y-auto rounded-[26px] border border-white/10 bg-[#070E1B]/95 shadow-[0_30px_100px_rgba(0,0,0,.72)] backdrop-blur-2xl lg:inset-y-4 lg:right-4 lg:w-[520px] xl:w-[610px]">
+    <div className="p-5 lg:p-6">
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-4"><PlanetOrb planet={planet} /><div><p className="text-[9px] font-semibold tracking-[.2em]" style={{color:accent}}>FUTURE PLANET</p><h2 className="mt-1 text-[25px] font-bold tracking-[-.035em] lg:text-[29px]">{planet.label}</h2></div></div>
+        <Close onClick={onClose}/>
+      </div>
+
+      <p className="mt-5 text-[13px] font-semibold leading-relaxed text-ink">{status}</p>
+      <div className="mt-4 grid grid-cols-3 divide-x divide-white/[.08] rounded-2xl border border-white/[.08] bg-white/[.035] py-3">
+        <SummaryMetric label="평균" value={average == null ? "—" : average.toFixed(1)} suffix="/ 5" accent={accent}/>
+        <SummaryMetric label="기록" value={entries.length} suffix="개" />
+        <SummaryMetric label="최근 변화" value={changeText} accent={accent}/>
+      </div>
+      <p className="mt-3 text-[10px] leading-relaxed text-mut">{flow}</p>
+
+      <section className="mt-6 border-t border-white/[.08] pt-5">
+        <div className="flex items-center justify-between"><h3 className="text-[14px] font-bold">최근 흐름</h3><span className="text-[9px] text-mut">기록 기준 · 5점 만점</span></div>
+        <TrendChart series={analysis?.series || []} accent={accent}/>
+        <p className="mt-3 text-[9px] font-semibold text-mut">영향 요인</p>
+        <div className="mt-2 flex flex-wrap gap-2">{factors.map((factor)=><span key={factor} className="rounded-full border px-3 py-1.5 text-[10px] text-sub" style={{borderColor:`${accent}40`,background:`${accent}10`}}>{factor}</span>)}</div>
+
+        {(analysis?.best?.text || analysis?.worst?.text) && <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          <InsightCard tone="good" title={`${analysis.best?.mood >= 4 ? "가장 좋았던 날" : "그중 나았던 날"} · ${analysis.best?.date ? dateLabel(analysis.best.date) : "—"}`} text={analysis.best?.text}/>
+          <InsightCard tone="hard" title={`${analysis.worst?.mood <= 2 ? "가장 힘들었던 날" : "그중 무거웠던 날"} · ${analysis.worst?.date ? dateLabel(analysis.worst.date) : "—"}`} text={analysis.worst?.text}/>
+        </div>}
+
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          <details className="group rounded-xl border border-white/[.06] bg-black/15 px-3 py-2.5"><summary className="cursor-pointer list-none text-[10px] text-sub">최근 기록 {recent.length}개 보기 <ChevronRight size={12} className="float-right transition-transform group-open:rotate-90"/></summary><div className="mt-2 space-y-2 border-t border-white/[.06] pt-2">{recent.length ? recent.map((entry)=><p key={entry.date} className="text-[9.5px] leading-relaxed text-mut"><span className="mr-2" style={{color:accent}}>{dateLabel(entry.date)}</span>{entry.text || entry.note || "짧게 남긴 기록"}</p>) : <p className="text-[9.5px] text-mut">아직 기록이 없어요.</p>}</div></details>
+          <details className="group rounded-xl border border-white/[.06] bg-black/15 px-3 py-2.5"><summary className="cursor-pointer list-none text-[10px] text-sub">분석 기준 보기 <ChevronRight size={12} className="float-right transition-transform group-open:rotate-90"/></summary><p className="mt-2 border-t border-white/[.06] pt-2 text-[9px] leading-relaxed text-mut">이 영역으로 분류된 기록의 기분 점수와 표현을 요약했습니다. 성격 진단이나 미래 예측은 아닙니다.</p></details>
+        </div>
+      </section>
+
+      <section className="relative mt-6 overflow-hidden rounded-[20px] border p-5" style={{borderColor:`${accent}70`,background:`linear-gradient(135deg,${accent}1F,rgba(11,17,31,.72))`,boxShadow:`0 0 32px ${accent}12`}}>
+        <span className="pointer-events-none absolute -left-10 -top-16 h-36 w-36 rounded-full blur-2xl" style={{background:`${accent}25`}}/>
+        <div className="relative"><h3 className="text-[14px] font-bold">{planet.label}을 높이면 어떤 미래가 펼쳐질까요?</h3>
+          <button onClick={onSimulate} className="tap mt-4 flex w-full items-center justify-center gap-2 rounded-full py-3.5 text-[13px] font-bold text-white shadow-lg" style={{background:`linear-gradient(100deg,${accent},#E84E68)`}}>{planet.label} 미래 보기 <ChevronRight size={16}/></button>
+          <p className="mt-2 text-center text-[9px] text-mut">이 영역을 중심으로 미래 시뮬레이션을 시작합니다.</p>
+        </div>
+      </section>
+    </div>
+  </aside>;
   /* Legacy modal layout retained below for reference only.
   return <Shell onClose={onClose} wide><div className="grid gap-6 md:grid-cols-[230px_1fr]">
     <div><div className="flex items-center gap-4"><PlanetOrb planet={planet} /><div><h2 className="text-[22px] font-bold">{planet.label}</h2><p className="mt-1 text-[11px] leading-relaxed text-sub">{DESCRIPTIONS[planet.key]}</p></div></div>
@@ -728,4 +799,9 @@ function RecordModal({ record, onClose, onRelated }) { return <Shell onClose={on
 function RecordPreview({ record }) { return <div className="mt-4 rounded-xl border border-white/[.07] bg-black/10 p-4"><div className="grid grid-cols-3 gap-3 text-[10px]"><Mini label="기분" value={record.mood?`${record.mood}/5`:"—"}/><Mini label="에너지" value={record.energy?`${record.energy}/5`:"—"}/><Mini label="키워드" value={record.emotion||"기록"}/></div><p className="mt-4 text-[12px] leading-relaxed text-sub">{record.text||record.note||"이날의 기록이 아직 짧아요."}</p></div>; }
 function Mini({label,value}) { return <div className="rounded-xl bg-white/[.035] px-2 py-3 text-center"><div className="text-[15px] font-bold text-ink">{value}</div><div className="mt-1 text-[9px] text-mut">{label}</div></div>; }
 function ReportCard({title,value,text}) { return <div className="min-h-[145px] rounded-[18px] border border-white/[.07] bg-black/10 p-4"><div className="text-[10px] font-semibold text-sub">{title}</div><div className="mt-5 text-[21px] font-bold text-cyan">{value}</div><p className="mt-2 text-[10px] leading-relaxed text-mut">{text}</p></div>; }
-function PlanetOrb({planet,small=false}) { return <span className={`block shrink-0 rounded-full border border-white/15 ${small?"h-10 w-10":"h-16 w-16"}`} style={{background:`radial-gradient(circle at 30% 25%,#fff9,transparent 18%),radial-gradient(circle at 34% 30%,${planet.to},${planet.from} 62%,#080912)`}}/>; }
+function PlanetOrb({planet,small=false}) {
+  return <span className={`relative block shrink-0 overflow-hidden rounded-full border border-white/15 bg-black ${small?"h-10 w-10":"h-16 w-16"}`}>
+    <img src={PLANET_TEXTURES[planet.key]} alt="" className="h-full w-full object-cover" />
+    <span className="pointer-events-none absolute inset-0 rounded-full shadow-[inset_-9px_-8px_14px_rgba(0,0,0,.72),inset_3px_3px_7px_rgba(255,255,255,.12)]" />
+  </span>;
+}

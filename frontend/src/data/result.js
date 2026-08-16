@@ -106,12 +106,20 @@ export const MY_UNIVERSE = {
 };
 
 // 행성 = 삶의 영역. 선택하면 그 영역의 시뮬레이션 우주로.
+//
+// kind 는 실제 raster 표면 위에 적용할 물리 재질만 고른다.
+// 화면 텍스처는 data/planetSurface.js의 행성별 고해상도 PNG를 사용한다.
 export const PLANETS = [
-  { key: "career", label: "진로", from: "#7655C8", to: "#D8C6FF" },
-  { key: "life", label: "삶의 만족", from: "#D68A35", to: "#FFE09A" },
-  { key: "relation", label: "관계", from: "#C35E7B", to: "#FFACB8" },
-  { key: "health", label: "건강", from: "#28A491", to: "#A0F2D9" },
-  { key: "growth", label: "성장성", from: "#3485CA", to: "#A6E0FF" },
+  // 진로 — 목성·토성형 가스행성. 네온 보라가 아니라 먼지 낀 라벤더·모브.
+  { key: "career", label: "진로", kind: "gas", from: "#382E4C", to: "#B7A5CE" },
+  // 삶의 만족 — 화성·금성형 암석행성. 채도 높은 주황이 아니라 테라코타·복숭앗빛 먼지.
+  { key: "life", label: "삶의 만족", kind: "rocky", from: "#553321", to: "#D2A183" },
+  // 관계 — 화성형 붉은 암석행성. 산화철 붉은색·차분한 진홍. 위 테라코타보다 어둡고 붉다.
+  { key: "relation", label: "관계", kind: "rocky", from: "#45180F", to: "#AE5740" },
+  // 건강 — 천왕성형 얼음행성. 선명한 초록이 아니라 씨폼·탁한 청록.
+  { key: "health", label: "건강", kind: "ice", from: "#2A5651", to: "#A3CFC7" },
+  // 성장성 — 해왕성·지구형 바다행성. 네이비·코발트에 흰 구름.
+  { key: "growth", label: "성장성", kind: "ocean", from: "#0E2145", to: "#7BA5D6" },
 ];
 
 // 저장된 평행우주 슬롯

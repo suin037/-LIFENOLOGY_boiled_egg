@@ -72,6 +72,7 @@ function buildSide(scenario, choice, detail, profile, evidence, domainCov, domai
       // 뜨는 조건부 입력이라(InputScreen.needMajor) 대부분의 사용자는 고른 적이
       // 없는 값이 헤더에 박혔다. 데모 경로(prediction.js)는 원래 직종을 썼기에
       // 실데이터로 붙는 순간 헤더가 직종→전공으로 바뀌는 불일치도 있었다.
+      // (occupationLabel 이 온보딩 직종 → KSCO 대분류 순으로 고른다.)
       occupation: occupationLabel(profile) || "—",
       observe_years_income: maxYear(trajectory, 0),
       observe_years_wellbeing: maxYear(wellbeing, 0),

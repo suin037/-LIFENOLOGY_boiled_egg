@@ -90,7 +90,6 @@ export default function Archive() {
   const [filter, setFilter] = useState("all");
   const [sort, setSort] = useState("recent"); // recent | domain
   const [openId, setOpenId] = useState(null);
-
   // 일기 신호는 카드마다 같으니 화면에서 한 번만 계산해 내려준다.
   const signals = useMemo(() => computeDiarySignals({ windowDays: 28 }), []);
 

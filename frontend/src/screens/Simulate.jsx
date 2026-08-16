@@ -4,6 +4,8 @@ import { Check, GitCompareArrows, Search, Sparkles, TrendingUp } from "lucide-re
 import { useResult } from "../data/ResultContext.jsx";
 import { labelOf } from "../data/prediction.js";
 import Stars from "../components/Stars.jsx";
+import { PLANET_TEXTURES } from "../data/planetSurface.js";
+import { toPlanetKey } from "../data/choices.js";
 
 const STEPS = [
   { label: "입력한 선택 이해하기", icon: Search },
@@ -17,7 +19,7 @@ const STEP_MS = 1400;
 
 export default function Simulate() {
   const navigate = useNavigate();
-  const { runSimulation, choices, scenarioTexts } = useResult();
+  const { runSimulation, choices, scenarioTexts, scenarioDomains } = useResult();
   const [done, setDone] = useState(0);
 
   useEffect(() => {
@@ -42,6 +44,8 @@ export default function Simulate() {
   }, []);
 
   const progress = Math.max(8, Math.round((done / STEPS.length) * 100));
+  const planetA = PLANET_TEXTURES[toPlanetKey(scenarioDomains.a) || "career"];
+  const planetB = PLANET_TEXTURES[toPlanetKey(scenarioDomains.b) || "growth"];
 
   return (
     <div className="relative mx-auto flex min-h-full max-w-[1180px] flex-col pb-3 pt-5 lg:min-h-[calc(100vh-40px)] lg:flex-row lg:items-center lg:px-10 lg:py-10">
@@ -78,8 +82,8 @@ export default function Simulate() {
         <div className="absolute inset-[20px] rounded-full border border-white/[.06]" />
         <div className="absolute inset-[20px] rounded-full shadow-[inset_0_0_26px_rgba(139,108,207,.14)]" />
         <div className="absolute inset-[20px] animate-orbit rounded-full">
-          <ChoiceOrb side="A" className="left-0 top-1/2 -translate-x-1/2 -translate-y-1/2" />
-          <ChoiceOrb side="B" className="right-0 top-1/2 translate-x-1/2 -translate-y-1/2" />
+          <ChoiceOrb side="A" src={planetA} className="left-0 top-1/2 -translate-x-1/2 -translate-y-1/2" />
+          <ChoiceOrb side="B" src={planetB} className="right-0 top-1/2 translate-x-1/2 -translate-y-1/2" />
         </div>
         <div className="absolute left-1/2 top-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[#171128] shadow-[0_0_34px_rgba(139,108,207,.22)]">
           <GitCompareArrows size={25} className="text-white" strokeWidth={1.8} />
@@ -134,19 +138,21 @@ export default function Simulate() {
   );
 }
 
-function ChoiceOrb({ side, className }) {
+function ChoiceOrb({ side, src, className }) {
   const isA = side === "A";
   // 바깥 div = 궤도 위 위치(transform은 translate 전용), 안쪽 div = 역회전(글자 수평 유지).
   return (
     <div className={`absolute h-10 w-10 ${className}`}>
       <div
-        className={`flex h-full w-full animate-orbit-counter items-center justify-center rounded-full border text-[15px] font-bold shadow-lg ${
+        className={`relative h-full w-full animate-orbit-counter overflow-hidden rounded-full border shadow-lg ${
           isA
-            ? "border-cyan/50 bg-[#132849] text-cyan shadow-[0_0_18px_5px_rgba(139,108,207,.28)]"
-            : "border-gold/50 bg-[#302313] text-gold shadow-[0_0_18px_5px_rgba(243,154,74,.24)]"
+            ? "border-cyan/50 shadow-[0_0_18px_5px_rgba(139,108,207,.35)]"
+            : "border-gold/50 shadow-[0_0_18px_5px_rgba(243,154,74,.3)]"
         }`}
       >
-        {side}
+        <img src={src} alt="" className="h-full w-full scale-[1.35] object-cover" />
+        <span className="absolute inset-0 bg-[radial-gradient(circle_at_34%_28%,transparent_18%,rgba(3,7,18,.16)_58%,rgba(3,7,18,.72)_100%)]" />
+        <span className={`absolute bottom-0.5 right-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[8px] font-black text-white ${isA ? "bg-violet-500" : "bg-orange-500"}`}>{side}</span>
       </div>
     </div>
   );

@@ -35,7 +35,7 @@ export const CUSTOM_HAIR = {
     svg: (colors) => `
       <path d="M196 448C170 268 198 110 384 110C570 110 598 268 572 448
                L518 338L250 338Z"
-            fill="${colors.hair}" stroke="black" stroke-width="6" stroke-linejoin="round"/>`,
+            fill="${colors.hair}" stroke="${colors.hairOutline || colors.hair}" stroke-width="4" stroke-linejoin="round"/>`,
   },
 };
 

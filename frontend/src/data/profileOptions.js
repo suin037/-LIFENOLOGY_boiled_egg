@@ -45,6 +45,12 @@ const PHANTOM = new Set(["사회계열"]);
  * 정상적인 선택("건설·생산·운송" 등)이 있어서, 화이트리스트로 막으면 사용자가
  * 분명히 고른 직종이 화면에서 사라진다.
  */
+/** KSCO 대분류 코드 → 이름. 코드만 들고 있는 화면(API 결과 표시)이 쓴다. */
+export function occupationGroupLabel(code) {
+  if (code == null || code === "") return "";
+  return GROUP_LABEL[Number(code)] || "";
+}
+
 export function occupationLabel(profile) {
   const picked = (profile?.occupation || "").trim();
   if (picked && !PHANTOM.has(picked)) return picked;

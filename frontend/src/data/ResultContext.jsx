@@ -20,7 +20,8 @@ initDemoFromUrl();
 const DEFAULT_PROFILE = {
   name: "",
   age: 29,
-  sex: "2",
+  sex: null, // GOMS 코드: "1" 남 / "2" 여. 입력 없이 임의 기본값을 사용하지 않는다.
+  sexConfirmed: false,
   major: "사회", // 전공 계열
   // 직종은 기본값을 두지 않는다. 예전 기본값 "사회계열" 은 온보딩 직종 목록
   // (profileOptions.OCCUPATIONS)에 아예 없는 값이라, 사용자는 고른 적도 없고
@@ -46,7 +47,12 @@ const PROFILE_KEY = "pm.profile.v1";
 function loadProfile() {
   try {
     const saved = JSON.parse(localStorage.getItem(PROFILE_KEY) || "null");
-    return saved ? { ...DEFAULT_PROFILE, ...saved } : DEFAULT_PROFILE;
+    if (!saved) return DEFAULT_PROFILE;
+    const merged = { ...DEFAULT_PROFILE, ...saved };
+    // 이전 버전은 입력 없이 sex="2"를 저장했다. 사용자가 직접 고른 기록이 없는
+    // 값은 신뢰하지 않고 다시 선택하게 한다.
+    if (!saved.sexConfirmed) merged.sex = null;
+    return merged;
   } catch {
     return DEFAULT_PROFILE;
   }
@@ -67,6 +73,9 @@ export function ResultProvider({ children }) {
   const [result, setResult] = useState(() =>
     ({ ...getPredictionPair({ profile: DEFAULT_PROFILE, choiceA: "이직", choiceB: "유지" }), dataMode: "demo" }),
   );
+  // 한 번이라도 실제 비교를 실행했다면 시뮬레이션 탭은 입력 화면이 아니라
+  // 마지막 결과로 돌아간다. 라우트가 바뀌어도 Provider가 유지되므로 결과도 보존된다.
+  const [hasSimulationResult, setHasSimulationResult] = useState(false);
   const [onboarded, setOnboarded] = useState(false);
   // 관계 선택지일 때 담아두는 대화·연락 내역(붙여넣기·화면 캡처). 공고와 같은 흐름:
   // 입력에서 담고, 시뮬레이션 후 결과에서 분석을 본다.
@@ -146,6 +155,7 @@ export function ResultProvider({ children }) {
     const pair = { ...getPredictionPair({ profile, choiceA, choiceB, detail: currentDiary }),
                    dataMode: "demo", planetDomain: scenarioDomain };
     setResult(pair);
+    setHasSimulationResult(true);
     const requestArgs = {
       profile,
       choiceA,
@@ -179,6 +189,7 @@ export function ResultProvider({ children }) {
         imageLoading: true,
       };
       setResult(preview);
+      setHasSimulationResult(true);
       try {
         const summarize = (side) => {
           if (!side) return "";
@@ -297,12 +308,13 @@ export function ResultProvider({ children }) {
       scenarioContexts, setScenarioContexts,
       diary, setDiary,
       result, setResult,
+      hasSimulationResult,
       runSimulation, retryVisuals, onboarded, setOnboarded,
       postings, setPostings,
       jobAnalyses, setJobAnalyses, jobBusy, analyzePostings,
       talks, setTalks, relResults, relBusy, analyzeTalks,
     }),
-    [profile, choices, scenarioTexts, scenarioDomains, scenarioContexts, diary, result, onboarded,
+    [profile, choices, scenarioTexts, scenarioDomains, scenarioContexts, diary, result, hasSimulationResult, onboarded,
      postings, jobAnalyses, jobBusy, talks, relResults, relBusy],
   );
 

@@ -9,6 +9,9 @@ import requests
 from config import settings
 
 
+VISUAL_PROMPT_VERSION = "no-typography-v2"
+
+
 def configured() -> bool:
     return bool(settings.cloudflare_account_id and settings.cloudflare_api_token)
 
@@ -50,8 +53,11 @@ vary shot distance and camera angle instead of defaulting to a front-facing desk
 Clean Korean mobile-app editorial illustration, expressive hand-drawn 2D look, nuanced
 lighting and color, strong visual storytelling, vertical 4:5 composition.
 
-No photorealism, no 3D render, no additional people, no text, no letters, no numbers,
-no charts, no logos, no split screen, no collage.
+No photorealism, no 3D render, no additional people, no split screen, no collage.
+ABSOLUTELY NO typography or readable marks anywhere: no text, letters, words, Korean
+characters, numbers, captions, subtitles, labels, signs, posters, screens, charts, logos,
+watermarks, signatures, UI, book covers, document writing, or clothing print. Keep every
+screen, sign, paper, book, package, and background surface blank or purely pictorial.
 """.strip()
 
 
@@ -111,7 +117,7 @@ async def generate_pair(
         raise ValueError("Avatar image is empty")
     cache_key = hashlib.sha256(
         avatar_png + json.dumps(
-            [choice_a, choice_b, narrative_a, narrative_b, visual_a, visual_b, avatar_spec],
+            [VISUAL_PROMPT_VERSION, choice_a, choice_b, narrative_a, narrative_b, visual_a, visual_b, avatar_spec],
             ensure_ascii=False, sort_keys=True, default=str,
         ).encode("utf-8")
     ).hexdigest()

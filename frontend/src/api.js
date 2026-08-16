@@ -1,5 +1,6 @@
 // ─────────────────────────────────────────────────────────────
 // 백엔드 /simulate 연동 + 응답 → 화면(MOCK_RESULT) 형태 어댑터.
+import { occupationGroupLabel } from "./data/occupationGroups.js";
 // 엔진(L1~L5) 수치 + RAG 근거 + Claude 서사를 프론트 컴포넌트가 읽는 형태로 매핑한다.
 // ─────────────────────────────────────────────────────────────
 
@@ -108,7 +109,7 @@ export function mapSimulateToResult(sim) {
   return {
     meta: {
       age: prof.age,
-      occupation: prof.major || "—",
+      occupation: occupationGroupLabel(prof.occupation_group) || prof.occupation || prof.major || "—",
       n_sample: nSample,
       observe_years: incYears.length ? Math.max(...incYears) : 5,
       source: "GOMS · YP2021 · KLIPS (L1~L5)",
@@ -134,7 +135,10 @@ function buildSimulateBody({ profile, choiceA, choiceB, choiceADetail, choiceBDe
   const body = {
     profile: {
       age: profile.age,
-      sex: profile.sex || "1",
+      // 성별은 선택 정보다. 없으면 그대로 비워 보내고 백엔드가 전체 표본으로
+      // 떨어뜨린다. 예전엔 `|| "1"` 로 남성을 채웠는데, 고른 적 없는 성별의
+      // 유사집단 통계가 붙었다.
+      sex: profile.sex || null,
       // 전공 계열은 '사용자가 실제로 고른 경우'에만 보낸다.
       // 예전엔 `profile.major || profile.occupation || "공학"` 이었다. major 는 교육
       // 영역 비교에서만 뜨는 조건부 입력이라 대부분 비어 있는데, 그때 조용히 "공학"이
