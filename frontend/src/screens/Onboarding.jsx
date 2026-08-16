@@ -3,6 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { useResult } from "../data/ResultContext.jsx";
 import { Eyebrow, Button } from "../components/ui.jsx";
 import AvatarBuilder from "../components/AvatarBuilder.jsx";
+import StarterDataDialog from "../components/StarterDataDialog.jsx";
+import { seedStarterData } from "../data/personaSession.js";
+import { saveActiveSlot } from "../data/personaSlots.js";
 
 const OCCUPATIONS = [
   "연구·공학기술",
@@ -57,10 +60,31 @@ export default function Onboarding() {
     return () => window.clearTimeout(timer);
   }, [visibleThrough]);
 
+  // 갓 만든 계정에는 기록이 없다. 홈으로 바로 보내지 않고 시작 방식을 먼저 고르게 한다.
+  //   (두 미래 비교는 기록 없이도 되지만, 맞춤 해석이 약해지는 걸 여기서 알린다.)
+  const [starterOpen, setStarterOpen] = useState(false);
+  const [starterBusy, setStarterBusy] = useState(false);
+
   function finish() {
     if (!profile.sex) return;
+    setStarterOpen(true);
+  }
+
+  function enterApp() {
     setOnboarded(true); // 이후 홈 탭은 '나의 우주' 허브로 진입
     navigate("/my");
+  }
+
+  async function startWithSample() {
+    setStarterBusy(true);
+    await seedStarterData();   // 지원의 1년치 — '예시 데이터' 배지가 함께 붙는다
+    enterApp();
+  }
+
+  function startEmpty() {
+    setStarterBusy(true);
+    saveActiveSlot(new Date().toISOString()); // 방금 입력한 프로필을 내 슬롯에 담아둔다
+    enterApp();
   }
 
   function reveal(index) {
@@ -297,6 +321,14 @@ export default function Onboarding() {
           <Button disabled={!profile.sex} className="mb-2 mt-8 lg:ml-auto lg:max-w-[320px]" onClick={finish}>저장하고 시작하기</Button>
         )}
       </main>
+
+      <StarterDataDialog
+        open={starterOpen}
+        name={profile.name}
+        busy={starterBusy}
+        onSample={startWithSample}
+        onEmpty={startEmpty}
+      />
     </div>
   );
 }

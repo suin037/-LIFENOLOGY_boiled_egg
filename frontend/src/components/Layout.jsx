@@ -8,14 +8,17 @@ import ReminderToast from "./ReminderToast.jsx";
 import { useResult } from "../data/ResultContext.jsx";
 
 // 탭바를 숨기는 경로 (랜딩·온보딩·로딩)
-const NO_TABBAR = ["/", "/onboarding", "/simulate"];
+// /resume 은 다른 기기 링크로 처음 들어오는 자리다. 아직 이 기기엔 기록이 없으므로
+// 탭으로 다른 화면에 가봐야 빈 화면만 보인다 — 불러오기 결정에만 집중시킨다.
+// /personas 는 프로필을 고르기 전이라 탭으로 갈 곳이 없다 — 카드 선택에만 집중시킨다.
+const NO_TABBAR = ["/", "/personas", "/onboarding", "/simulate", "/resume"];
 // 프로필(설정) 아이콘을 숨기는 경로
-const NO_PROFILE = ["/simulate", "/onboarding", "/settings"];
+const NO_PROFILE = ["/simulate", "/personas", "/onboarding", "/settings", "/resume"];
 // PC 에서 넓게 쓰는 화면. /company 는 재무표·공시 목록이라 좁으면 읽기 나쁘다.
 // (/checkin 은 오늘 하나를 적는 화면이라 일부러 좁게 둔다.)
 // /simulate 는 useFullDesktop 인데 여기 빠져 있어 컨테이너가 450px(max-w-phone)로
 // 잡혔고, 그 안에서 lg 2단 레이아웃이 겹쳤다.
-const WIDE_DESKTOP = ["/home", "/input", "/result", "/my", "/archive", "/settings", "/company", "/simulate"];
+const WIDE_DESKTOP = ["/home", "/input", "/result", "/my", "/archive", "/settings", "/company", "/simulate", "/personas"];
 export default function Layout() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
@@ -45,7 +48,8 @@ export default function Layout() {
     try { localStorage.setItem("pm.guide.seen.v1", "1"); } catch { /* 저장 불가 환경 */ }
     setGuideOpen(false);
   };
-  const showBack = !["/", "/my"].includes(pathname);
+  // /resume 은 링크로 곧장 들어오는 자리라 돌아갈 이전 화면이 없다.
+  const showBack = !["/", "/my", "/resume"].includes(pathname);
   const goBack = () => window.history.length > 1 ? navigate(-1) : navigate("/my");
 
   return (

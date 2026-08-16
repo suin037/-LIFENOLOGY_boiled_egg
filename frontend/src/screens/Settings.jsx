@@ -15,7 +15,7 @@ import { LEVEL_TITLES, XP_RULES, universeSummary } from "../data/myUniverse.js";
 import { LEVEL_REWARDS } from "../data/unlocks.js";
 import PetMascot from "../components/PetMascot.jsx";
 import PetShop from "../components/PetShop.jsx";
-import { Bell, ChevronRight, LockKeyhole, Palette, UserRound, LogOut } from "lucide-react";
+import { Bell, ChevronRight, LockKeyhole, Palette, Smartphone, UserRound, LogOut } from "lucide-react";
 import { toChoiceDomains } from "../data/choices.js";
 
 const OCCUPATIONS = [
@@ -275,6 +275,25 @@ export default function Settings() {
               기본 정보 수정
             </button>
           </div>
+        </div>
+      </Card>
+
+      {/* 기기 옮기기 — 폰에서 하던 체험을 노트북에서 이어서. 서버 없이 링크로 옮긴다. */}
+      <Card>
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <div className="text-xs font-semibold text-mut">다른 기기에서 이어서 하기</div>
+            <p className="mt-1 text-[10px] leading-relaxed text-sub">
+              지금 기록을 링크·QR로 옮겨서 폰과 노트북을 오갈 수 있어요.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate("/handoff")}
+            className="tap flex shrink-0 items-center gap-1.5 rounded-xl bg-[#8B6CCF] px-4 py-2.5 text-[11px] font-bold text-white"
+          >
+            <Smartphone size={13} /> 옮기기
+          </button>
         </div>
       </Card>
 
