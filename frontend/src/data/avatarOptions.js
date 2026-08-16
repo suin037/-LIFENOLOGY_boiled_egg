@@ -37,7 +37,6 @@ export const HAIR_STYLES = [
   { id: "spiky", label: "뾰족머리", hair: "spiky", rear: null },
   { id: "bun", label: "번머리", hair: "bun", rear: null },
   { id: "menCover", label: "남자 덮머", hair: "menCover", rear: null, custom: true },
-  { id: "menFringe", label: "남자 앞머리", hair: "menFringe", rear: null, custom: true },
   { id: "menPerm", label: "남자 펌", hair: "menPerm", rear: null, custom: true },
   { id: "menPermPart", label: "남자 펌 · 5대5 가르마", hair: "menPermPart", rear: null, custom: true },
   { id: "menBowl", label: "남자 바가지컷", hair: "menBowl", rear: null, custom: true },
@@ -174,15 +173,29 @@ export function randomToonHead() {
 //   Avatar / AvatarBuilder / avatarImage 가 이 두 개를 쓴다.
 export { DEFAULT_AVATAR as DEFAULT_TOONHEAD };
 
+// 목록에서 뺀 스타일 → 대신 쓸 스타일.
+// 이게 없으면 그 스타일을 골라뒀던 사용자의 저장값이 통째로 초기화된다
+// (예전 판별식이 hairStyle 이 목록에 있는지로 toonHead 설정인지를 가렸기 때문에,
+//  스타일 하나를 빼는 순간 피부색·옷·눈까지 전부 기본값으로 돌아갔다).
+const RETIRED_HAIR = {
+  menFringe: "menCover", // 덮머 계열이 겹쳐서 뺐다
+  menPermFringe: "menPerm",
+};
+
 /** 저장된 config 를 항상 완전한 형태로. 예전(react-nice-avatar) 설정이 와도 기본값으로 되돌린다. */
 export function normalizeAvatar(config) {
+  // toonHead 설정인지는 얼굴형으로 가린다 — 헤어 목록은 계속 바뀌므로 판별 기준이 될 수 없다.
   const isToonHead =
     config &&
     typeof config.face === "string" &&
-    typeof config.hairStyle === "string" &&
-    HAIR_STYLES.some((style) => style.id === config.hairStyle);
+    Boolean(FACE_SHAPES[config.face]) &&
+    typeof config.hairStyle === "string";
   if (!isToonHead) return { ...DEFAULT_AVATAR };
-  return { ...DEFAULT_AVATAR, ...config };
+  const out = { ...DEFAULT_AVATAR, ...config };
+  if (!HAIR_STYLES.some((style) => style.id === out.hairStyle)) {
+    out.hairStyle = RETIRED_HAIR[out.hairStyle] || DEFAULT_AVATAR.hairStyle;
+  }
+  return out;
 }
 
 // 개인화 이미지 생성 API가 사용하는 설명 규격. 화면용 아바타와 같은 설정을
