@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useResult } from "../data/ResultContext.jsx";
 import { LIFE_DOMAINS, detectLifeDomains, domainLabel, suggestComparePrompts } from "../data/choices.js";
+import { OCCUPATION_GROUPS } from "../data/profileOptions.js";
 import { detectEmotions } from "../data/DiaryContext.jsx";
 import { domainRumination } from "../data/diarySignals.js";
 import { DOMAIN_OUTCOMES, questionsForChoice } from "../data/scenarioIntake.js";
@@ -18,11 +19,6 @@ const DOMAIN_ICONS = {
   finance: Wallet, health: HeartPulse, housing: House,
   relationship: Users, lifestyle: Leaf, long_term_values: Compass,
 };
-const OCCUPATION_GROUPS = [
-  [1, "관리자"], [2, "전문가·관련 종사자"], [3, "사무 종사자"],
-  [4, "서비스 종사자"], [5, "판매 종사자"], [6, "농림어업 숙련 종사자"],
-  [7, "기능원·관련 기능 종사자"], [8, "장치·기계 조작·조립 종사자"], [9, "단순노무 종사자"],
-];
 const EMPLOYMENT_STATUSES = [
   [1, "상용직"], [2, "임시직"], [3, "일용직"], [4, "고용주·자영업자"], [5, "무급가족 종사자"],
 ];
@@ -119,8 +115,16 @@ export default function InputScreen() {
   const needMajor = scenarioDomains.a.includes("education") || scenarioDomains.b.includes("education");
   const emotions = detectEmotions(`${diary} ${textA} ${textB}`);
   const completed = Number(Boolean(normalizedA)) + Number(Boolean(normalizedB));
-  const intakeA = questionsForChoice(textA, scenarioDomains.a);
-  const intakeB = questionsForChoice(textB, scenarioDomains.b);
+  // 한쪽이 영역을 못 잡으면 반대쪽을 상속한다("지금처럼 유지하기"처럼 단독으로는
+  // 영역이 없는 표현). 상속을 startComparison 에서만 하면 아래 intake 는 빈 영역으로
+  // 계산돼 B의 추가 질문·결과변수·context.domain 이 전부 '장기 가치'로 굳는다 —
+  // 영역 태그는 직업인데 백엔드로는 long_term_values 가 나가던 자리다.
+  const inheritedDomains = {
+    a: scenarioDomains.a?.length ? scenarioDomains.a : scenarioDomains.b || [],
+    b: scenarioDomains.b?.length ? scenarioDomains.b : scenarioDomains.a || [],
+  };
+  const intakeA = questionsForChoice(textA, inheritedDomains.a);
+  const intakeB = questionsForChoice(textB, inheritedDomains.b);
 
   function updateContext(side, intake, key, value) {
     const field = side.toLowerCase();
@@ -140,14 +144,20 @@ export default function InputScreen() {
       if (choice === "휴식") return ["career", "health"];
       return ["long_term_values"];
     };
+    // 영역을 먼저 확정하고, 그 영역으로 intake 를 다시 계산한다. 순서가 반대면
+    // 전송되는 choice_*_context.domain 이 영역 태그와 어긋난다(백엔드는 이 값을
+    // 서사 프롬프트와 KOWEPS 사건 판정에 쓴다).
+    const resolved = {
+      a: inheritedDomains.a.length ? inheritedDomains.a : fallback(choices.a),
+      b: inheritedDomains.b.length ? inheritedDomains.b : fallback(choices.b),
+    };
+    const resolvedA = questionsForChoice(textA, resolved.a);
+    const resolvedB = questionsForChoice(textB, resolved.b);
     setScenarioContexts((prev) => ({
-      a: { event: intakeA.event, event_label: intakeA.eventLabel, domain: intakeA.domain, answers: prev.a?.answers || {} },
-      b: { event: intakeB.event, event_label: intakeB.eventLabel, domain: intakeB.domain, answers: prev.b?.answers || {} },
+      a: { event: resolvedA.event, event_label: resolvedA.eventLabel, domain: resolvedA.domain, answers: prev.a?.answers || {} },
+      b: { event: resolvedB.event, event_label: resolvedB.eventLabel, domain: resolvedB.domain, answers: prev.b?.answers || {} },
     }));
-    setScenarioDomains((prev) => ({
-      a: prev.a?.length ? prev.a : prev.b?.length ? prev.b : fallback(choices.a),
-      b: prev.b?.length ? prev.b : prev.a?.length ? prev.a : fallback(choices.b),
-    }));
+    setScenarioDomains(resolved);
     // 담아둔 재료는 시뮬레이션과 함께 분석을 시작한다(결과 화면에서 확인).
     if (isRelationship) analyzeTalks(talks);
     if (isCareer) analyzePostings(postings, textA || choices.a);
